@@ -46,6 +46,21 @@ Gotchas learned: load-balanced RPCs serve reads a block behind the receipt → e
 gas estimates from a lagging node can be too low (the lending adapter mints accrued interest on deposit) → sends use
 estimate × 1.6; `sepolia.base.org` works for viem but rejects anvil's fork probe (use publicnode for anvil).
 
+## Live trading for demos
+
+- **Demo trader** = a second Privy server wallet `0x6539…0bAC` (`RWA_TRADER_PRIVY_WALLET_ID` / `_ADDRESS`),
+  VERIFIED in the registry, funded with testnet dUSD + WCP7 + gas, router-approved — `scripts/setup-rwa-demo-trader.mjs`
+  (idempotent).
+- **"Run a live trade" button** (market page, connected wallet) → `POST /api/rwa/live-trade` → `lib/rwa/liveTrade.ts`
+  places ONE real trade leaning toward the appraisal (below → buy, above → sell, small random at par), sized to close
+  part of the gap, clamped 40–250 dUSD. Gates (fail-closed): V2-RWAs flag + V2 gate; signed-message bound to action
+  `mintware-rwa-live-trade`; signer ∈ `RWA_DEMO_OPERATORS` (falls back to `LP_GATEWAY_CURATORS`; unset ⇒ 503);
+  rate limit + 12 s in-process cooldown. Proven locally: stranger 403, cross-action replay 401, operator 200 + real tx.
+- **Background activity**: `node --env-file=.env.robinhood.local scripts/rwa-demo-activity.mjs` — same sizing, one
+  trade every ~4 min (`RWA_ACTIVITY_SECS`, `RWA_ACTIVITY_MAX`). Run it before / during a meeting.
+- **getLogs ranges:** `sepolia.base.org` caps `eth_getLogs` at 1,000 blocks — the live API reads history from
+  `RWA_LOGS_RPC_URL` (default publicnode, ~10k ranges), incrementally (warm instances only scan new blocks).
+
 ## App surface (gated)
 
 `/app/rwa` (overview) + `/app/rwa/[unit]` (live market) + `GET /api/rwa/unit` (live chain reads, 10 s cache).

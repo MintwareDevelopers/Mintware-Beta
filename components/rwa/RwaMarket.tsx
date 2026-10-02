@@ -4,8 +4,11 @@
 // via /api/rwa/unit (polled); the proof panel renders the recorded lifecycle run (config/rwaDemo.json).
 // Light-only, V2 design system. Testnet + unaudited, fictional property, valueless tokens — said on-page.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSignMessage } from 'wagmi'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
+import { signedOrgFetch } from '@/lib/org/signedFetch'
 import { RWA_DEMO, REVERT_REASONS, RWA_CONTRACT_ROWS, RWA_CHAIN, txUrl, addrUrl, codeUrl, shortHash, walletLabel } from '@/lib/rwa/demo'
 
 type Unit = {
@@ -41,18 +44,18 @@ export function RwaMarket() {
   const [failed, setFailed] = useState(false)
   const [now, setNow] = useState(() => Date.now() / 1000)
 
+  const load = useCallback((fresh = false) =>
+    fetch(`/api/rwa/unit${fresh ? '?fresh=1' : ''}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d: Unit) => { if (d.ok) { setUnit(d); setFailed(false) } else setFailed(true) })
+      .catch(() => setFailed(true)), [])
+
   useEffect(() => {
-    let live = true
-    const load = () =>
-      fetch('/api/rwa/unit', { cache: 'no-store' })
-        .then((r) => r.json())
-        .then((d: Unit) => { if (!live) return; if (d.ok) { setUnit(d); setFailed(false) } else setFailed(true) })
-        .catch(() => live && setFailed(true))
     load()
-    const poll = setInterval(load, 12_000)
+    const poll = setInterval(() => load(), 12_000)
     const tick = setInterval(() => setNow(Date.now() / 1000), 1_000)
-    return () => { live = false; clearInterval(poll); clearInterval(tick) }
-  }, [])
+    return () => { clearInterval(poll); clearInterval(tick) }
+  }, [load])
 
   // Interest keeps accruing between polls: extrapolate client-side at the venue's rate.
   const interest = useMemo(() => {
@@ -108,6 +111,7 @@ export function RwaMarket() {
                 <span>{unit ? ago(now - unit.appraisal.at) : '—'}</span>
               </div>
               {status && <div className={`mt-4 inline-flex rounded-full px-3 py-1 text-[12.5px] font-semibold ${status.c}`}>{status.t}</div>}
+              <LiveTradeButton onTraded={() => { load(true); setTimeout(() => load(true), 4000) }} />
             </div>
           </div>
         </div>
@@ -273,6 +277,49 @@ export function RwaMarket() {
           </p>
         </div>
       </section>
+    </div>
+  )
+}
+
+/** Operator-only: signs a message, the server places ONE real trade from the verified demo-trader wallet. */
+function LiveTradeButton({ onTraded }: { onTraded: () => void }) {
+  const { address, isConnected } = useMintwareIdentity()
+  const { signMessageAsync } = useSignMessage()
+  const [state, setState] = useState<{ busy: boolean; msg?: string; hash?: string; ok?: boolean }>({ busy: false })
+  if (!isConnected || !address) return null
+
+  const run = async () => {
+    setState({ busy: true, msg: 'Sign to place a live trade…' })
+    try {
+      const res = await signedOrgFetch({ path: '/api/rwa/live-trade', action: 'mintware-rwa-live-trade', address, signMessageAsync })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j.success) {
+        const why: Record<string, string> = {
+          not_an_operator: 'This wallet is not a demo operator.', cooldown: 'One trade at a time — try again in a few seconds.',
+          trade_in_flight: 'A trade is already settling.', operators_unset: 'Live trading is not configured on this deploy.',
+          trader_not_configured: 'The demo trader is not configured on this deploy.', appraisal_stale: 'The appraisal is stale; trading is halted.',
+        }
+        setState({ busy: false, ok: false, msg: why[j.error] ?? 'The trade did not go through.' })
+        return
+      }
+      setState({ busy: false, ok: true, hash: j.hash, msg: `Settled: the demo trader ${j.side === 'buy' ? 'bought with' : 'sold'} ${j.amount}` })
+      onTraded()
+    } catch {
+      setState({ busy: false, ok: false, msg: 'Signature declined.' })
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t border-hair-soft pt-4">
+      <button onClick={run} disabled={state.busy} className="glass-pill-primary glass-pill-sm w-full disabled:opacity-60">
+        {state.busy ? 'Settling on Base Sepolia…' : 'Run a live trade'}
+      </button>
+      {state.msg && (
+        <p className={`mt-2 text-[12.5px] ${state.ok === false ? 'text-[#B4532A]' : 'text-ink-mid'}`}>
+          {state.msg}
+          {state.hash && <> · <a href={txUrl(state.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-peri-deep no-underline hover:underline">{shortHash(state.hash)} ↗</a></>}
+        </p>
+      )}
     </div>
   )
 }

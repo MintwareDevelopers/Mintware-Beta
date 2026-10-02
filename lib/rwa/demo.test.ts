@@ -20,6 +20,21 @@ describe('V2-RWAs demo data', () => {
   })
 })
 
+describe('V2-RWAs live-trade sizing', () => {
+  it('leans toward the appraisal and stays small', async () => {
+    const { planTrade } = await import('./liveTrade')
+    const below = planTrade(97, 102, 19_000, 0.5)
+    expect(below.side).toBe('buy')
+    expect(below.usd!).toBeGreaterThanOrEqual(40)
+    expect(below.usd!).toBeLessThanOrEqual(250)
+    const above = planTrade(108, 102, 19_000, 0.5)
+    expect(above.side).toBe('sell')
+    expect(above.units! * 108).toBeLessThanOrEqual(250.0001)
+    expect(planTrade(102, 102, 19_000, 0.2).side).toBe('buy')
+    expect(planTrade(102, 102, 19_000, 0.8).side).toBe('sell')
+  })
+})
+
 describe('V2-RWAs gate', () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.resetModules() })
 

@@ -49,10 +49,14 @@ export function tickToUsd(tick: number, propertyIsCurrency0 = RWA_DEMO.propertyI
   return (propertyIsCurrency0 ? p : 1 / p) * 1e12
 }
 
+/** The verified demo-trader Privy wallet behind the "run a live trade" button + the activity script. */
+export const RWA_DEMO_TRADER = '0x65398D823cB346aa4CCd4774223F96E303360bAC'
+
 /** Human label for a demo wallet, else a short address. */
 export function walletLabel(addr: string): string {
   const a = addr.toLowerCase()
   if (a === RWA_DEMO.issuer.toLowerCase()) return 'Issuer'
+  if (a === RWA_DEMO_TRADER.toLowerCase()) return 'Demo trader (live)'
   for (const w of Object.values(RWA_DEMO.wallets)) if (w.address.toLowerCase() === a) return w.label.replace(/^.* · /, '')
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }

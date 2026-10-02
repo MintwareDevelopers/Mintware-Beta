@@ -15,6 +15,9 @@ export const dynamic = 'force-dynamic'
 
 const RPC = process.env.RWA_RPC_URL ?? 'https://sepolia.base.org'
 const client = createPublicClient({ chain: baseSepolia, transport: http(RPC, { timeout: 8_000 }) })
+// History needs wide eth_getLogs ranges: sepolia.base.org caps them at 1,000 blocks, publicnode allows ~10k.
+const LOGS_RPC = process.env.RWA_LOGS_RPC_URL ?? 'https://base-sepolia-rpc.publicnode.com'
+const logsClient = createPublicClient({ chain: baseSepolia, transport: http(LOGS_RPC, { timeout: 10_000 }) })
 
 const VAULT = parseAbi([
   'function totalSeniorAssets() view returns (uint256)',
@@ -60,16 +63,41 @@ async function fromBlock(): Promise<bigint> {
 }
 
 async function logsInChunks<T>(get: (from: bigint, to: bigint) => Promise<T[]>, from: bigint, to: bigint, step = 9_000n): Promise<T[]> {
-  const out: T[] = []
-  for (let a = from; a <= to; a += step + 1n) out.push(...(await get(a, a + step > to ? to : a + step)))
-  return out
+  const ranges: [bigint, bigint][] = []
+  for (let a = from; a <= to; a += step + 1n) ranges.push([a, a + step > to ? to : a + step])
+  const out: T[][] = []
+  for (let i = 0; i < ranges.length; i += 6) out.push(...(await Promise.all(ranges.slice(i, i + 6).map(([a, b]) => get(a, b)))))
+  return out.flat()
+}
+
+// Incremental history: a warm instance only scans blocks it has not seen yet (a cold one scans from deploy).
+const getSwaps = (a: bigint, b: bigint) => logsClient.getLogs({ address: c.poolManager as `0x${string}`, event: SWAP_EVT, args: { id: POOL_ID }, fromBlock: a, toBlock: b })
+const getDemoSwaps = (a: bigint, b: bigint) => logsClient.getLogs({ address: c.router as `0x${string}`, event: DEMO_SWAP_EVT, fromBlock: a, toBlock: b })
+const getAppraisals = (a: bigint, b: bigint) => logsClient.getLogs({ address: c.hook as `0x${string}`, event: APPRAISAL_EVT, fromBlock: a, toBlock: b })
+type Hist = {
+  scannedTo: bigint
+  swaps: Awaited<ReturnType<typeof getSwaps>>
+  demoSwaps: Awaited<ReturnType<typeof getDemoSwaps>>
+  appraisals: Awaited<ReturnType<typeof getAppraisals>>
+}
+let hist: Hist | null = null
+async function history(head: bigint): Promise<Hist> {
+  const start = hist ? hist.scannedTo + 1n : await fromBlock()
+  const h: Hist = hist ?? { scannedTo: start - 1n, swaps: [], demoSwaps: [], appraisals: [] }
+  if (start > head) return h
+  const [swaps, demoSwaps, appraisals] = await Promise.all([
+    logsInChunks(getSwaps, start, head), logsInChunks(getDemoSwaps, start, head), logsInChunks(getAppraisals, start, head),
+  ])
+  hist = { scannedTo: head, swaps: [...h.swaps, ...swaps], demoSwaps: [...h.demoSwaps, ...demoSwaps], appraisals: [...h.appraisals, ...appraisals] }
+  return hist
 }
 
 let cache: { at: number; body: unknown } | null = null
 
 export const GET = createHandler(async (req, ctx) => {
   if (!isV2RwaVisible(req.cookies.get(V2_COOKIE)?.value)) return ctx.json({ ok: false, error: 'not_found' }, 404)
-  if (cache && Date.now() - cache.at < 10_000) return ctx.json(cache.body)
+  const fresh = req.nextUrl.searchParams.get('fresh') === '1' // right after a live trade: skip the cache
+  if (!fresh && cache && Date.now() - cache.at < 10_000) return ctx.json(cache.body)
 
   try {
     const head = await client.getBlock()
@@ -91,12 +119,8 @@ export const GET = createHandler(async (req, ctx) => {
       ])
     const [spotTick, appraisalTick, deviationTicks, inCore, inSpec, fresh] = band
 
-    const start = await fromBlock()
-    const [swaps, demoSwaps, appraisals] = await Promise.all([
-      logsInChunks((a, b) => client.getLogs({ address: c.poolManager as `0x${string}`, event: SWAP_EVT, args: { id: POOL_ID }, fromBlock: a, toBlock: b }), start, head.number),
-      logsInChunks((a, b) => client.getLogs({ address: c.router as `0x${string}`, event: DEMO_SWAP_EVT, fromBlock: a, toBlock: b }), start, head.number),
-      logsInChunks((a, b) => client.getLogs({ address: c.hook as `0x${string}`, event: APPRAISAL_EVT, fromBlock: a, toBlock: b }), start, head.number),
-    ])
+    // Logs node may trail the head node by a block or two — scan to a safe depth behind head.
+    const { swaps, demoSwaps, appraisals } = await history(head.number - 2n)
 
     // Block timestamps for every block that carries an event (bounded: a demo market, not a busy pool).
     const blocks = [...new Set([...swaps, ...appraisals].map((l) => l.blockNumber as bigint))].slice(-200)

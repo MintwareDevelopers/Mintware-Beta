@@ -166,7 +166,10 @@ exist as bearer routes and run only when hit manually with `CRON_SECRET` (and th
 | Variable | Visibility | Notes |
 |---|---|---|
 | `NEXT_PUBLIC_V2_RWA_ENABLED` | Public | `'true'` shows `/app/rwa*` + `/api/rwa/unit` to visitors who ALSO pass the V2 gate. **Default OFF** (pages 404). |
-| `RWA_RPC_URL` | Server-only | Base Sepolia RPC for `/api/rwa/unit` (default `https://sepolia.base.org`). |
+| `RWA_RPC_URL` | Server-only | Base Sepolia RPC for `/api/rwa/unit` + live trades (default `https://sepolia.base.org`). |
+| `RWA_LOGS_RPC_URL` | Server-only | RPC for event history (default publicnode — `sepolia.base.org` caps `eth_getLogs` at 1,000 blocks). |
+| `RWA_TRADER_PRIVY_WALLET_ID` / `RWA_TRADER_PRIVY_ADDRESS` | Server-only | The verified **demo-trader** Privy wallet (`0x6539…0bAC`) behind `POST /api/rwa/live-trade`. Needs `PRIVY_APP_ID`/`_SECRET`. Unset ⇒ 503 `trader_not_configured`. |
+| `RWA_DEMO_OPERATORS` | Server-only | Comma-separated wallet allowlist for the live-trade button (falls back to `LP_GATEWAY_CURATORS`). Empty ⇒ 503. |
 | `RWA_ORACLE_PRIVY_WALLET_ID` / `RWA_ORACLE_PRIVY_ADDRESS` | Server-only / scripts | The **dedicated `rwa` Privy seat** (`0xAF8E…d5ca`, created 2026-10-01) — deployer/owner/keeper of the demo unit. Lives in `.env.robinhood.local` for the scripts. No fallback to root/gateway seats. Optional `RWA_ORACLE_PRIVY_AUTH_KEY` (O-6) — not yet created. |
 
 ### Arc / parking account (idle-USDC-earns-in-place)
