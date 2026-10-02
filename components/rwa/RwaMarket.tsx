@@ -9,13 +9,13 @@ import Link from 'next/link'
 import { useSignMessage } from 'wagmi'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
-import { RWA_DEMO, REVERT_REASONS, RWA_CONTRACT_ROWS, RWA_CHAIN, txUrl, addrUrl, codeUrl, shortHash, walletLabel } from '@/lib/rwa/demo'
+import { RWA_DEMO, revertReasonText, RWA_CONTRACT_ROWS, RWA_CHAIN, txUrl, addrUrl, codeUrl, shortHash, walletLabel } from '@/lib/rwa/demo'
 
 type Unit = {
   ok: boolean
   block: number
   blockTime: number
-  appraisal: { tick: number; usd: number; at: number; fresh: boolean; maxAgeSecs: number | null; minUpdateSecs: number | null }
+  appraisal: { tick: number; usd: number; at: number; fresh: boolean; oracleReady: boolean; maxAgeSecs: number | null; minUpdateSecs: number | null }
   spot: { tick: number; usd: number; deviationTicks: number; inCore: boolean; inSpec: boolean }
   band: { core: [number, number]; spec: [number, number]; coreFeePct: number; specFeePct: number } | null
   tradingPaused: boolean
@@ -68,7 +68,8 @@ export function RwaMarket() {
   const p = RWA_DEMO.property
   const status = !unit ? null
     : unit.tradingPaused ? { t: 'Trading paused', c: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]' }
-    : !unit.appraisal.fresh ? { t: 'Appraisal stale — trading halted', c: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]' }
+    : !unit.appraisal.fresh && unit.appraisal.oracleReady ? { t: 'Appraisal stale — trading halted, LP exit window open', c: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]' }
+    : !unit.appraisal.fresh ? { t: 'Appraisal expired — awaiting a new appraisal', c: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]' }
     : unit.spot.inCore ? { t: 'Inside the core band', c: 'text-[#2F7D5B] bg-[rgba(47,125,91,0.10)]' }
     : unit.spot.inSpec ? { t: 'Inside the band', c: 'text-peri-deep bg-[rgba(108,108,240,0.10)]' }
     : { t: 'Outside the band — gap-closing trades only', c: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]' }
@@ -228,7 +229,7 @@ export function RwaMarket() {
                           <li key={t.hash} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[13px]">
                             <span className="text-ink">
                               {t.status === 'reverted' ? '⨯ ' : '✓ '}{displayLabel(t.label)}
-                              {REVERT_REASONS[t.label] && <span className="block text-[12px] text-[#B4532A]">{REVERT_REASONS[t.label]}</span>}
+                              {revertReasonText(t) && <span className="block text-[12px] text-[#B4532A]">{revertReasonText(t)}</span>}
                             </span>
                             <a href={txUrl(t.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-peri-deep no-underline hover:underline">{shortHash(t.hash)} ↗</a>
                           </li>

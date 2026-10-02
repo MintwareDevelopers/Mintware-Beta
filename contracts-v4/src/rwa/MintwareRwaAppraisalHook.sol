@@ -13,6 +13,12 @@ import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol
 import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {LPFeeLibrary}          from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
+
+/// @dev The vault's public `poolKey` struct getter (MintwarePairVault).
+interface IVaultPoolKey {
+    function poolKey() external view returns (Currency currency0, Currency currency1, uint24 fee, int24 tickSpacing, IHooks hooks);
+}
 
 /// @title  MintwareRwaAppraisalHook
 /// @notice V2-RWAs — the Uniswap v4 hook for ONE real-world-asset / USDC pool. It anchors trading to the
@@ -22,23 +28,30 @@ import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step
 ///           • Band. Swaps that END outside ±`specBandTicks` of the appraisal revert — unless they move the
 ///             price TOWARD the appraisal (so a fresh appraisal never freezes the market: the arb that closes
 ///             the gap is always allowed). Inside ±`coreBandTicks` the low core fee applies, else the spec fee.
-///           • Oracle. `oracleTick()` returns the appraisal tick, READY only while the appraisal is fresh
-///             (≤ `maxAppraisalAge`). Stale ⇒ not ready ⇒ the vault fails closed on valuation and traders
-///             cannot swap. The vault marks its LP at `min(spot, appraisal)`, so a high appraisal can never
-///             inflate the senior claim.
+///           • Oracle + exit window. Traders may swap only while the appraisal is FRESH (≤ `maxAppraisalAge`).
+///             `oracleTick()` stays READY for a further `oracleGraceSecs` after that — the EXIT WINDOW: trading
+///             is halted, so spot is frozen (only the vault's own bounded unwinds move it) and the vault's
+///             `min(spot, appraisal)` mark stays manipulation-resistant, letting LPs still redeem. After the
+///             grace the oracle is not ready and the vault fails closed (liveness, never principal) until a fresh
+///             appraisal is posted. A high appraisal can never inflate the senior claim (the vault takes the min).
 ///           • LP gate. Only the bound liquidity vault may add or remove liquidity.
 ///           • Vault exemption. The vault's own seniority unwind swaps skip the band: they are already capped
-///             at ±500 ticks around this oracle by `MWTreasuryPositionLib._swapLimit`, and a senior
-///             redemption must never be blocked by a trading rule.
+///             at ±500 ticks around this oracle by `MWTreasuryPositionLib._swapLimit`, and a trading rule must
+///             not block a senior redemption.
+///           • Fee. Chosen from the PRE-swap tick (the post-swap tick is unknown in `beforeSwap`): one swap that
+///             starts in the core band pays the core fee even if it ends in the spec band. Accepted — the band
+///             itself still bounds where it can end.
 ///
 /// @dev    Hardening over the shelved `MintwareOracleHook` (round-4 lesson: an instantly repointable trust
 ///         anchor is a drain vector):
-///           – appraisal moves are bounded per update (`maxStepTicks`) and rate-limited (`minUpdateInterval`),
-///             so a compromised keeper can only walk the price slowly, in public, with every step on-chain;
-///           – the keeper is rotated through a 48 h two-step timelock; the band / step / age / fee config is
-///             instant only before the pool exists, then 48 h-timelocked;
-///           – the pool must be initialised INSIDE the core band of an appraisal that already exists, and the
-///             hook binds to exactly one dynamic-fee pool;
+///           – appraisal moves are bounded per update (`maxStepTicks`), rate-limited (`minUpdateInterval`) AND
+///             capped in aggregate per rolling 24 h (`maxDriftTicksPerDay`), so a compromised keeper's total
+///             walk per day is bounded, in public, with every step on-chain;
+///           – the keeper is rotated through a 48 h two-step timelock; the config is instant only before the pool
+///             exists, then 48 h-timelocked;
+///           – the hook is pinned at `setVault` to the vault's OWN pool id, so nobody can bind it to another pool
+///             between the first appraisal and the real initialise (front-run griefing); the pool must also open
+///             INSIDE the core band of a fresh appraisal, on a dynamic fee;
 ///           – a guardian can pause trading instantly (never redemptions — the vault is exempt).
 ///         Ticks are in pool space (price of currency0 in currency1, raw units). 1 tick ≈ 1 bp of price.
 contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
@@ -66,14 +79,17 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
         uint32 maxAppraisalAge;   // seconds an appraisal stays fresh
         uint24 coreFeePips;       // LP fee inside the core band (1e6 = 100%)
         uint24 specFeePips;       // LP fee in the spec band
+        uint24 maxDriftTicksPerDay; // aggregate appraisal move allowed per rolling 24 h window
+        uint32 oracleGraceSecs;   // exit window: oracle stays ready this long after trading goes stale
     }
 
     // ── immutables / bound state ──────────────────────────────────────────────
 
     IPoolManager public immutable poolManager;
 
-    address public vault;      // the bound MintwareTreasuryVault (set once)
-    PoolId  public poolId;     // the one pool this hook serves (bound at initialize)
+    address public vault;          // the bound MintwareTreasuryVault (set once)
+    PoolId  public expectedPoolId; // pinned at setVault from the vault's own pool key
+    PoolId  public poolId;         // the one pool this hook serves (bound at initialize)
     bool    public poolBound;
 
     // ── appraisal ─────────────────────────────────────────────────────────────
@@ -82,6 +98,9 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
     uint64  public appraisedAt;
     bool    public hasAppraisal;
     address public keeper;
+
+    int24   public driftAnchorTick;   // appraisal at the start of the current 24 h drift window
+    uint64  public driftWindowStart;
 
     Config  public config;
 
@@ -121,6 +140,8 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
     error AppraisalStale();
     error UpdateTooSoon();
     error StepTooLarge();
+    error DailyDriftExceeded();
+    error VaultNotSet();
     error PoolAlreadyBound();
     error WrongPool();
     error NotDynamicFee();
@@ -174,10 +195,15 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
     // ── wiring ────────────────────────────────────────────────────────────────
 
     /// @notice Bind the liquidity vault (set once). The vault is the only LP and the only band-exempt swapper.
+    ///         Also PINS the pool this hook may ever serve to the vault's own pool key, so nobody can bind the
+    ///         hook to a junk pool in the window before the real initialise.
     function setVault(address vault_) external onlyOwner {
         if (vault != address(0)) revert AlreadySet();
         if (vault_ == address(0)) revert ZeroAddress();
-        vault = vault_;
+        (Currency c0, Currency c1, uint24 fee, int24 spacing, IHooks hooks) = IVaultPoolKey(vault_).poolKey();
+        if (address(hooks) != address(this)) revert WrongPool();
+        vault          = vault_;
+        expectedPoolId = PoolKey({currency0: c0, currency1: c1, fee: fee, tickSpacing: spacing, hooks: hooks}).toId();
         emit VaultSet(vault_);
     }
 
@@ -194,14 +220,16 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
         if (msg.sender != keeper && msg.sender != owner()) revert OnlyKeeper();
         if (hasAppraisal) revert AppraisalAlreadyInitialised();
         _checkTick(tick);
-        hasAppraisal  = true;
-        appraisalTick = tick;
-        appraisedAt   = uint64(block.timestamp);
+        hasAppraisal     = true;
+        appraisalTick    = tick;
+        appraisedAt      = uint64(block.timestamp);
+        driftAnchorTick  = tick;
+        driftWindowStart = uint64(block.timestamp);
         emit AppraisalPosted(tick, tick, uint64(block.timestamp), msg.sender);
     }
 
-    /// @notice Post a new appraisal. Bounded per step and rate-limited — the keeper can walk the reference
-    ///         price only slowly and publicly.
+    /// @notice Post a new appraisal. Bounded per step, rate-limited, and capped in aggregate per rolling 24 h
+    ///         window — the keeper's total walk per day is bounded and every step is public.
     function postAppraisal(int24 tick) external {
         if (msg.sender != keeper) revert OnlyKeeper();
         if (!hasAppraisal) revert NoAppraisal();
@@ -209,19 +237,32 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
         Config memory c = config;
         if (block.timestamp < uint256(appraisedAt) + c.minUpdateInterval) revert UpdateTooSoon();
         if (_absDiff(tick, appraisalTick) > c.maxStepTicks) revert StepTooLarge();
+        if (block.timestamp >= uint256(driftWindowStart) + 1 days) {
+            driftAnchorTick  = appraisalTick; // new window anchors at the appraisal it starts from
+            driftWindowStart = uint64(block.timestamp);
+        }
+        if (_absDiff(tick, driftAnchorTick) > c.maxDriftTicksPerDay) revert DailyDriftExceeded();
         int24 prev    = appraisalTick;
         appraisalTick = tick;
         appraisedAt   = uint64(block.timestamp);
         emit AppraisalPosted(tick, prev, uint64(block.timestamp), msg.sender);
     }
 
+    /// @notice Trading is allowed only while the appraisal is fresh.
     function isFresh() public view returns (bool) {
         return hasAppraisal && block.timestamp <= uint256(appraisedAt) + config.maxAppraisalAge;
     }
 
-    /// @notice The vault's oracle (the `IJitOracle` shape): the appraisal tick, ready only while fresh.
+    /// @notice The vault may value its position while fresh OR inside the exit window that follows.
+    function oracleReady() public view returns (bool) {
+        Config memory c = config;
+        return hasAppraisal && block.timestamp <= uint256(appraisedAt) + c.maxAppraisalAge + c.oracleGraceSecs;
+    }
+
+    /// @notice The vault's oracle (the `IJitOracle` shape): the appraisal tick, ready while fresh or in the
+    ///         exit window (trading is halted there, so spot cannot be pushed by anyone but the vault).
     function oracleTick() external view returns (int24 tick, bool ready) {
-        return (appraisalTick, isFresh());
+        return (appraisalTick, oracleReady());
     }
 
     /// @notice UI/keeper helper: live pool tick, its distance from the appraisal, and which band it sits in.
@@ -294,7 +335,8 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
         external override onlyPoolManager returns (bytes4)
     {
         if (poolBound) revert PoolAlreadyBound();
-        if (address(key.hooks) != address(this)) revert WrongPool();
+        if (vault == address(0)) revert VaultNotSet();
+        if (address(key.hooks) != address(this) || PoolId.unwrap(key.toId()) != PoolId.unwrap(expectedPoolId)) revert WrongPool();
         if (!LPFeeLibrary.isDynamicFee(key.fee)) revert NotDynamicFee();
         if (!isFresh()) revert NoAppraisal();
         int24 initTick = TickMath.getTickAtSqrtPrice(sqrtPriceX96);
@@ -412,7 +454,9 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
             c.coreBandTicks == 0 || c.coreBandTicks > c.specBandTicks || c.specBandTicks > MAX_SPEC_BAND ||
             c.maxStepTicks == 0 || c.maxStepTicks > c.specBandTicks ||
             c.maxAppraisalAge == 0 || c.maxAppraisalAge > MAX_APPRAISAL_AGE ||
-            c.coreFeePips > MAX_FEE_PIPS || c.specFeePips > MAX_FEE_PIPS || c.coreFeePips > c.specFeePips
+            c.coreFeePips > MAX_FEE_PIPS || c.specFeePips > MAX_FEE_PIPS || c.coreFeePips > c.specFeePips ||
+            c.maxDriftTicksPerDay < c.maxStepTicks || c.maxDriftTicksPerDay > MAX_SPEC_BAND ||
+            c.oracleGraceSecs > MAX_APPRAISAL_AGE
         ) revert BadConfig();
     }
 

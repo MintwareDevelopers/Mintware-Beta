@@ -39,11 +39,12 @@ const JUNIOR_TOKENS = parseUnits(process.env.JUNIOR_TOKENS ?? '5000', 18)
 const JUNIOR_USD = parseUnits(process.env.JUNIOR_USD ?? '500', 6)
 const LEND_APR_BPS = BigInt(process.env.LEND_APR_BPS ?? 450)
 
-const CONFIG = { coreBandTicks: 300, specBandTicks: 1000, maxStepTicks: 500, minUpdateInterval: 600, maxAppraisalAge: 30 * 86400, coreFeePips: 3000, specFeePips: 10000 }
+const CONFIG = { coreBandTicks: 300, specBandTicks: 1000, maxStepTicks: 500, minUpdateInterval: 600, maxAppraisalAge: 30 * 86400, coreFeePips: 3000, specFeePips: 10000, maxDriftTicksPerDay: 1000, oracleGraceSecs: 7 * 86400 }
 const CONFIG_TUPLE = { type: 'tuple', components: [
   { name: 'coreBandTicks', type: 'uint24' }, { name: 'specBandTicks', type: 'uint24' }, { name: 'maxStepTicks', type: 'uint24' },
   { name: 'minUpdateInterval', type: 'uint32' }, { name: 'maxAppraisalAge', type: 'uint32' },
   { name: 'coreFeePips', type: 'uint24' }, { name: 'specFeePips', type: 'uint24' },
+  { name: 'maxDriftTicksPerDay', type: 'uint24' }, { name: 'oracleGraceSecs', type: 'uint32' },
 ] }
 
 const die = (m) => { console.error(`\n✗ ${m}`); process.exit(1) }
@@ -74,17 +75,28 @@ async function retry(fn, label, tries = 6) {
 }
 
 const txs = progress.txs ?? (progress.txs = [])
-async function confirm(hash, label) {
-  const r = await pub.waitForTransactionReceipt({ hash })
-  if (r.status !== 'success') die(`${label} reverted (${hash})`)
+progress.pending ??= {}
+
+// Send a step EXACTLY ONCE across re-runs: the hash is checkpointed the moment it is broadcast, so a crash or
+// a receipt timeout before confirmation resumes by waiting on THAT hash — never by sending the step again.
+async function sendOnce(label, send) {
+  let hash = progress.pending[label]
+  if (hash) console.log(`  · ${label}: resuming, waiting on ${hash}`)
+  else { hash = await send(); progress.pending[label] = hash; checkpoint() }
+  const r = await pub.waitForTransactionReceipt({ hash, timeout: 300_000 })
+  if (r.status !== 'success') {
+    txs.push({ label, hash, block: Number(r.blockNumber), status: 'reverted' }); delete progress.pending[label]; checkpoint()
+    die(`${label} reverted (${hash})`)
+  }
   txs.push({ label, hash, block: Number(r.blockNumber) })
+  delete progress.pending[label]
+  checkpoint()
   console.log(`  ✓ ${label}  ${hash}`)
   return r
 }
 async function deploy(label, a, args = [], bytecode = a.bytecode.object) {
   if (progress.steps[`deploy ${label}`]) { console.log(`  · ${label} already at ${progress.steps[`deploy ${label}`]}`); return progress.steps[`deploy ${label}`] }
-  const hash = await w.deployContract({ abi: a.abi, bytecode, args })
-  const r = await confirm(hash, `deploy ${label}`)
+  const r = await sendOnce(`deploy ${label}`, () => w.deployContract({ abi: a.abi, bytecode, args }))
   console.log(`      → ${r.contractAddress}`)
   progress.steps[`deploy ${label}`] = r.contractAddress
   checkpoint()
@@ -92,8 +104,8 @@ async function deploy(label, a, args = [], bytecode = a.bytecode.object) {
 }
 async function call(label, address, a, functionName, args = []) {
   if (progress.steps[label]) { console.log(`  · ${label} already done`); return }
-  await retry(() => pub.simulateContract({ address, abi: a.abi, functionName, args, account }), label)
-  const r = await confirm(await w.writeContract({ address, abi: a.abi, functionName, args }), label)
+  if (!progress.pending[label]) await retry(() => pub.simulateContract({ address, abi: a.abi, functionName, args, account }), label)
+  const r = await sendOnce(label, () => w.writeContract({ address, abi: a.abi, functionName, args }))
   progress.steps[label] = r.transactionHash
   checkpoint()
   return r
@@ -130,8 +142,8 @@ for (let i = 0n; i < 2_000_000n; i++) {
 }
 if (!salt) die('could not mine a hook salt')
 console.log(`  · mined hook address ${hookAddr}`)
-if (((await pub.getCode({ address: hookAddr })) ?? '0x').length <= 2) {
-  await confirm(await w.sendTransaction({ to: C2_FACTORY, data: concat([salt, hookInit]) }), 'deploy MintwareRwaAppraisalHook (CREATE2)')
+if (((await pub.getCode({ address: hookAddr })) ?? '0x').length <= 2 || progress.pending['deploy MintwareRwaAppraisalHook (CREATE2)']) {
+  await sendOnce('deploy MintwareRwaAppraisalHook (CREATE2)', () => w.sendTransaction({ to: C2_FACTORY, data: concat([salt, hookInit]) }))
 }
 await retry(async () => { if (((await pub.getCode({ address: hookAddr })) ?? '0x').length <= 2) throw new Error('hook not at the mined address') }, 'hook code')
 

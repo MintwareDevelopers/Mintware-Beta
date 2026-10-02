@@ -13,10 +13,10 @@
 | Part | Contract | Note |
 |---|---|---|
 | Liquidity vault | `MintwareTreasuryVault` (**unchanged** V2 code) | senior = open LPs' USD at par, exits in USD only; junior = issuer's property inventory, locked ≥ 90 d, first-loss; idle-first (~80%) in an `IYieldAdapter` |
-| Pool + hook | Uniswap v4 dynamic-fee pool + `contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol` | appraisal band (swaps ending outside revert unless they move TOWARD the appraisal), band fee, LP gated to the vault, vault's own unwind swaps exempt (already ±500-tick bounded by `MWTreasuryPositionLib`), **is the vault's oracle** via `oracleTick()` (stale ⇒ not ready ⇒ fail closed) |
-| Compliance | the issuer's permissioned token (ERC-3643-shaped) | the ONLY check: whoever RECEIVES the token. Vault, PoolManager, router enrolled once as permitted holders. Read through `src/rwa/interfaces/IRwaIdentityRegistry.sol`. |
+| Pool + hook | Uniswap v4 dynamic-fee pool + `contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol` | appraisal band (swaps ending outside revert unless they move TOWARD the appraisal), band fee, LP gated to the vault, vault's own unwind swaps exempt (already ±500-tick bounded by `MWTreasuryPositionLib`), **is the vault's oracle** via `oracleTick()`. Pinned at `setVault` to the vault's own pool id (no front-run binding to another pool). **Exit window:** trading stops when the appraisal goes stale (`maxAppraisalAge`); the oracle stays ready for `oracleGraceSecs` more (spot is frozen — only the vault's bounded unwinds move it), so LPs can still redeem; after that the vault fails closed until a fresh appraisal |
+| Compliance | the issuer's permissioned token (ERC-3643-shaped) | the only gate is the token's transfer rule: BOTH sides of every transfer must be a permitted holder (enrolled infra) or registry-verified — so a buyer must be verified to receive, and a revoked holder cannot sell. LPs never touch the token. Vault, PoolManager, router enrolled once as permitted holders. Read through `src/rwa/interfaces/IRwaIdentityRegistry.sol`. |
 
-Appraisal hardening: per-update step cap, min interval, max age, keeper + config changes 48 h-timelocked after the
+Appraisal hardening: per-update step cap, min interval, a rolling-24 h aggregate drift cap (`maxDriftTicksPerDay`), max age + exit-window grace, keeper + config changes 48 h-timelocked after the
 pool exists, pool must launch inside the core band of a fresh appraisal, guardian `pauseTrading` (never blocks
 redemptions). Trust anchors are never instantly repointable (round-4 lesson).
 
@@ -72,4 +72,5 @@ pages `notFound()`, the API 404s otherwise. Proof data: `lib/rwa/demo.ts` (reads
 - Accredited / qualified-purchaser LP gate (3(c)(7) question) would need a vault change — out of v1 by decision.
 - Collateral oracle (`RwaCollateralOracle`, branch `feat/rwa-data-oracle-poc`), rental-income routing, factory.
 - External audit before any real value. Copy rules: no deposit / savings / guaranteed / fixed-APY framing.
-- Tests: `contracts-v4/test/rwa/MintwareRwaLiquidityUnit.t.sol` (18, incl. a band fuzz).
+- Tests: `contracts-v4/test/rwa/MintwareRwaLiquidityUnit.t.sol` (25, incl. a band fuzz) — every refusal asserted by its EXACT inner error (v4 `WrappedError` unwrapped); LP-gate tests mutation-checked.
+- Adversarial review (2026-10-02, 54 agents, 23 confirmed): fixed — pool-binding front-run, stale-appraisal redemption freeze (exit window), daily drift cap, send-once resumable scripts, decoded revert reasons, exact-error tests, doc drift. Accepted + documented: band fee chosen from the PRE-swap tick (one swap can start core and end in spec at the core fee).

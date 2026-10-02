@@ -5,7 +5,8 @@ Stack: Next.js 16 (App Router, webpack build) · TypeScript · Tailwind v4 · **
 Supabase · Foundry · Rust services. pnpm.
 
 > **▶ Read [`.claude/STATE.md`](.claude/STATE.md) first** — the single "you are here" file:
-> what's **live**, what's **shelved** (RWA + Campaigns both are), and where to look. It wins over
+> what's **live**, what's **shelved** (Campaigns and the old RWA venue are — the RWA *liquidity engine* is
+> revived as the V2-RWAs vertical, see `.claude/rules/rwa-liquidity.md`), and where to look. It wins over
 > any rule/doc it disagrees with. The through-line is *"Never idle. Never locked. Always yours."*
 > ([`docs/product/framing-and-messaging.md`](docs/product/framing-and-messaging.md)).
 >

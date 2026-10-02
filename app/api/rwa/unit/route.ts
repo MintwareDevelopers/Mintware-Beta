@@ -2,7 +2,8 @@
 // Reads the vault / lending adapter / appraisal hook directly (no DB), plus the pool's swap history, the
 // demo router's trade events and the hook's appraisal events, so the market page shows the chain as of
 // now. Gated: 404 unless the V2-RWAs flag is on AND the visitor passes the V2 gate. Best-effort: an RPC
-// hiccup returns { ok:false } and the page falls back to the recorded proof run. Testnet + unaudited.
+// hiccup returns { ok:false }; the page then shows its recorded proof run (legs + contracts) but no live numbers.
+// All state reads are pinned to ONE block so a snapshot can never mix blocks. Testnet + unaudited.
 
 import { createPublicClient, http, keccak256, encodeAbiParameters, parseAbi, parseAbiItem, type Log } from 'viem'
 import { baseSepolia } from 'viem/chains'
@@ -37,6 +38,7 @@ const HOOK = parseAbi([
   'function bandStatus() view returns (int24 spotTick, int24 appraisal, uint256 deviationTicks, bool inCore, bool inSpec, bool fresh)',
   'function appraisedAt() view returns (uint64)',
   'function tradingPaused() view returns (bool)',
+  'function oracleReady() view returns (bool)',
 ])
 const SWAP_EVT = parseAbiItem('event Swap(bytes32 indexed id, address indexed sender, int128 amount0, int128 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint24 fee)')
 const DEMO_SWAP_EVT = parseAbiItem('event DemoSwap(address indexed trader, bool zeroForOne, uint256 amountIn, uint256 amountOut)')
@@ -101,21 +103,23 @@ export const GET = createHandler(async (req, ctx) => {
 
   try {
     const head = await client.getBlock()
-    const [senior, deployed, shares, juniorTokens, juniorUsd, lockExpiry, lendAssets, pending, apr, minted, band, appraisedAt, paused] =
+    const pinned = head.number - 1n // one block back: a load-balanced backend may not have `head` yet
+    const [senior, deployed, shares, juniorTokens, juniorUsd, lockExpiry, lendAssets, pending, apr, minted, band, appraisedAt, paused, oracleReadyRaw] =
       await Promise.all([
-        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'totalSeniorAssets' }),
-        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'deployedFromSenior' }),
-        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'totalSeniorShares' }),
-        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'juniorTokens' }),
-        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'juniorUsdcBuffer' }),
-        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'lockExpiry' }),
-        client.readContract({ address: c.adapter as `0x${string}`, abi: LEND, functionName: 'totalAssets' }),
-        client.readContract({ address: c.adapter as `0x${string}`, abi: LEND, functionName: 'pendingInterest' }),
-        client.readContract({ address: c.adapter as `0x${string}`, abi: LEND, functionName: 'aprBps' }),
-        client.readContract({ address: c.adapter as `0x${string}`, abi: LEND, functionName: 'totalInterestMinted' }),
-        client.readContract({ address: c.hook as `0x${string}`, abi: HOOK, functionName: 'bandStatus' }),
-        client.readContract({ address: c.hook as `0x${string}`, abi: HOOK, functionName: 'appraisedAt' }),
-        client.readContract({ address: c.hook as `0x${string}`, abi: HOOK, functionName: 'tradingPaused' }),
+        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'totalSeniorAssets', blockNumber: pinned }),
+        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'deployedFromSenior', blockNumber: pinned }),
+        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'totalSeniorShares', blockNumber: pinned }),
+        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'juniorTokens', blockNumber: pinned }),
+        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'juniorUsdcBuffer', blockNumber: pinned }),
+        client.readContract({ address: c.vault as `0x${string}`, abi: VAULT, functionName: 'lockExpiry', blockNumber: pinned }),
+        client.readContract({ address: c.adapter as `0x${string}`, abi: LEND, functionName: 'totalAssets', blockNumber: pinned }),
+        client.readContract({ address: c.adapter as `0x${string}`, abi: LEND, functionName: 'pendingInterest', blockNumber: pinned }),
+        client.readContract({ address: c.adapter as `0x${string}`, abi: LEND, functionName: 'aprBps', blockNumber: pinned }),
+        client.readContract({ address: c.adapter as `0x${string}`, abi: LEND, functionName: 'totalInterestMinted', blockNumber: pinned }),
+        client.readContract({ address: c.hook as `0x${string}`, abi: HOOK, functionName: 'bandStatus', blockNumber: pinned }),
+        client.readContract({ address: c.hook as `0x${string}`, abi: HOOK, functionName: 'appraisedAt', blockNumber: pinned }),
+        client.readContract({ address: c.hook as `0x${string}`, abi: HOOK, functionName: 'tradingPaused', blockNumber: pinned }),
+        client.readContract({ address: c.hook as `0x${string}`, abi: HOOK, functionName: 'oracleReady', blockNumber: pinned }).catch(() => null),
       ])
     const [spotTick, appraisalTick, deviationTicks, inCore, inSpec, fresh] = band
 
@@ -166,6 +170,7 @@ export const GET = createHandler(async (req, ctx) => {
       blockTime: Number(head.timestamp),
       appraisal: {
         tick: Number(appraisalTick), usd: tickToUsd(Number(appraisalTick)), at: Number(appraisedAt), fresh,
+        oracleReady: oracleReadyRaw ?? fresh, // older hooks (no exit window) ⇒ ready iff fresh
         maxAgeSecs: cfg?.maxAppraisalAge ?? null, minUpdateSecs: cfg?.minUpdateInterval ?? null,
       },
       spot: { tick: Number(spotTick), usd: tickToUsd(Number(spotTick)), deviationTicks: Number(deviationTicks), inCore, inSpec },

@@ -20,7 +20,8 @@ const KEY_T = { type: 'tuple', components: [
 const CFG_T = { type: 'tuple', components: [
   { name: 'coreBandTicks', type: 'uint24' }, { name: 'specBandTicks', type: 'uint24' }, { name: 'maxStepTicks', type: 'uint24' },
   { name: 'minUpdateInterval', type: 'uint32' }, { name: 'maxAppraisalAge', type: 'uint32' },
-  { name: 'coreFeePips', type: 'uint24' }, { name: 'specFeePips', type: 'uint24' }] }
+  { name: 'coreFeePips', type: 'uint24' }, { name: 'specFeePips', type: 'uint24' },
+  { name: 'maxDriftTicksPerDay', type: 'uint24' }, { name: 'oracleGraceSecs', type: 'uint32' }] }
 
 const LIB = 'contracts-v4/src/payments/lib/MWTreasuryPositionLib.sol:MWTreasuryPositionLib'
 const jobs = [

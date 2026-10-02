@@ -60,7 +60,9 @@ contract DeployRwaLiquidityUnit is Script {
             minUpdateInterval: 10 minutes,
             maxAppraisalAge: 30 days,
             coreFeePips: 3_000,          // 0.30%
-            specFeePips: 10_000          // 1.00%
+            specFeePips: 10_000,         // 1.00%
+            maxDriftTicksPerDay: 1_000,  // ≈ 10.5% aggregate per 24 h
+            oracleGraceSecs: 7 days      // exit window after trading goes stale
         });
     }
 

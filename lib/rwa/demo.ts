@@ -5,7 +5,8 @@
 
 import demo from '@/config/rwaDemo.json'
 
-export type RwaProofTx = { label: string; hash: string; status: 'success' | 'reverted'; from?: string; block?: number }
+export type RwaRevertReason = { error: string; target: string | null; args: string[] }
+export type RwaProofTx = { label: string; hash: string; status: 'success' | 'reverted'; from?: string; block?: number; reason?: RwaRevertReason }
 export type RwaProofLeg = { n: number; title: string; desc: string; txs: RwaProofTx[] }
 
 export type RwaDemo = {
@@ -23,6 +24,7 @@ export type RwaDemo = {
   hookConfig: {
     coreBandTicks: number; specBandTicks: number; maxStepTicks: number
     minUpdateInterval: number; maxAppraisalAge: number; coreFeePips: number; specFeePips: number
+    maxDriftTicksPerDay?: number; oracleGraceSecs?: number
   } | null
   deployTxs: { label: string; hash: string; block?: number }[]
   snapshot: Record<string, string>
@@ -31,10 +33,17 @@ export type RwaDemo = {
 
 export const RWA_DEMO = demo as unknown as RwaDemo
 
-/** Why each deliberately-refused proof tx reverted, read from its on-chain trace (see the lifecycle script). */
-export const REVERT_REASONS: Record<string, string> = {
-  'Fox (unverified) tries to buy with 100 dUSD': 'NotPermitted(Fox): the property token refused to deliver to an unverified wallet',
-  'Dana tries a 2,500 dUSD buy (would leave the band)': 'PriceOutOfBand: the hook refused a trade that would end >10% from the appraisal',
+/** Plain-English text for a refusal, from the revert the lifecycle script DECODED on-chain (`tx.reason`). */
+const RULE_TEXT: Record<string, string> = {
+  NotPermitted: 'the property token refused to deliver to an unverified wallet',
+  PriceOutOfBand: 'the hook refused a trade that would end outside the appraisal band',
+  AppraisalStale: 'the hook halts trading while the appraisal is stale',
+  TradingIsPaused: 'trading is paused by the guardian',
+}
+export function revertReasonText(t: RwaProofTx): string | null {
+  if (t.status !== 'reverted') return null
+  if (!t.reason) return 'reverted on-chain (reason not recorded for this run)'
+  return `${t.reason.error}: ${RULE_TEXT[t.reason.error] ?? 'reverted on-chain'} (decoded from the chain)`
 }
 
 export const RWA_CHAIN = { id: 84532, name: 'Base Sepolia', explorer: 'https://sepolia.basescan.org' } as const

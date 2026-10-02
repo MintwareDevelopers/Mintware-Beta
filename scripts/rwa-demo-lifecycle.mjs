@@ -1,12 +1,11 @@
 // V2-RWAs — run the full demo lifecycle against a DEPLOYED liquidity unit and record every proof hash.
 //
-// Prereq: `forge script contracts-v4/script/DeployRwaLiquidityUnit.s.sol --rpc-url <rpc> --broadcast` (that
-// script prints the vault address; pass it as RWA_VAULT). Everything else is read back from the vault itself
-// (usd / property / adapter / hook), so the proof file can never point at a mismatched contract set.
+// Prereq: scripts/deploy-rwa-demo.mjs (writes config/rwaDemo.deployment.json). Everything else is read back
+// from the vault itself (usd / property / adapter / hook), so the proof file can never point at a mismatched set.
 //
 // The run, each step a real transaction whose hash lands in the proof file:
 //   1. issuer verifies two traders in the identity registry
-//   2. three open LPs deposit dUSD as the senior tranche (they are NOT verified — they never hold the asset)
+//   2. three open LPs supply dUSD to the senior tranche (they are NOT verified — they never hold the asset)
 //   3. a slice of senior is deployed into the v4 pool next to the issuer's property inventory; the rest earns
 //   4. verified traders buy and sell inside the appraisal band
 //   5. an UNVERIFIED wallet tries to buy → the property token refuses it → the tx is mined REVERTED
@@ -15,8 +14,9 @@
 //   8. the lending adapter realises its accrued interest
 //   9. an LP exits — and receives dUSD only
 //
-// Steps 5 and 6 are sent with an explicit gas limit so they are MINED as failed transactions — on-chain
-// evidence of the compliance gate and the band, not a simulation.
+// Steps 5 and 6 are sent with an explicit gas limit so they are MINED as failed transactions, then the script
+// replays each against its parent block and REQUIRES the decoded revert to be the intended rule (NotPermitted
+// from the token; PriceOutOfBand from the hook) — stored in the proof file as `reason`.
 //
 // TESTNET ONLY. Demo wallets are generated once and kept in RWA_DEMO_WALLETS (gitignored); they hold only
 // valueless testnet tokens + a little testnet ETH for gas.
@@ -32,7 +32,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, defineChain } from 'viem'
+import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, defineChain, parseAbi, decodeErrorResult } from 'viem'
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
 import { resolveRwaSigner } from './lib/rwaSigner.mjs'
 
@@ -118,37 +118,85 @@ const progress = existsSync(PROGRESS) ? JSON.parse(readFileSync(PROGRESS, 'utf8'
 if (progress.vault?.toLowerCase() !== vaultAddr.toLowerCase()) die(`progress file ${PROGRESS} belongs to another vault — move it aside`)
 const checkpoint = () => writeFileSync(PROGRESS, JSON.stringify(progress, null, 2))
 
-async function send(account, address, a, functionName, args, label, { expectRevert = false } = {}) {
+// Decode WHY a mined tx reverted, from the chain itself: replay its exact calldata against the parent block and
+// unwrap v4's WrappedError(target, selector, reason, details) down to the rule that fired.
+const RULE_ERRORS = parseAbi([
+  'error WrappedError(address target, bytes4 selector, bytes reason, bytes details)',
+  'error NotPermitted(address account)',
+  'error PriceOutOfBand(int24 tick, int24 appraisal)',
+  'error AppraisalStale()',
+  'error TradingIsPaused()',
+])
+async function revertReason(hash) {
+  const tx = await pub.getTransaction({ hash })
+  const res = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+    jsonrpc: '2.0', id: 1, method: 'eth_call',
+    params: [{ from: tx.from, to: tx.to, data: tx.input, gas: `0x${tx.gas.toString(16)}` }, `0x${(tx.blockNumber - 1n).toString(16)}`],
+  }) }).then((r) => r.json())
+  let data = res.error?.data, target = null
+  for (let depth = 0; data && depth < 4; depth++) {
+    let d
+    try { d = decodeErrorResult({ abi: RULE_ERRORS, data }) } catch { return { error: `unknown ${String(data).slice(0, 10)}`, target, args: [] } }
+    if (d.errorName !== 'WrappedError') return { error: d.errorName, target, args: d.args.map(String) }
+    target = d.args[0]; data = d.args[2]
+  }
+  return { error: 'none', target, args: [] }
+}
+
+// Resumable + send-once: a step's hash is checkpointed the moment it is BROADCAST, so a crash or a receipt
+// timeout resumes by waiting on that hash — never by sending the step a second time.
+async function send(account, address, a, functionName, args, label, { expectRevert = null } = {}) {
   const done = progress.steps[label]
   if (done) {
     log(`· ${label} (already on-chain ${done.hash})`)
     if (leg) leg.txs.push(done)
     return done
   }
-  const w = wallet(account)
-  const opts = { address, abi: a, functionName, args, account }
+  progress.pending ??= {}
+  let hash = progress.pending[label]
   let gas = FORCED_GAS
-  if (!expectRevert) {
-    await simulateWithRetry(opts, label)
-    // Explicit headroom: an estimate served by a lagging node can miss state-dependent work (e.g. the
-    // lending adapter minting freshly accrued interest) and run the real tx out of gas.
-    const est = await pub.estimateContractGas(opts).catch(() => 300_000n)
-    gas = (est * 16n) / 10n + 30_000n
-  } else {
-    await sleep(3000) // let the prior state settle on every backend before the deliberate revert
+  if (hash) log(`· ${label}: resuming, waiting on ${hash}`)
+  else {
+    const w = wallet(account)
+    const opts = { address, abi: a, functionName, args, account }
+    if (!expectRevert) {
+      await simulateWithRetry(opts, label)
+      // Explicit headroom: an estimate served by a lagging node can miss state-dependent work (e.g. the
+      // lending adapter minting freshly accrued interest) and run the real tx out of gas.
+      const est = await pub.estimateContractGas(opts).catch(() => 300_000n)
+      gas = (est * 16n) / 10n + 30_000n
+    } else {
+      await sleep(3000) // let the prior state settle on every backend before the deliberate revert
+    }
+    hash = await w.writeContract({ ...opts, gas })
+    progress.pending[label] = hash
+    checkpoint()
   }
-  const hash = await w.writeContract({ ...opts, gas })
-  const r = await pub.waitForTransactionReceipt({ hash })
+  const r = await pub.waitForTransactionReceipt({ hash, timeout: 300_000 })
   const status = r.status === 'success' ? 'success' : 'reverted'
-  if (expectRevert && status !== 'reverted') die(`${label}: expected an on-chain revert, got ${status}`)
-  if (expectRevert && r.gasUsed >= gas) die(`${label}: reverted by running out of gas, not by the rule under test (${hash})`)
-  if (!expectRevert && status !== 'success') die(`${label}: reverted (${hash}, gas ${r.gasUsed}/${gas})`)
-  log(`${status === 'success' ? '✓' : '⨯ reverted (expected)'}  ${label}  ${hash}`)
   const rec = { label, hash, status, from: account.address, block: Number(r.blockNumber) }
+  if (expectRevert) {
+    if (status !== 'reverted') { recordFailure(rec); die(`${label}: expected an on-chain revert, got ${status}`) }
+    await sleep(2500)
+    const why = await revertReason(hash)
+    rec.reason = why
+    // The proof only counts if the chain says the INTENDED rule fired (not out-of-gas, not some other check).
+    if (why.error !== expectRevert.error || (expectRevert.target && why.target?.toLowerCase() !== expectRevert.target.toLowerCase())) {
+      recordFailure(rec); die(`${label}: reverted for ${why.error} in ${why.target}, expected ${expectRevert.error} (${hash})`)
+    }
+  } else if (status !== 'success') { recordFailure(rec); die(`${label}: reverted (${hash}, gas ${r.gasUsed})`) }
+  log(`${status === 'success' ? '✓' : `⨯ reverted (expected: ${rec.reason.error})`}  ${label}  ${hash}`)
+  delete progress.pending[label]
   progress.steps[label] = rec
   checkpoint()
   if (leg) leg.txs.push(rec)
   return rec
+}
+function recordFailure(rec) {
+  progress.failures ??= []
+  progress.failures.push(rec)
+  delete progress.pending[rec.label]
+  checkpoint()
 }
 
 async function fundGas(to) {
@@ -207,11 +255,11 @@ await sell('danaTrader', 1, `Dana sells 1 ${propSymbol}`)
 
 // ── 5. unverified refused ──────────────────────────────────────────────────
 startLeg('An unverified wallet is refused', 'Fox tries to buy. The property token itself refuses to deliver to an unverified wallet, so the whole swap reverts on-chain.')
-await buy('foxUnverified', 100, 'Fox (unverified) tries to buy with 100 dUSD', { expectRevert: true })
+await buy('foxUnverified', 100, 'Fox (unverified) tries to buy with 100 dUSD', { expectRevert: { error: 'NotPermitted', target: property } })
 
 // ── 6. out of band refused ─────────────────────────────────────────────────
 startLeg('A trade beyond the band is refused', 'A buy large enough to push the price more than ~10% past the appraisal is rejected by the hook.')
-await buy('danaTrader', 2_500, 'Dana tries a 2,500 dUSD buy (would leave the band)', { expectRevert: true })
+await buy('danaTrader', 2_500, 'Dana tries a 2,500 dUSD buy (would leave the band)', { expectRevert: { error: 'PriceOutOfBand', target: hook } })
 
 // ── 7. appraisal update ────────────────────────────────────────────────────
 startLeg('The appraisal moves, within its limits', 'The keeper posts a new appraisal: bounded to ~5% per update and at most once per interval. The band moves with it.')
