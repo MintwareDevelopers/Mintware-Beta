@@ -24,6 +24,7 @@ const GROUPS: { heading: string; items: { href: string; label: string; external?
   ...(RWA_ON ? [{ heading: 'RWA', items: [
     { href: '/app/rwa', label: 'RWA overview' }, { href: '/app/rwa/wcp7', label: 'Willow Creek market' },
     { href: '/app/rwa/proof', label: 'On-chain proof' },
+    { href: '/app/rwa-liquidity', label: 'Supply RWA liquidity' }, { href: '/app/team/rwa', label: 'RWA issuer console' },
   ] }] : []),
   { heading: 'Live', items: [{ href: '/v1', label: 'LP Gateway (V1)', external: true }, { href: '/agents/leaderboard', label: 'Agent leaderboard', external: true }] },
 ]
