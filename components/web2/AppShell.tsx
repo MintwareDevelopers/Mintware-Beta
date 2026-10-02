@@ -14,6 +14,8 @@ import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { shortAddr } from '@/lib/web2/api'
 
+const RWA_ON = process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'
+
 export type ShellNavItem = { href: string; label: string; hint?: string; exact?: boolean }
 export type ShellNavGroup = { title?: string; items: ShellNavItem[] }
 
@@ -169,6 +171,7 @@ export function PersonalShell({ children }: { children: ReactNode }) {
           title: 'Earn',
           items: [
             { href: '/app/vaults', label: 'Vaults', hint: 'Testnet' },
+            ...(RWA_ON ? [{ href: '/app/rwa-liquidity', label: 'RWA liquidity', hint: 'Testnet' }] : []),
             { href: '/v1', label: 'LP Gateway', hint: 'Live ↗' },
           ],
         },

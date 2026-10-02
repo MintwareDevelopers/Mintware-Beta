@@ -104,11 +104,11 @@ export function RwaOverview() {
           <div className={EY}>How it clears</div>
           <h2 className={`${H2} mt-1.5`}>Permissionless liquidity. Compliant ownership.</h2>
           <div className="mt-8 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-3 max-[900px]:grid-cols-1">
-            <RoleCard n="01" tag="Open to anyone" title="Liquidity providers" body="Supply dollars to the senior tranche. They never hold the property token, so its transfer rules never reach them, and they exit in dollars." tone="teal" />
+            <RoleCard n="01" tag="Open to anyone" title="Liquidity providers" body="Supply dollars to the senior tranche. They never hold the property token, so its transfer rules never reach them, and they exit in dollars." tone="teal" link={{ href: '/app/rwa-liquidity', label: 'Supply liquidity →' }} />
             <Arrow />
-            <RoleCard n="02" tag="Enrolled once" title="Vault + pool" body="The vault puts a slice into a standard Uniswap v4 pool and lends the rest. The issuer's own inventory sits underneath as first-loss." tone="peri" />
+            <RoleCard n="02" tag="Enrolled once" title="Vault + pool" body="The vault puts a slice into a standard Uniswap v4 pool and lends the rest. The issuer's own inventory sits underneath as first-loss." tone="peri" link={{ href: '/app/team/rwa', label: 'Issuer console →' }} />
             <Arrow />
-            <RoleCard n="03" tag="Verified" title="Traders" body="Checked by the issuer's token at the moment they receive it. An unverified wallet is refused by the token itself." tone="coral" />
+            <RoleCard n="03" tag="Verified" title="Traders" body="Checked by the issuer's token at the moment they receive it. An unverified wallet is refused by the token itself." tone="coral" link={{ href: '/app/rwa/wcp7', label: 'See the market →' }} />
           </div>
         </div>
       </section>
@@ -162,7 +162,7 @@ const TONES = {
   peri: 'text-peri-deep bg-[rgba(108,108,240,0.10)]',
   coral: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]',
 }
-function RoleCard({ n, tag, title, body, tone }: { n: string; tag: string; title: string; body: string; tone: keyof typeof TONES }) {
+function RoleCard({ n, tag, title, body, tone, link }: { n: string; tag: string; title: string; body: string; tone: keyof typeof TONES; link?: { href: string; label: string } }) {
   return (
     <div className="rounded-[20px] border border-hair bg-white p-6">
       <div className="flex items-center justify-between">
@@ -171,6 +171,7 @@ function RoleCard({ n, tag, title, body, tone }: { n: string; tag: string; title
       </div>
       <h3 className="mt-4 font-atx-display text-[18px] font-semibold">{title}</h3>
       <p className="mt-2 text-[13.5px] leading-[1.55] text-ink-mid">{body}</p>
+      {link && <Link href={link.href} className="mt-4 inline-flex text-[13px] font-semibold text-peri-deep no-underline hover:underline">{link.label}</Link>}
     </div>
   )
 }

@@ -11,6 +11,7 @@ import { signedOrgFetch } from '@/lib/org/signedFetch'
 import { getUnit, explorer, shortHash, walletLabel, RWA_UNITS } from '@/lib/rwa/demo'
 import { useRwaUnit, usd, ago, rwaStatus, STATUS_CLS } from './useRwaUnit'
 import { BandGauge, LiquidityMap, PriceBandChart, LiveDot, Disclosure, EY, H2 } from './RwaVisuals'
+import { SupplyPanel } from './SupplyPanel'
 
 const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
 
@@ -74,6 +75,34 @@ export function RwaMarket({ slug }: { slug: string }) {
           <div className="rounded-[24px] border border-hair bg-white p-7">
             <div className={EY}>Where the liquidity sits</div>
             <div className="mt-6">{unit ? <LiquidityMap unit={unit} interest={interest} symbol={p.symbol} /> : <div className="h-[180px] mw-shimmer rounded-[14px]" />}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* TAKE PART — the two roles a visitor can play here */}
+      <section className="border-b border-hair-soft bg-[#F7FBFA]">
+        <div className={`${WRAP} py-9 grid grid-cols-2 gap-5 max-[900px]:grid-cols-1`}>
+          {u.liveTrade
+            ? <SupplyPanel unit={u} onChanged={() => reload(true)} />
+            : (
+              <div className="rounded-[24px] border border-hair bg-white p-6">
+                <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[#1F7A6A]">Supply liquidity</div>
+                <p className="mt-3 text-[13.5px] leading-[1.55] text-ink-mid">Supplying runs on the Base Sepolia market today. This {u.chain.name} unit shows the same contracts working on a second chain.</p>
+                <Link href="/app/rwa/wcp7#supply" className="glass-pill-primary mt-4 inline-flex no-underline">Supply on Base Sepolia →</Link>
+              </div>
+            )}
+          <div className="rounded-[24px] border border-hair bg-white p-6">
+            <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[#B4532A]">Buy or sell {p.symbol}</div>
+            <h3 className="mt-1.5 font-atx-display text-[19px] font-semibold tracking-[-0.01em]">Through the issuer, as a verified holder</h3>
+            <p className="mt-3 text-[13.5px] leading-[1.55] text-ink-mid">
+              Owning the property token is regulated, so trading happens on the issuer&apos;s licensed platform, where you are
+              verified. Mintware is the liquidity underneath: every trade there clears against this pool, inside the band.
+            </p>
+            <ul className="mt-4 grid gap-2 text-[13px] text-ink-mid">
+              <li className="flex gap-2"><span className="text-[#2F7D5B]">✓</span> Verified wallets receive the token</li>
+              <li className="flex gap-2"><span className="text-[#B4532A]">⨯</span> Unverified wallets are refused by the token itself — <Link href={`/app/rwa/proof?unit=${u.slug}`} className="text-peri-deep no-underline hover:underline">see it on-chain</Link></li>
+            </ul>
+            <p className="mt-4 border-t border-hair-soft pt-3 text-[11.5px] leading-[1.55] text-ink-soft">In this demo, a stand-in router plays the issuer&apos;s front end{u.liveTrade ? ' — the “Run a live trade” button above uses it from a verified demo wallet' : ''}.</p>
           </div>
         </div>
       </section>

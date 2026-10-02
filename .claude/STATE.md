@@ -107,6 +107,8 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 - **V2 app gate + IA (2026-10-02):** ALL of `/app` now requires the V2 password (`V2AppGate`, `V2_PASSWORD`) — deep
   links no longer bypass it. Token-issuer flows live in Team › Liquidity for your token (`/app/team/liquidity/*`);
   Personal is retail-only. "Savings" was renamed "Treasury yield" (copy rule). See `architecture.md` §10.
+- **RWA role flows (2026-10-02):** retail LPs supply/redeem on the market page + Personal › RWA liquidity; issuers get
+  Team › RWA issuance (read-only); testnet dUSD faucet `POST /api/rwa/faucet`. See `rwa-liquidity.md` › Role flows.
   Rule: `.claude/rules/rwa-liquidity.md`.
   Also LIVE on XRPL EVM testnet (1449000, `RWA_NETWORK=xrpl-evm-testnet`, our own v4-core PoolManager there):
   `config/rwaDemo.xrpl*.json`; page `/app/rwa/wcp7-xrpl` (chain switcher on the market page).
@@ -279,6 +281,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/org/new` | `app/app/org/(guarded)/new/page.tsx` |
 | `/app/profile` | `app/app/(personal)/profile/page.tsx` |
 | `/app/rwa` | `app/app/rwa/page.tsx` |
+| `/app/rwa-liquidity` | `app/app/(personal)/rwa-liquidity/page.tsx` |
 | `/app/rwa/[unit]` | `app/app/rwa/[unit]/page.tsx` |
 | `/app/rwa/how` | `app/app/rwa/how/page.tsx` |
 | `/app/rwa/proof` | `app/app/rwa/proof/page.tsx` |
@@ -291,6 +294,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/team/liquidity/launch` | `app/app/team/liquidity/launch/page.tsx` |
 | `/app/team/liquidity/staged` | `app/app/team/liquidity/staged/page.tsx` |
 | `/app/team/policy` | `app/app/team/policy/page.tsx` |
+| `/app/team/rwa` | `app/app/team/rwa/page.tsx` |
 | `/app/team/swap` | `app/app/team/swap/page.tsx` |
 | `/app/team/team` | `app/app/team/team/page.tsx` |
 | `/app/team/vaults` | `app/app/team/vaults/page.tsx` |

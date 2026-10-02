@@ -101,6 +101,25 @@ Flag off ⇒ 404; no unlock ⇒ every RWA URL renders `RwaAccess` instead (no de
 `V2_PASSWORD` unset ⇒ nobody gets in. The earlier separate RWA password (`RWA_ACCESS_PASSWORD`, `/api/rwa/unlock`,
 `lib/rwa/gate.ts`) was removed the same day. Proof data: `lib/rwa/demo.ts` (reads `config/rwaDemo*.json`).
 
+## Role flows (2026-10-02 — ties RWA into the rest of the app)
+
+- **Retail liquidity providers (Personal):** the market page's `SupplyPanel` (`components/rwa/SupplyPanel.tsx`) — get test
+  dUSD → approve → `depositUSDC(assets, previewDeposit×0.99, me)` → `redeemSenior(shares, value×0.98)`, signed + gas-paid
+  by the user's own wallet (Base Sepolia only). Positions: Personal › Earn › **RWA liquidity** (`/app/rwa-liquidity`,
+  `useRwaPosition` reads `seniorShares`/`convertToAssets` on-chain). Faucet: `POST /api/rwa/faucet` (signed
+  `mintware-rwa-faucet`, rate-limited, one claim/wallet/day per instance) sends 500 dUSD from the demo-trader float —
+  never mints, never sends gas. Proven on-chain by `scripts/rwa-supply-smoke.mjs` (approve/supply/redeem, 25 dUSD →
+  24.999999 back). Copy: "supply"/"redeem"; discloses pause + stale-appraisal exit risk and that LP eligibility is
+  counsel-gated.
+- **Issuers (Team):** Team › RWA issuance › **Your asset units** (`/app/team/rwa`, `RwaIssuerConsole`) — first-loss
+  inventory + lock, open liquidity on top, USD cover of the pool slice, appraisal age / next allowed update / validity.
+  Read-only by design: appraisals are keeper-posted on-chain, and listing a new asset is operator-deployed until a unit
+  factory exists. Not yet scoped per org (every org sees the demo units).
+- **Traders:** the market page explains the handoff — verified buyers trade on the issuer's licensed front end; the
+  demo's stand-in router + "Run a live trade" button play that role.
+- ⚠ Ops: the demo-trader wallet had ~0.0005 Base Sepolia ETH on 2026-10-02 (faucet transfers + live trades both spend
+  it) — top it up before a demo.
+
 ## Open / not built
 
 - Accredited / qualified-purchaser LP gate (3(c)(7) question) would need a vault change — out of v1 by decision.
