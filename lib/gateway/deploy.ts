@@ -38,6 +38,8 @@ type Reason =
   | 'ref_catching_up' // spot is outside the on-chain follower band → we poked one step and will retry next run
   | 'ref_price_unavailable' // no external reference price for this pool and LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE is on
   | 'ref_price_deviation' // spot deviates from the external reference by more than LP_GATEWAY_DEPLOY_REF_MAX_DEV_BPS
+  // RT-3a: spot gives the zap materially FEWER paired tokens than a reference price would (a pre-read push).
+  | 'spot_below_reference'
 export type DeployOutcome =
   | { ok: true; deployTx: `0x${string}`; quoteDeployedAtomic: bigint; pairedDeployedAtomic: bigint; minLiquidity: bigint }
   | { ok: false; status: number; error: string; reason: Reason }
@@ -122,6 +124,32 @@ export function externalPairedPriceInQuote(c: Pick<PoolCandidate, 'priceQuotePer
   if (c.quoteToken === u) return p // 1 base(paired) = p quote(USDG)
   if (c.baseToken === u) return 1 / p // 1 base(USDG) = p quote(paired) → 1 paired = 1/p USDG
   return null // USDG is neither leg per GeckoTerminal — not our pool's orientation
+}
+
+/** Paired tokens `quoteAmount` buys at an external "quote per paired" price (human units). 0 when unusable. */
+export function quoteToPairedAtExternal(quoteAmount: bigint, extPairedInQuote: number, quoteDecimals: number, pairedDecimals: number): bigint {
+  if (quoteAmount <= 0n || !Number.isFinite(extPairedInQuote) || extPairedInQuote <= 0) return 0n
+  const SCALE = 10n ** 18n
+  const priceScaled = BigInt(Math.round(extPairedInQuote * 1e18))
+  if (priceScaled <= 0n) return 0n
+  return (quoteAmount * 10n ** BigInt(pairedDecimals) * SCALE) / (10n ** BigInt(quoteDecimals) * priceScaled)
+}
+
+/**
+ * RT-3a: the zap's slippage floor. Floored at spot alone, a price pushed BEFORE the cron reads slot0 moves the floor
+ * with it, leaving only the follower band (~10% overpay) as the bound. So floor at the MOST paired any trusted price
+ * says the swap should buy — spot, the on-chain follower, and (when available) the external reference — minus the
+ * slippage tolerance. If spot itself is worse than that best reference by more than the tolerance, refuse instead of
+ * sending a deploy that would revert (or fill at a manipulated price).
+ */
+export function conservativeMinPairedOut(i: { spotOut: bigint; referenceOuts: bigint[]; slippageBps: number }):
+  | { ok: true; minPairedOut: bigint; bestOut: bigint }
+  | { ok: false; gapBps: number; bestOut: bigint } {
+  const bestOut = [i.spotOut, ...i.referenceOuts].reduce((a, b) => (b > a ? b : a), 0n)
+  if (bestOut <= 0n) return { ok: false, gapBps: Number.MAX_SAFE_INTEGER, bestOut }
+  const gapBps = Number(((bestOut - i.spotOut) * 10_000n) / bestOut)
+  if (gapBps > i.slippageBps) return { ok: false, gapBps, bestOut }
+  return { ok: true, minPairedOut: applyToleranceBps(bestOut, i.slippageBps), bestOut }
 }
 
 /** |spot − ext| in bps of ext. Non-finite / non-positive inputs ⇒ MAX (fail closed). */
@@ -271,6 +299,7 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
     // theoretical spot-price output, haircut by LP_GATEWAY_SWAP_SLIPPAGE_BPS.
     swapAmount = quoteToDeploy / 2n
     const expectedPairedOut = quoteToPairedAtSpot(swapAmount, slot0.sqrtPriceX96, quoteIsCurrency0)
+    // Provisional spot-only floor; tightened against the follower + external reference below (RT-3a).
     minPairedOut = applyToleranceBps(expectedPairedOut, swapSlippageBps())
 
     floor = computeDeployMinLiquidity({
@@ -302,6 +331,7 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
     return { ok: false, status: 200, error: `spot is ${devBps} bps from the follower (band ${bandBps}) — poked, will retry`, reason: 'ref_catching_up' }
   }
 
+  let extPairedOut: bigint | null = null
   // Round-3 XR-2 (b): external reference sanity. The follower can be walked by anyone over a few blocks, so the band
   // alone cannot tell legitimate drift from a held pre-deploy mispricing. Compare with GeckoTerminal's last price for
   // THIS pool (matched by v4 poolId through the Discover feed). Missing reference ⇒ refuse unless explicitly waived.
@@ -328,10 +358,23 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
         log?.warn('gateway.deploy', 'spot deviates from the external reference — refusing to deploy', { spot, ext, refDev, max: refMaxDevBps() })
         return { ok: false, status: 200, error: `spot deviates ${refDev} bps from the external reference (max ${refMaxDevBps()})`, reason: 'ref_price_deviation' }
       }
+      extPairedOut = quoteToPairedAtExternal(swapAmount, ext, Number(qd), Number(pd))
     }
   } catch (e) {
     log?.error('gateway.deploy', 'external reference check failed', { error: String(e) })
     if (requireRefPrice()) return { ok: false, status: 200, error: 'external reference check failed — refusing to deploy', reason: 'ref_price_unavailable' }
+  }
+  // RT-3a: floor the zap at the best of spot / follower / external, not spot alone.
+  {
+    const refOuts = [quoteToPairedAtSpot(swapAmount, refSqrtPriceX96, quoteIsCurrency0)]
+    if (extPairedOut !== null && extPairedOut > 0n) refOuts.push(extPairedOut)
+    const spotOut = quoteToPairedAtSpot(swapAmount, spotSqrtPriceX96, quoteIsCurrency0)
+    const c = conservativeMinPairedOut({ spotOut, referenceOuts: refOuts, slippageBps: swapSlippageBps() })
+    if (!c.ok) {
+      log?.warn('gateway.deploy', 'spot buys materially less paired than the reference prices — refusing to deploy', { gapBps: c.gapBps, slippageBps: swapSlippageBps() })
+      return { ok: false, status: 200, error: `spot is ${c.gapBps} bps worse than the reference price for the zap (tolerance ${swapSlippageBps()})`, reason: 'spot_below_reference' }
+    }
+    minPairedOut = c.minPairedOut
   }
   if (!floor.ok) {
     return floor.reason === 'out_of_range'

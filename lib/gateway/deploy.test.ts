@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { deployWindowKey, computeDeployMinLiquidity, DEFAULT_DEPLOY_TOL_BPS } from './deploy'
-import { getSqrtPriceAtTick, getLiquidityForAmounts, applyToleranceBps } from './v4Math'
+import { deployWindowKey, computeDeployMinLiquidity, DEFAULT_DEPLOY_TOL_BPS, conservativeMinPairedOut, quoteToPairedAtExternal } from './deploy'
+import { getSqrtPriceAtTick, getLiquidityForAmounts, applyToleranceBps, quoteToPairedAtSpot } from './v4Math'
 
 // L-02: the (position_manager, chain, window_key) claim is what makes a retried/concurrent deploy cron
 // no-op instead of compound-deploying. window_key must be STABLE within a window and roll over across it,
@@ -150,5 +150,54 @@ describe('first-deploy price sanity (round-3 XR-2 / X-7)', () => {
     expect(requireRefPrice({ LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE: 'no' })).toBe(true)
     expect(requireRefPrice({ LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE: 'false' })).toBe(false)
     expect(requireRefPrice({ LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE: ' FALSE ' })).toBe(false)
+  })
+})
+
+describe('RT-3a: zap slippage floor is anchored to the reference prices, not spot alone', () => {
+  it('honest pool (spot == references): floor = spot output − tolerance, unchanged from before', () => {
+    const r = conservativeMinPairedOut({ spotOut: 1_000_000n, referenceOuts: [1_000_000n, 1_000_000n], slippageBps: 100 })
+    expect(r).toEqual({ ok: true, minPairedOut: applyToleranceBps(1_000_000n, 100), bestOut: 1_000_000n })
+  })
+
+  it('pre-read push of 8% (inside a 10% band): refused, where a spot-only floor would have let it fill', () => {
+    const spotOut = 920_000n // attacker made paired 8% dearer before the cron read slot0
+    const spotOnlyFloor = applyToleranceBps(spotOut, 100)
+    expect(spotOnlyFloor).toBeLessThan(1_000_000n) // the old floor accepted a fill ~9% short of fair
+    const r = conservativeMinPairedOut({ spotOut, referenceOuts: [1_000_000n], slippageBps: 100 })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.gapBps).toBe(800)
+  })
+
+  it('a push within the tolerance still deploys, with the floor at the BEST reference (bounded loss ≈ tolerance)', () => {
+    const r = conservativeMinPairedOut({ spotOut: 995_000n, referenceOuts: [1_000_000n, 990_000n], slippageBps: 100 })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.minPairedOut).toBe(applyToleranceBps(1_000_000n, 100))
+      expect(r.minPairedOut).toBeLessThanOrEqual(995_000n) // never above what spot can actually deliver
+    }
+  })
+
+  it('spot BETTER than the references (paired cheap) is never a reason to refuse; floor follows the best price', () => {
+    const r = conservativeMinPairedOut({ spotOut: 1_050_000n, referenceOuts: [1_000_000n], slippageBps: 100 })
+    expect(r).toEqual({ ok: true, minPairedOut: applyToleranceBps(1_050_000n, 100), bestOut: 1_050_000n })
+  })
+
+  it('zero / missing outputs fail closed', () => {
+    expect(conservativeMinPairedOut({ spotOut: 0n, referenceOuts: [], slippageBps: 100 }).ok).toBe(false)
+  })
+
+  it('follower sqrt-price output uses the same math as spot (both orientations)', () => {
+    const p = getSqrtPriceAtTick(1000)
+    for (const q0 of [true, false]) {
+      const out = quoteToPairedAtSpot(10n ** 9n, p, q0)
+      const r = conservativeMinPairedOut({ spotOut: out, referenceOuts: [quoteToPairedAtSpot(10n ** 9n, p, q0)], slippageBps: 100 })
+      expect(r.ok).toBe(true)
+    }
+  })
+
+  it('quoteToPairedAtExternal: 100 USDG (6dp) at 4 USDG/paired (18dp) = 25 paired', () => {
+    expect(quoteToPairedAtExternal(100_000_000n, 4, 6, 18)).toBe(25n * 10n ** 18n)
+    expect(quoteToPairedAtExternal(100_000_000n, 0, 6, 18)).toBe(0n)
+    expect(quoteToPairedAtExternal(100_000_000n, Number.NaN, 6, 18)).toBe(0n)
   })
 })
