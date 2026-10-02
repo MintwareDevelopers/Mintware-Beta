@@ -83,3 +83,5 @@ tools/v1-audit/node_modules/
 .rwa-demo-wallets.json
 config/rwaDemo.deployment.json.progress.json
 config/rwaDemo.json.progress.json
+.rwa-demo-wallets.*.json
+config/rwaDemo.*.progress.json

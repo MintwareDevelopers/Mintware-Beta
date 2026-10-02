@@ -25,8 +25,11 @@
 // config/rwaDemo.deployment.json (written by scripts/deploy-rwa-demo.mjs).
 // Run:
 //   node --env-file=.env.robinhood.local scripts/rwa-demo-lifecycle.mjs
-// Env: RWA_RPC_URL (https://sepolia.base.org), RWA_DEMO_OUT (config/rwaDemo.json),
-//      RWA_DEMO_WALLETS (.rwa-demo-wallets.json), RWA_GAS_FUND_WEI (per demo wallet, default 0.00012 ETH),
+//   RWA_NETWORK=xrpl-evm-testnet node --env-file=.env.robinhood.local scripts/rwa-demo-lifecycle.mjs
+// Env: RWA_NETWORK (preset in scripts/lib/rwaNetworks.mjs, default base-sepolia) — sets the RPC, the output files
+//      (Base Sepolia: config/rwaDemo.json; XRPL EVM testnet: config/rwaDemo.xrpl.json), the wallets file and the
+//      per-wallet gas fund. Each can be overridden: RWA_RPC_URL, RWA_DEMO_OUT, RWA_DEPLOYMENT_OUT,
+//      RWA_DEMO_WALLETS, RWA_GAS_FUND_WEI.
 //      RWA_REHEARSAL=1 + RWA_REHEARSAL_KEY (local anvil fork: throwaway key, fast-forward time instead of waiting).
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
@@ -35,17 +38,19 @@ import { dirname, join } from 'node:path'
 import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, defineChain, parseAbi, decodeErrorResult } from 'viem'
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
 import { resolveRwaSigner } from './lib/rwaSigner.mjs'
+import { resolveNetwork, assertTestnet, chainMeta } from './lib/rwaNetworks.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const OUT = join(ROOT, 'contracts-v4', 'out')
 
-const RPC = process.env.RWA_RPC_URL ?? 'https://sepolia.base.org'
-const OUT_FILE = process.env.RWA_DEMO_OUT ?? join(ROOT, 'config', 'rwaDemo.json')
-const DEPLOYMENT_FILE = process.env.RWA_DEPLOYMENT_OUT ?? join(ROOT, 'config', 'rwaDemo.deployment.json')
-const WALLETS_FILE = process.env.RWA_DEMO_WALLETS ?? join(ROOT, '.rwa-demo-wallets.json')
+const NET = (() => { try { return resolveNetwork(ROOT) } catch (e) { console.error(`\n✗ ${e.message}`); process.exit(1) } })()
+const RPC = NET.rpc
+const OUT_FILE = NET.demoFile
+const DEPLOYMENT_FILE = NET.deploymentFile
+const WALLETS_FILE = NET.walletsFile
 const REHEARSAL = process.env.RWA_REHEARSAL === '1'
-const GAS_FUND = BigInt(process.env.RWA_GAS_FUND_WEI ?? '120000000000000') // 0.00012 ETH per demo wallet
+const GAS_FUND = NET.gasFundWei
 const FORCED_GAS = 600_000n
 
 function die(m) { console.error(`\n✗ ${m}`); process.exit(1) }
@@ -66,7 +71,9 @@ const ROUTER = abi('DemoSwapRouter')
 
 const pub0 = createPublicClient({ transport: http(RPC) })
 const chainId = await pub0.getChainId()
-const chain = defineChain({ id: chainId, name: `chain-${chainId}`, nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [RPC] } } })
+try { assertTestnet(NET, chainId) } catch (e) { die(e.message) }
+if (deployment && deployment.chainId !== chainId) die(`${DEPLOYMENT_FILE} is for chain ${deployment.chainId}, RPC is chain ${chainId}`)
+const chain = defineChain({ id: chainId, name: NET.name, nativeCurrency: NET.nativeCurrency, rpcUrls: { default: { http: [RPC] } } })
 const pub = createPublicClient({ chain, transport: http(RPC) })
 const { account: issuer, kind: signerKind } = await resolveRwaSigner().catch((e) => die(e.message))
 const wallet = (account) => createWalletClient({ account, chain, transport: http(RPC) })
@@ -300,7 +307,9 @@ const snap = {
 const out = {
   generatedAt: new Date().toISOString(),
   chainId,
+  chain: chainMeta(NET),
   rehearsal: REHEARSAL,
+  poolManagerDeployedByUs: deployment?.poolManagerDeployedByUs ?? false,
   property: { name: propName, symbol: propSymbol, appraisalUsdAtLaunch: 100, decimals: 18 },
   contracts: { vault: vaultAddr, hook, property, usd, adapter, registry, router: routerAddr, poolManager: await read(vaultAddr, VAULT, 'poolManager') },
   poolKey: { ...key, fee: Number(key.fee), tickSpacing: Number(key.tickSpacing) },

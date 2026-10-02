@@ -32,13 +32,38 @@ Deployer / owner / keeper / guardian = the **dedicated `rwa` Privy seat** `0xAF8
 root or gateway seats** (`scripts/lib/rwaSigner.mjs`). All 8 contracts source-verified on BaseScan.
 ⚠ The seat has no wallet-API authorization key yet (O-6 pattern) — add one before anything beyond the demo.
 
+## XRPL EVM testnet (1449000) — one home: `config/rwaDemo.xrpl.deployment.json` + `config/rwaDemo.xrpl.json`
+
+**Status (2026-10-02): NOT broadcast.** Fork rehearsal green; the `rwa` seat holds 0 XRP there. Fund it at
+`https://faucet.xrplevm.org` (Testnet) with ≥ 0.5 XRP (a run costs ≈ 0.17 XRP: deploy ≈ 0.02 + lifecycle gas +
+6 × 0.02 demo-wallet gas), then `RWA_NETWORK=xrpl-evm-testnet node --env-file=.env.robinhood.local scripts/deploy-rwa-demo.mjs`,
+the same for `rwa-demo-lifecycle.mjs`, then `RWA_NETWORK=xrpl-evm-testnet node scripts/verify-rwa-demo.mjs`.
+
+- Chain: id `1449000`, RPC `https://rpc.testnet.xrplevm.org`, explorer (Blockscout) `https://explorer.testnet.xrplevm.org`,
+  native gas **XRP** (18 dp on the EVM side), EIP-1559 (blocks carry `baseFeePerGas`, ≈ 0.6 gwei), block gas limit 21M.
+  The public RPC serves historical state (block−1 `eth_call` replay works).
+- **No Uniswap v4 here** (not in Uniswap's deployments list; no code at any canonical v4 address) ⇒ the preset has
+  `poolManager: 'deploy'` and the deploy script first deploys **v4-core's `PoolManager`** from the Forge artifacts
+  (owner = the seat; 17.1 KB runtime, under EIP-170). v4-core is **BUSL-1.1** — this is a testnet / non-production
+  deployment of it, recorded as `poolManagerDeployedByUs: true`; it is OUR PoolManager, not Uniswap's.
+- Arachnid's deterministic CREATE2 factory `0x4e59…956C` **is** deployed here, so the hook is mined exactly as on Base
+  Sepolia. (The script refuses to run on a chain without it rather than guessing.)
+- Verification: Blockscout API `https://explorer.testnet.xrplevm.org/api/` (forge `--verifier blockscout`, no key).
+  ⚠ Its verifier config lists only old solc builds (no 0.8.26) — it may need the "standard-input" upload instead.
+- Demo wallets: `.rwa-demo-wallets.xrpl.json` (gitignored); per-wallet gas fund 0.02 XRP (gas ≈ 500× Base Sepolia's).
+
 ## Scripts
+
+All three take **`RWA_NETWORK`** (`base-sepolia` default | `xrpl-evm-testnet`; presets in `scripts/lib/rwaNetworks.mjs`),
+which sets the RPC, PoolManager, output / wallet files, gas fund and explorer verifier; each field is still env-overridable.
+They refuse any chain id other than the preset's testnet (`assertTestnet`), and every proof file carries a `chain`
+block (`id`, `name`, `explorer`, `nativeSymbol`) so a UI can load either chain's file and link the right explorer.
 
 | Script | Does |
 |---|---|
-| `scripts/deploy-rwa-demo.mjs` | pure-Privy deploy + wire + appraise + open + junior commit; resumable (`*.progress.json`) |
-| `scripts/rwa-demo-lifecycle.mjs` | the 9-leg proof story → `config/rwaDemo.json`; the unverified buy and the over-band buy are sent with a fixed gas limit so they are MINED reverted (and it refuses an out-of-gas revert as proof); resumable |
-| `scripts/verify-rwa-demo.mjs` | BaseScan source verification (Etherscan V2 API) |
+| `scripts/deploy-rwa-demo.mjs` | pure-Privy deploy (+ our own v4 PoolManager where none exists) + wire + appraise + open + junior commit; balance pre-flight; resumable (`*.progress.json`) |
+| `scripts/rwa-demo-lifecycle.mjs` | the 9-leg proof story → the network's demo file; the unverified buy and the over-band buy are sent with a fixed gas limit so they are MINED reverted (and it refuses an out-of-gas revert as proof); resumable |
+| `scripts/verify-rwa-demo.mjs` | source verification: BaseScan (Etherscan V2 API, key) or Blockscout (no key) |
 | `contracts-v4/script/DeployRwaLiquidityUnit.s.sol` | Forge equivalent, for local fork rehearsals |
 
 Rehearse on a fork: `anvil --fork-url https://base-sepolia-rpc.publicnode.com` + `RWA_REHEARSAL=1 RWA_REHEARSAL_KEY=<anvil key>`.

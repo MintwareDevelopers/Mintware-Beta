@@ -1,16 +1,32 @@
-// V2-RWAs — source-verify every contract of the deployed demo unit on the chain's explorer (Etherscan V2 API).
-// Reads config/rwaDemo.deployment.json; needs BASESCAN_API_KEY (an Etherscan V2 key works for every chain).
+// V2-RWAs — source-verify every contract of the deployed demo unit on the chain's explorer.
+// Chain-agnostic via RWA_NETWORK (scripts/lib/rwaNetworks.mjs):
+//   base-sepolia      → Etherscan V2 API; needs BASESCAN_API_KEY (an Etherscan V2 key works for every chain).
+//   xrpl-evm-testnet  → the explorer's Blockscout API (https://explorer.testnet.xrplevm.org/api/); no key needed.
+// Reads the network's deployment file (config/rwaDemo.deployment.json / config/rwaDemo.xrpl.deployment.json).
+// When the deployment carries our own PoolManager (no canonical Uniswap v4 on that chain), it is verified too.
 // Run:  node --env-file=.env.local scripts/verify-rwa-demo.mjs
+//       RWA_NETWORK=xrpl-evm-testnet node scripts/verify-rwa-demo.mjs
 import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { encodeAbiParameters } from 'viem'
+import { resolveNetwork } from './lib/rwaNetworks.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const d = JSON.parse(readFileSync(process.env.RWA_DEPLOYMENT_OUT ?? join(ROOT, 'config', 'rwaDemo.deployment.json'), 'utf8'))
-const key = process.env.BASESCAN_API_KEY ?? process.env.ETHERSCAN_API_KEY
-if (!key) { console.error('✗ BASESCAN_API_KEY not set'); process.exit(1) }
+const NET = resolveNetwork(ROOT)
+const d = JSON.parse(readFileSync(NET.deploymentFile, 'utf8'))
+if (d.chainId !== NET.chainId) { console.error(`✗ ${NET.deploymentFile} is chain ${d.chainId}, RWA_NETWORK=${NET.id} is ${NET.chainId}`); process.exit(1) }
+if (d.rehearsal) { console.error('✗ that deployment file is a local-fork rehearsal — nothing to verify'); process.exit(1) }
+const verifierUrl = process.env.RWA_VERIFIER_URL ?? NET.verifier.url
+let verifierArgs
+if (NET.verifier.kind === 'etherscan') {
+  const key = process.env.BASESCAN_API_KEY ?? process.env.ETHERSCAN_API_KEY
+  if (!key) { console.error('✗ BASESCAN_API_KEY not set'); process.exit(1) }
+  verifierArgs = ['--verifier', 'etherscan', '--verifier-url', verifierUrl, '--etherscan-api-key', key]
+} else {
+  verifierArgs = ['--verifier', 'blockscout', '--verifier-url', verifierUrl]
+}
 
 const c = d.contracts, me = d.signer
 const A = (t) => ({ type: t })
@@ -25,6 +41,9 @@ const CFG_T = { type: 'tuple', components: [
 
 const LIB = 'contracts-v4/src/payments/lib/MWTreasuryPositionLib.sol:MWTreasuryPositionLib'
 const jobs = [
+  ...(d.poolManagerDeployedByUs
+    ? [[c.poolManager, 'contracts-v4/lib/v4-core/src/PoolManager.sol:PoolManager', encodeAbiParameters([A('address')], [me])]]
+    : []),
   [c.usd, 'contracts-v4/src/rwa/testnet/DemoUSD.sol:DemoUSD', encodeAbiParameters([A('address')], [me])],
   [c.registry, 'contracts-v4/src/rwa/testnet/MockRwaIdentityRegistry.sol:MockRwaIdentityRegistry', encodeAbiParameters([A('address')], [me])],
   [c.property, 'contracts-v4/src/rwa/testnet/MockPermissionedPropertyToken.sol:MockPermissionedPropertyToken',
@@ -46,15 +65,14 @@ const only = process.env.RWA_VERIFY_ONLY?.split(',').map((s) => s.trim().toLower
 let failed = 0
 for (const [addr, id, args, extra = []] of jobs) {
   if (only && !only.includes(id.split(':')[1].toLowerCase())) continue
-  const argv = ['verify-contract', addr, id, '--chain-id', String(d.chainId), '--watch',
-    '--verifier', 'etherscan', '--verifier-url', `https://api.etherscan.io/v2/api?chainid=${d.chainId}`,
-    '--etherscan-api-key', key, '--retries', '10', '--delay', '6', ...(args !== '0x' ? ['--constructor-args', args] : []), ...extra]
+  const argv = ['verify-contract', addr, id, '--chain-id', String(d.chainId), '--watch', ...verifierArgs,
+    '--retries', '10', '--delay', '6', ...(args !== '0x' ? ['--constructor-args', args] : []), ...extra]
   let out = '', ok = false
   for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
     const r = spawnSync(forge, argv, { cwd: ROOT, encoding: 'utf8' })
     out = `${r.stdout}\n${r.stderr}`
-    ok = /Pass - Verified|already verified|Contract successfully verified/i.test(out)
-    if (!ok) sleepSync(8000) // Etherscan free tier: space out submissions + status polls
+    ok = /Pass - Verified|already verified|Contract successfully verified|successfully verified/i.test(out)
+    if (!ok) sleepSync(8000) // free-tier explorers: space out submissions + status polls
   }
   sleepSync(4000)
   if (!ok) failed++

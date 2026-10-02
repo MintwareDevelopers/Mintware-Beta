@@ -6,31 +6,38 @@
 // vault, mines the hook's CREATE2 salt so its address carries the permission bits, wires everything,
 // posts the first appraisal, opens the pool AT it, and commits the issuer's junior.
 //
-// Writes the addresses to RWA_DEPLOYMENT_OUT (config/rwaDemo.deployment.json), which
-// scripts/rwa-demo-lifecycle.mjs reads next.
+// Writes the addresses to the network's deployment file (Base Sepolia: config/rwaDemo.deployment.json;
+// XRPL EVM testnet: config/rwaDemo.xrpl.deployment.json), which scripts/rwa-demo-lifecycle.mjs reads next.
+//
+// Chain-agnostic: RWA_NETWORK picks a preset from scripts/lib/rwaNetworks.mjs (default base-sepolia). On a chain
+// with no canonical Uniswap v4 PoolManager (preset poolManager: 'deploy', e.g. XRPL EVM testnet) it first deploys
+// v4-core's PoolManager from the Forge artifacts, owner = the signer (v4-core is BUSL-1.1: testnet use only).
 //
 // TESTNET ONLY: the RWA seat plays issuer, keeper and guardian; the property is fictional; tokens are valueless.
 //
 // Run:  node --env-file=.env.robinhood.local scripts/deploy-rwa-demo.mjs
+//       RWA_NETWORK=xrpl-evm-testnet node --env-file=.env.robinhood.local scripts/deploy-rwa-demo.mjs
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  createPublicClient, createWalletClient, http, defineChain, encodeAbiParameters, encodeDeployData,
+  createPublicClient, createWalletClient, http, defineChain, encodeAbiParameters,
   getContractAddress, keccak256, pad, toHex, concat, formatEther, parseUnits, getAddress,
 } from 'viem'
 import { resolveRwaSigner } from './lib/rwaSigner.mjs'
+import { resolveNetwork, assertTestnet, chainMeta } from './lib/rwaNetworks.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const OUT = join(ROOT, 'contracts-v4', 'out')
 
-const RPC = process.env.RWA_RPC_URL ?? 'https://sepolia.base.org'
-const POOL_MANAGER = getAddress(process.env.V4_POOL_MANAGER ?? '0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408')
+const NET = (() => { try { return resolveNetwork(ROOT) } catch (e) { console.error(`\n✗ ${e.message}`); process.exit(1) } })()
+const RPC = NET.rpc
+const DEPLOY_POOL_MANAGER = NET.poolManager === 'deploy'
 const C2_FACTORY = '0x4e59b44847b379578588920cA78FbF26c0B4956C'
 const HOOK_FLAGS = 0x2ac0n
-const DEPLOYMENT_OUT = process.env.RWA_DEPLOYMENT_OUT ?? join(ROOT, 'config', 'rwaDemo.deployment.json')
+const DEPLOYMENT_OUT = NET.deploymentFile
 
 const PROPERTY_NAME = process.env.PROPERTY_NAME ?? 'Willow Creek Parcel 7 (demo)'
 const PROPERTY_SYMBOL = process.env.PROPERTY_SYMBOL ?? 'WCP7'
@@ -52,13 +59,26 @@ const art = (file, name = file) => JSON.parse(readFileSync(join(OUT, `${file}.so
 
 const { account, kind } = await resolveRwaSigner().catch((e) => die(e.message))
 const chainId = await createPublicClient({ transport: http(RPC) }).getChainId()
-const chain = defineChain({ id: chainId, name: `chain-${chainId}`, nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [RPC] } } })
+try { assertTestnet(NET, chainId) } catch (e) { die(e.message) }
+const SYM = NET.nativeCurrency.symbol
+const chain = defineChain({ id: chainId, name: NET.name, nativeCurrency: NET.nativeCurrency, rpcUrls: { default: { http: [RPC] } } })
 const pub = createPublicClient({ chain, transport: http(RPC) })
 const w = createWalletClient({ account, chain, transport: http(RPC) })
 const me = account.address
 
-console.log(`\nV2-RWAs demo deploy — chain ${chainId} — signer ${me} (${kind}) — gas ${formatEther(await pub.getBalance({ address: me }))} ETH`)
-if ((await pub.getCode({ address: POOL_MANAGER }))?.length > 2 === false) die(`no PoolManager at ${POOL_MANAGER}`)
+console.log(`\nV2-RWAs demo deploy — ${NET.name} (chain ${chainId}) — signer ${me} (${kind}) — gas ${formatEther(await pub.getBalance({ address: me }))} ${SYM}`)
+// The hook is mined against the deterministic CREATE2 factory (Arachnid). It exists on Base Sepolia and on XRPL
+// EVM testnet; on a chain without it, deploy it first (its presigned tx is pre-EIP-155) — this script won't guess.
+if (((await pub.getCode({ address: C2_FACTORY })) ?? '0x').length <= 2) die(`no deterministic CREATE2 factory at ${C2_FACTORY} on chain ${chainId}`)
+// EIP-1559 vs legacy: viem picks type-2 fees only when the latest block carries baseFeePerGas.
+const latest = await pub.getBlock()
+console.log(`  · fees: ${latest.baseFeePerGas != null ? `EIP-1559 (base fee ${latest.baseFeePerGas} wei)` : 'legacy gasPrice'}`)
+// Pre-flight: never start a half-deploy on an underfunded seat (deploy + lifecycle + demo-wallet gas).
+const startBal = await pub.getBalance({ address: me })
+if (startBal < NET.minRunWei) {
+  die(`signer ${me} holds ${formatEther(startBal)} ${SYM}; this run needs ≥ ${formatEther(NET.minRunWei)} ${SYM}` +
+    (NET.faucet ? ` — fund it from ${NET.faucet}` : ''))
+}
 
 // ── resumable progress: every completed step is checkpointed, so a re-run skips what is already on-chain ──
 const PROGRESS = `${DEPLOYMENT_OUT}.progress.json`
@@ -134,6 +154,9 @@ const A = {
     { name: 'currency0', type: 'address' }, { name: 'currency1', type: 'address' }, { name: 'fee', type: 'uint24' },
     { name: 'tickSpacing', type: 'int24' }, { name: 'hooks', type: 'address' }] }, { name: 'sqrtPriceX96', type: 'uint160' }], outputs: [{ type: 'int24' }] }] },
 }
+// Our own v4-core PoolManager (only where the chain has no canonical one) goes through the SAME freshness guard
+// and build fingerprint as every other artifact. Absent on Base Sepolia, so its fingerprint is unchanged there.
+if (DEPLOY_POOL_MANAGER) A.poolManagerCore = art('PoolManager')
 
 for (const [n, a] of Object.entries(A)) if (a.metadata) assertFresh(n, a)
 console.log('  · artifacts match the source on disk')
@@ -147,6 +170,15 @@ const buildFingerprint = keccak256(toHex(JSON.stringify({
 if (progress.build && progress.build !== buildFingerprint) die(`progress file ${PROGRESS} belongs to a different build/config — move it aside to deploy a fresh unit`)
 progress.build = buildFingerprint
 checkpoint()
+
+// 0) the Uniswap v4 PoolManager — the chain's canonical one, or (no canonical deployment) our own from v4-core
+let POOL_MANAGER
+if (DEPLOY_POOL_MANAGER) {
+  POOL_MANAGER = getAddress(await deploy('PoolManager (v4-core, BUSL-1.1, testnet)', A.poolManagerCore, [me]))
+} else {
+  POOL_MANAGER = getAddress(NET.poolManager)
+  if (((await pub.getCode({ address: POOL_MANAGER })) ?? '0x').length <= 2) die(`no PoolManager at ${POOL_MANAGER}`)
+}
 
 // 1) tokens, registry, simulated lending venue
 const usd = await deploy('DemoUSD', A.usd, [me])
@@ -225,8 +257,12 @@ await call('dUSD.approve(vault)', usd, A.usd, 'approve', [vault, JUNIOR_USD])
 await call('vault.commitTeam (junior, 1-year lock)', vault, A.vault, 'commitTeam', [JUNIOR_TOKENS, JUNIOR_USD, 365n * 86400n])
 
 const deployment = {
-  generatedAt: new Date().toISOString(), chainId, signer: me, signerKind: kind,
+  generatedAt: new Date().toISOString(), chainId, chain: chainMeta(NET), signer: me, signerKind: kind,
+  rehearsal: process.env.RWA_REHEARSAL === '1',
   contracts: { usd, registry, property, adapter, hook: hookAddr, positionLib: lib, vault, router, poolManager: POOL_MANAGER },
+  // true ⇒ there is no canonical Uniswap v4 here and the PoolManager above is OUR testnet deployment of v4-core
+  // (BUSL-1.1, owner = the signer) — not Uniswap's.
+  poolManagerDeployedByUs: DEPLOY_POOL_MANAGER,
   property: { name: PROPERTY_NAME, symbol: PROPERTY_SYMBOL, decimals: 18, appraisalUsdAtLaunch: 100 },
   hookConfig: CONFIG, appraisalTick: appraisal, propertyIsCurrency0: propIs0,
   poolKey: key, hookSalt: salt, txs,
@@ -234,7 +270,7 @@ const deployment = {
 mkdirSync(dirname(DEPLOYMENT_OUT), { recursive: true })
 writeFileSync(DEPLOYMENT_OUT, JSON.stringify(deployment, null, 2) + '\n')
 console.log(`\n✓ deployed + opened — ${txs.length} txs → ${DEPLOYMENT_OUT}`)
-console.log(`  gas left: ${formatEther(await pub.getBalance({ address: me }))} ETH`)
+console.log(`  gas left: ${formatEther(await pub.getBalance({ address: me }))} ${SYM}`)
 
 // ── TickMath.getSqrtPriceAtTick, ported verbatim (v4-core) ─────────────────
 function sqrtAtTick(tick) {
