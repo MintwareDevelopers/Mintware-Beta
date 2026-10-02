@@ -95,7 +95,7 @@ export function SupplyPanel({ unit, onChanged }: { unit: RwaUnit; onChanged?: ()
 
       <div className="mt-4 inline-flex rounded-full border border-hair bg-white p-1" role="tablist">
         {(['supply', 'redeem'] as const).map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={`rounded-full px-4 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer ${tab === t ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid'}`}>{t}</button>
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={`rounded-full px-4 py-1.5 max-md:py-2.5 text-[12.5px] font-semibold capitalize cursor-pointer ${tab === t ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid'}`}>{t}</button>
         ))}
       </div>
 

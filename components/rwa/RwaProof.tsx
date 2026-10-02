@@ -26,7 +26,7 @@ export function RwaProof({ slug }: { slug: string }) {
             <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
               {RWA_UNITS.map((x) => (
                 <Link key={x.slug} href={`/app/rwa/proof?unit=${x.slug}`} role="tab" aria-selected={x.slug === u.slug}
-                  className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}>
+                  className={`rounded-full px-3.5 py-1.5 max-md:py-2.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}>
                   {x.chain.name}
                 </Link>
               ))}

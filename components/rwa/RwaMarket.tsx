@@ -40,7 +40,7 @@ export function RwaMarket({ slug }: { slug: string }) {
                   href={`/app/rwa/${x.slug}`}
                   role="tab"
                   aria-selected={x.slug === u.slug}
-                  className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}
+                  className={`rounded-full px-3.5 py-1.5 max-md:py-2.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}
                 >
                   {x.chain.name}
                 </Link>

@@ -65,8 +65,8 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
         {data && (
           <>
             {/* header */}
-            <div className="flex items-center justify-between gap-4 mb-8">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+              <div className="min-w-0">
                 <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Org treasury</div>
                 <h1 className="font-atx-display font-semibold text-ink tracking-[-0.03em] text-[28px] leading-tight mt-1">{data.org.name}</h1>
               </div>
