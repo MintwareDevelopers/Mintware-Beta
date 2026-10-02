@@ -82,12 +82,12 @@ export default function AgentParkingPage() {
       {/* Account card */}
       {acct && !acct.error && (
         <div className="rounded-2xl border border-mw-border shadow-card p-6 mb-8 bg-mw-surface-card">
-          <div className="grid grid-cols-2 gap-6">
-            <div>
+          <div className="grid grid-cols-2 gap-6 max-[520px]:grid-cols-1 max-[520px]:gap-4">
+            <div className="min-w-0">
               <div className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-3 mb-2 font-sans">
                 Parked · earning
               </div>
-              <div className="text-[36px] font-bold text-mw-ink tracking-[-0.02em] font-mono tabular-nums">
+              <div className="text-[clamp(1.6rem,7vw,2.25rem)] font-bold text-mw-ink tracking-[-0.02em] font-mono tabular-nums break-all">
                 ${acct.parkedUsdcFormatted ?? '0'}
               </div>
             </div>
@@ -95,7 +95,7 @@ export default function AgentParkingPage() {
               <div className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-3 mb-2 font-sans">
                 Spendable now
               </div>
-              <div className="text-[36px] font-bold text-mw-teal tracking-[-0.02em] font-mono tabular-nums">
+              <div className="text-[clamp(1.6rem,7vw,2.25rem)] font-bold text-mw-teal tracking-[-0.02em] font-mono tabular-nums break-all">
                 ${acct.spendableUsdcFormatted ?? '0'}
               </div>
             </div>
