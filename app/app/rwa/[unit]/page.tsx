@@ -1,10 +1,10 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import type { Metadata } from 'next'
 import { MwNav } from '@/components/web2/MwNav'
 import { RwaMarket } from '@/components/rwa/RwaMarket'
 import { V2_COOKIE } from '@/lib/v2/gate'
-import { isV2RwaVisible } from '@/lib/v2/rwaGate'
+import { isV2RwaVisible, canSeeRwa } from '@/lib/v2/rwaGate'
 import { getUnit } from '@/lib/rwa/demo'
 
 // /app/rwa/[unit] — V2-RWAs live market for one RWA liquidity unit (`wcp7` on Base Sepolia, `wcp7-xrpl` on XRPL
@@ -14,10 +14,12 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'RWA liquidity · Mintware', robots: { index: false, follow: false } }
 
 export default async function RwaUnitPage({ params }: { params: Promise<{ unit: string }> }) {
-  if (!isV2RwaVisible((await cookies()).get(V2_COOKIE)?.value)) notFound()
+  const jar = await cookies()
+  if (!isV2RwaVisible(jar.get(V2_COOKIE)?.value)) notFound()
   const { unit } = await params
   const u = getUnit(unit)
   if (!u) notFound()
+  if (!canSeeRwa(jar)) redirect(`/app/rwa?next=/app/rwa/${u.slug}`)
   return (
     <>
       <MwNav />

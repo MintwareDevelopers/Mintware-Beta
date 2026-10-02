@@ -102,7 +102,8 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   The Arc-specific mentions in the bullets below are now historical.
 - **RWA** — the 2026-08-05 venue stays shelved (archived: `docs/archive/rwa/`, branch `archive/rwa-surface`),
   BUT the **liquidity engine is revived as "V2-RWAs"** (2026-10-01, LiquidAcre partnership): a V2 *vertical*,
-  testnet demo LIVE on Base Sepolia, unaudited, dark-launched behind `NEXT_PUBLIC_V2_RWA_ENABLED` + the V2 gate.
+  testnet demo LIVE on Base Sepolia, unaudited, dark-launched behind `NEXT_PUBLIC_V2_RWA_ENABLED` + the V2 gate + its own
+  partner-access password (`RWA_ACCESS_PASSWORD`, branded screen at `/app/rwa`; ScopeSwitcher → RWA).
   Rule: `.claude/rules/rwa-liquidity.md`.
   Also LIVE on XRPL EVM testnet (1449000, `RWA_NETWORK=xrpl-evm-testnet`, our own v4-core PoolManager there):
   `config/rwaDemo.xrpl*.json`; page `/app/rwa/wcp7-xrpl` (chain switcher on the market page).

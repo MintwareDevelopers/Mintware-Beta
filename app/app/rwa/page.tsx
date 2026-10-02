@@ -4,7 +4,8 @@ import { cookies } from 'next/headers'
 import type { Metadata } from 'next'
 import { MwNav } from '@/components/web2/MwNav'
 import { V2_COOKIE } from '@/lib/v2/gate'
-import { isV2RwaVisible } from '@/lib/v2/rwaGate'
+import { isV2RwaVisible, canSeeRwa } from '@/lib/v2/rwaGate'
+import { RwaAccess } from '@/components/rwa/RwaAccess'
 import { RWA_UNITS, explorer, shortHash } from '@/lib/rwa/demo'
 
 // /app/rwa — V2-RWAs overview: the liquidity engine for tokenized real-world assets, and the live demo unit on
@@ -16,8 +17,17 @@ export const metadata: Metadata = { title: 'RWA liquidity · Mintware', robots: 
 
 const WRAP = 'max-w-[1120px] mx-auto px-6 max-sm:px-4'
 
-export default async function RwaHome() {
-  if (!isV2RwaVisible((await cookies()).get(V2_COOKIE)?.value)) notFound()
+export default async function RwaHome({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const jar = await cookies()
+  if (!isV2RwaVisible(jar.get(V2_COOKIE)?.value)) notFound()
+  if (!canSeeRwa(jar)) {
+    return (
+      <>
+        <MwNav />
+        <RwaAccess next={(await searchParams).next} />
+      </>
+    )
+  }
 
   return (
     <>

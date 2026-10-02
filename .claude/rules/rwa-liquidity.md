@@ -29,7 +29,8 @@ Never deploy these to a mainnet.
 
 Deployer / owner / keeper / guardian = the **dedicated `rwa` Privy seat** `0xAF8E…d5ca`
 (`RWA_ORACLE_PRIVY_WALLET_ID` / `_ADDRESS` in `.env.robinhood.local`, created 2026-10-01). **No fallback to the
-root or gateway seats** (`scripts/lib/rwaSigner.mjs`). All 8 contracts source-verified on BaseScan.
+root or gateway seats** (`scripts/lib/rwaSigner.mjs`). All 8 contracts source-verified — 7 on BaseScan, the CREATE2-mined hook on Base Sepolia Blockscout (BaseScan rejects
+factory-CREATE2 deploys; `lib/rwa/demo.ts#explorer` links Blockscout for it).
 ⚠ The seat has no wallet-API authorization key yet (O-6 pattern) — add one before anything beyond the demo.
 
 ## XRPL EVM testnet (1449000) — one home: `config/rwaDemo.xrpl.deployment.json` + `config/rwaDemo.xrpl.json`
@@ -86,8 +87,13 @@ estimate × 1.6; `sepolia.base.org` works for viem but rejects anvil's fork prob
 ## App surface (gated)
 
 `/app/rwa` (overview) + `/app/rwa/[unit]` (live market) + `GET /api/rwa/unit` (live chain reads, 10 s cache).
-Visible only when `NEXT_PUBLIC_V2_RWA_ENABLED === 'true'` **and** the V2 gate passes (`lib/v2/rwaGate.ts`) —
-pages `notFound()`, the API 404s otherwise. Proof data: `lib/rwa/demo.ts` (reads `config/rwaDemo.json`).
+Three fail-closed layers (`lib/v2/rwaGate.ts#canSeeRwa`): `NEXT_PUBLIC_V2_RWA_ENABLED === 'true'` **and** the V2 gate
+(open in prod while `NEXT_PUBLIC_V1_MODE_ENABLED` is unset) **and** the **RWA partner-access cookie** (`mw_rwa`,
+`lib/rwa/gate.ts`) — set by `POST /api/rwa/unlock` when the visitor enters `RWA_ACCESS_PASSWORD` on the
+Mintware-branded access screen (`components/rwa/RwaAccess.tsx`). Its OWN password, separate from `/deck`/`/dataroom`,
+shared with issuer partners out-of-band. Flag off ⇒ pages `notFound()`; locked ⇒ `/app/rwa` renders the access screen
+(no addresses/hashes in the HTML), `/app/rwa/[unit]` redirects to it with `?next=`, `/api/rwa/{unit,live-trade}` 404.
+Password unset ⇒ nobody unlocks. Entry point: an **RWA** option in the app `ScopeSwitcher` (flag-gated). Proof data: `lib/rwa/demo.ts` (reads `config/rwaDemo.json`).
 
 ## Open / not built
 

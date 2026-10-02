@@ -8,8 +8,7 @@
 import { createPublicClient, http, keccak256, encodeAbiParameters, parseAbi, parseAbiItem, defineChain, type Log, type PublicClient } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { createHandler } from '@/lib/web2/routeHandler'
-import { V2_COOKIE } from '@/lib/v2/gate'
-import { isV2RwaVisible } from '@/lib/v2/rwaGate'
+import { canSeeRwa } from '@/lib/v2/rwaGate'
 import { getUnit, tickToUsd, RWA_UNITS, type RwaUnit } from '@/lib/rwa/demo'
 
 export const dynamic = 'force-dynamic'
@@ -119,7 +118,7 @@ const contexts = new Map<string, ReturnType<typeof makeContext>>()
 const contextFor = (u: RwaUnit) => contexts.get(u.slug) ?? (contexts.set(u.slug, makeContext(u)), contexts.get(u.slug)!)
 
 export const GET = createHandler(async (req, ctx) => {
-  if (!isV2RwaVisible(req.cookies.get(V2_COOKIE)?.value)) return ctx.json({ ok: false, error: 'not_found' }, 404)
+  if (!canSeeRwa(req.cookies)) return ctx.json({ ok: false, error: 'not_found' }, 404)
   const u = getUnit(req.nextUrl.searchParams.get('unit') ?? RWA_UNITS[0].slug)
   if (!u) return ctx.json({ ok: false, error: 'unknown_unit' }, 404)
   const k = contextFor(u)

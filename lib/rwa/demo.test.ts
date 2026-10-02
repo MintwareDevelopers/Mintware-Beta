@@ -54,4 +54,25 @@ describe('V2-RWAs gate', () => {
     expect(isV2RwaVisible('wrong')).toBe(false)
     expect(isV2RwaVisible(v2Token())).toBe(true)
   })
+
+  const jar = (m: Record<string, string>) => ({ get: (n: string) => (n in m ? { value: m[n] } : undefined) })
+
+  it('requires the RWA partner-access cookie on top of the flag', async () => {
+    vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', 'true')
+    vi.stubEnv('RWA_ACCESS_PASSWORD', 'partner-pw')
+    const { canSeeRwa } = await import('@/lib/v2/rwaGate')
+    const { rwaToken, RWA_COOKIE } = await import('@/lib/rwa/gate')
+    expect(canSeeRwa(jar({}))).toBe(false)
+    expect(canSeeRwa(jar({ [RWA_COOKIE]: 'wrong' }))).toBe(false)
+    expect(canSeeRwa(jar({ [RWA_COOKIE]: rwaToken() }))).toBe(true)
+  })
+
+  it('fails closed when the RWA access password is unset', async () => {
+    vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', 'true')
+    vi.stubEnv('RWA_ACCESS_PASSWORD', '')
+    const { canSeeRwa } = await import('@/lib/v2/rwaGate')
+    const { RWA_COOKIE } = await import('@/lib/rwa/gate')
+    expect(canSeeRwa(jar({}))).toBe(false)
+    expect(canSeeRwa(jar({ [RWA_COOKIE]: '' }))).toBe(false)
+  })
 })

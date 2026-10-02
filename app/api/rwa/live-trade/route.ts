@@ -6,8 +6,7 @@
 // ⇒ 503); a per-wallet rate limit plus an in-process cooldown. Testnet only: the trader holds valueless tokens.
 
 import { createHandler } from '@/lib/web2/routeHandler'
-import { V2_COOKIE } from '@/lib/v2/gate'
-import { isV2RwaVisible } from '@/lib/v2/rwaGate'
+import { canSeeRwa } from '@/lib/v2/rwaGate'
 import { runLiveTrade } from '@/lib/rwa/liveTrade'
 
 export const dynamic = 'force-dynamic'
@@ -18,7 +17,7 @@ function operators(): string[] {
 }
 
 export const POST = createHandler(async (req, ctx) => {
-  if (!isV2RwaVisible(req.cookies.get(V2_COOKIE)?.value)) return ctx.json({ success: false, error: 'not_found' }, 404)
+  if (!canSeeRwa(req.cookies)) return ctx.json({ success: false, error: 'not_found' }, 404)
   const allow = operators()
   if (allow.length === 0) return ctx.json({ success: false, error: 'operators_unset', code: 'NOT_CONFIGURED' }, 503)
   const who = ctx.user!.address.toLowerCase()
