@@ -65,7 +65,7 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   2026-09-08) is LIVE: Vercel repointed, registered in `gateway_instances` (code-hash + seat verified), `/api/gateway/meta`
   serves it with `source: registry` — the registry is now the live trust root, not the env fallback. Mainnet blocked on a
   Morpho USDG vault with capacity (all 39 at `maxDeposit == 0`). Rule: `.claude/rules/lp-gateway.md`.
-- **Marketing:** `/`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
+- **Marketing:** `/how-it-works` (the model in diagrams — V1 public, V2 section rendered only past the `lib/v2/gate` unlock), `/`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
   `/agents`, `/about`, `/docs`.
 - **Org treasury (new, testnet)** — the multi-tenant treasury MVP built ON the org layer
   (`orgs`/`org_members` + `attestOrgMembership`, migration `20260818000001`). Auth surface `/app/org/[slug]`
@@ -299,6 +299,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/docs` | `app/docs/page.tsx` |
 | `/earn/[pool]` | `app/earn/[pool]/page.tsx` |
 | `/explorer` | `app/explorer/page.tsx` |
+| `/how-it-works` | `app/how-it-works/page.tsx` |
 | `/legal` | `app/legal/page.tsx` |
 | `/org/[slug]` | `app/org/[slug]/page.tsx` |
 | `/org/[slug]/badge` | `app/org/[slug]/badge/page.tsx` |

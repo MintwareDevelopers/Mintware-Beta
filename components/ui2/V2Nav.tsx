@@ -11,6 +11,7 @@ import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 
 const FEATURES = [
+  { key: 'how', href: '/how-it-works', label: 'How it works' },
   { key: 'vaults', href: '/vaults', label: 'Vaults' },
   { key: 'ypn', href: '/yield-payment-network', label: 'Liquid Sovereign Account' },
   { key: 'cards', href: '/cards', label: 'Cards' },
@@ -18,7 +19,7 @@ const FEATURES = [
   { key: 'teams', href: '/teams', label: 'For Teams' },
 ] as const
 
-export type V2NavActive = 'vaults' | 'ypn' | 'cards' | 'agents' | 'teams' | 'defi'
+export type V2NavActive = 'how' | 'vaults' | 'ypn' | 'cards' | 'agents' | 'teams' | 'defi'
 
 export function V2Nav({ active }: { active?: V2NavActive }) {
   const { isConnected } = useMintwareIdentity()
@@ -34,7 +35,7 @@ export function V2Nav({ active }: { active?: V2NavActive }) {
           <b className="font-atx-display text-[17px] font-bold tracking-[-0.02em]">Mintware</b>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-7">
+        <nav className="hidden lg:flex items-center gap-7">
           {FEATURES.map((f) => (
             <Link
               key={f.key}
@@ -47,13 +48,13 @@ export function V2Nav({ active }: { active?: V2NavActive }) {
         </nav>
 
         <div className="flex items-center gap-3.5">
-          <button onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} className="md:hidden glass-pill glass-pill-sm w-11 h-11 !px-0">{open ? '✕' : '☰'}</button>
+          <button onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} className="lg:hidden glass-pill glass-pill-sm w-11 h-11 !px-0">{open ? '✕' : '☰'}</button>
           <button onClick={() => launch('/app')} className="glass-pill glass-pill-sm">{launchLabel} →</button>
         </div>
       </div>
 
       {open && (
-        <div className="md:hidden flex flex-col bg-white/95 backdrop-blur-md border-t border-hair-soft">
+        <div className="lg:hidden flex flex-col bg-white/95 backdrop-blur-md border-t border-hair-soft">
           {FEATURES.map((f) => (
             <Link key={f.key} href={f.href} onClick={() => setOpen(false)} className={`px-6 py-3.5 text-[15px] font-medium no-underline border-t border-hair-soft ${active === f.key ? 'text-ink' : 'text-ink-mid'}`}>{f.label}</Link>
           ))}

@@ -10,6 +10,7 @@ import { MintwareMark } from '@/components/ui2/MintwareMark'
 // Current live app sections only — legacy static mockups (/explorer, /for-protocols.html)
 // dropped. Add { href: '/docs', label: 'Docs' } once the docs section ships.
 const FOOTER_LINKS = [
+  { href: '/how-it-works', label: 'How it works' },
   { href: '/defi', label: 'DeFi' },
   { href: '/teams', label: 'For Teams' },
   { href: '/vaults', label: 'Vaults' },

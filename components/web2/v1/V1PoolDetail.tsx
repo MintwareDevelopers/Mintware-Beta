@@ -35,6 +35,8 @@ import { buildGatewayDepositMessage, buildGatewayWithdrawMessage } from '@/lib/w
 import { depositSharesQuote, withdrawLegsQuote, parsePoolState, type SerializedPoolState } from '@/lib/gateway/positionReader'
 import { applyToleranceBps } from '@/lib/gateway/v4Math'
 import { sanitizeAmountInput } from '@/lib/gateway/amountInput'
+import { ModelDiagram } from '@/components/marketing/how/ModelDiagram'
+import { V1_LP } from '@/components/marketing/how/diagrams'
 
 // C-6 slippage tolerance applied to every dry quote before it becomes an on-chain floor (bps).
 export const SLIPPAGE_TOLERANCE_BPS = 100
@@ -637,9 +639,28 @@ export function V1PoolDetail({ slug }: { slug: string }) {
               <Loop n="02" t="Deployed as liquidity" d="Your full deposit — no held-back reserve — is paired into this pool and earns trading fees." />
               <Loop n="03" t="Fees compound back in" d="Trading fees lift your position's value pro-rata. Withdraw anytime for both legs." />
             </div>
+            <a href="#what-happens" className="inline-block text-[12.5px] mt-3 no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>See every step ↓</a>
           </div>
         </div>
       </div>
+
+      {/* what happens to your USDG — the same V1 LP diagram as /how-it-works, in the app's dark theme */}
+      <section id="what-happens" className="mt-8 scroll-mt-[76px]">
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>What happens to your USDG</div>
+            <p className="text-[13.5px] mt-1.5 max-w-[70ch] leading-[1.55]" style={{ color: '#9B9BAD' }}>
+              Every step from deposit to withdrawal, as the contracts run it. Part of your USDG is swapped into {base} inside
+              the deploy transaction, so the full amount becomes liquidity.
+            </p>
+          </div>
+          <Link href="/how-it-works#v1" className="text-[12.5px] no-underline hover:underline shrink-0" style={{ color: '#8A82F4', fontWeight: 600 }}>How the whole model works →</Link>
+        </div>
+        <ModelDiagram spec={V1_LP} theme="dark" className="mt-4" />
+        <div className="text-[12.5px] mt-3 leading-[1.55]" style={{ color: '#9B9BAD' }}>
+          <span style={{ color: '#F4F4FA', fontWeight: 600 }}>Impermanent loss is 100% yours.</span> Mintware supplies no capital to this position.
+        </div>
+      </section>
 
       <p className="text-[12px] mt-6" style={{ color: '#63636F' }}>
         Robinhood testnet · metrics live from GeckoTerminal · every figure above is an estimate, not a projection ·{' '}
