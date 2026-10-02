@@ -40,6 +40,8 @@ function buildNav(activeOrgSlug: string | null): { groups: { title?: string; ite
           { href: '/app/team/liquidity/staged', label: 'Stage one side' },
         ],
       },
+      // V2-RWAs: the issuer side of the RWA vertical (flag-gated, like the RWA workspace itself).
+      ...(process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true' ? [{ title: 'RWA issuance', items: [{ href: '/app/team/rwa', label: 'Your asset units', hint: 'Testnet' }] }] : []),
       {
         title: 'Spend',
         items: [

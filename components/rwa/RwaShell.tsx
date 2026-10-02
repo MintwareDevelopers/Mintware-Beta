@@ -14,6 +14,13 @@ export function RwaShell({ children }: { children: React.ReactNode }) {
           title: 'Markets',
           items: RWA_UNITS.map((u) => ({ href: `/app/rwa/${u.slug}`, label: u.demo.property.name.replace(' (demo)', ''), hint: u.chain.short })),
         },
+        {
+          title: 'Take part',
+          items: [
+            { href: '/app/rwa-liquidity', label: 'Supply liquidity', hint: 'LPs' },
+            { href: '/app/team/rwa', label: 'Issuer console', hint: 'Issuers' },
+          ],
+        },
         { title: 'Evidence', items: [{ href: '/app/rwa/proof', label: 'On-chain proof' }, { href: '/app/rwa/how', label: 'How it works' }] },
       ]}
       footer={

@@ -4,31 +4,15 @@
 // and clamped small, so the demo market stays anchored and inside the band. Testnet only.
 
 // Server-only by construction: imported solely from app/api/rwa/live-trade/route.ts (it reads Privy secrets).
-import { createPublicClient, createWalletClient, http, parseAbi, parseUnits, type Account } from 'viem'
-import { baseSepolia } from 'viem/chains'
+import { parseAbi, parseUnits } from 'viem'
 import { RWA_DEMO, tickToUsd } from './demo'
-
-const RPC = process.env.RWA_RPC_URL ?? 'https://sepolia.base.org'
-const pub = createPublicClient({ chain: baseSepolia, transport: http(RPC, { timeout: 10_000 }) })
+import { rwaPub as pub, rwaTrader as trader, rwaWallet } from './traderSigner'
 
 const HOOK = parseAbi(['function bandStatus() view returns (int24, int24, uint256, bool, bool, bool)', 'function tradingPaused() view returns (bool)'])
 const VAULT = parseAbi(['function deployedFromSenior() view returns (uint256)'])
 const ROUTER = parseAbi(['function swapExactIn((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, bool zeroForOne, uint256 amountIn, uint256 minOut) returns (uint256)'])
 
 export type LiveTradeResult = { hash: string; side: 'buy' | 'sell'; amount: string; trader: string }
-
-let traderAccount: Account | null = null
-async function trader(): Promise<Account> {
-  if (traderAccount) return traderAccount
-  const { PRIVY_APP_ID, PRIVY_APP_SECRET, RWA_TRADER_PRIVY_WALLET_ID: walletId, RWA_TRADER_PRIVY_ADDRESS: address } = process.env
-  if (!PRIVY_APP_ID || !PRIVY_APP_SECRET || !walletId || !address) throw new Error('trader_not_configured')
-  const { PrivyClient } = await import('@privy-io/server-auth')
-  const { createViemAccount } = await import('@privy-io/server-auth/viem')
-  const privy = new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET)
-  // Privy bundles its own viem copy, so its Account type is nominally distinct — same runtime shape.
-  traderAccount = (await createViemAccount({ walletId, address: address as `0x${string}`, privy: privy as never })) as unknown as Account
-  return traderAccount
-}
 
 /** Pure sizing: which side and how much, given spot, appraisal and the pool's USD depth. Exported for tests. */
 export function planTrade(spotUsd: number, appraisalUsd: number, poolUsd: number, rand = Math.random()) {
@@ -67,7 +51,7 @@ export async function runLiveTrade(): Promise<LiveTradeResult> {
     }
     await pub.simulateContract(req)
     const est = await pub.estimateContractGas(req).catch(() => 400_000n)
-    const hash = await createWalletClient({ account, chain: baseSepolia, transport: http(RPC) })
+    const hash = await rwaWallet(account)
       .writeContract({ ...req, gas: (est * 16n) / 10n + 30_000n })
     const r = await pub.waitForTransactionReceipt({ hash })
     if (r.status !== 'success') throw new Error(`reverted:${hash}`)
