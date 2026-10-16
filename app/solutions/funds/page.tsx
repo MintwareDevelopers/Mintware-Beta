@@ -102,7 +102,7 @@ const C = {
       {
         i: '04',
         title: 'Non-custodial, native-USDC settlement',
-        how: 'Keys stay with the fund (self-custody + external wallets); capital lives in the fund’s wallet or in autonomous, audited contracts — never with Mintware. Settlement is USDC-native over Circle / Arc rails with CCTP bridging; Mintware never touches fiat.',
+        how: 'Keys stay with the fund (self-custody + external wallets); capital lives in the fund’s wallet or in autonomous, audited contracts — never with Mintware. Settlement is USDC-native over Circle rails with CCTP bridging; Mintware never touches fiat.',
         why: 'No custodian in the middle of your treasury, no off-ramp tax, no counterparty holding the balance. The infrastructure is yours to operate; the licensed pieces stay with licensed partners.',
       },
     ],
@@ -129,7 +129,7 @@ const C = {
       { k: 'Structured tranches', v: 'Senior capital is price-free — it never reads a pool price, so it stays spendable at par. A junior first-loss tranche absorbs impermanent loss and market moves. The senior balance behaves like cash; the volatility lands on the tranche built to take it.' },
       { k: 'Solvency-aware redemption', v: 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts the cushion, everyone shares the same transparent pro-rata outcome — no race for the exit, no first-redeemer advantage.' },
       { k: 'The ULV engine', v: 'Idle capital earns via rehypothecation into best-venue lending — the adapter shops Aave and Morpho for the top USDC rate; just-in-time V4 liquidity plus MEV/LVR recapture stack a second layer of return that normally leaks to arbitrageurs. Capital is never idle inside the vault.' },
-      { k: 'Native-USDC rails', v: 'Settlement is USDC-native on Circle / Arc with CCTP bridging; card spend runs through a regulated card partner. Mintware never custodies funds and never touches fiat.' },
+      { k: 'Native-USDC rails', v: 'Settlement is USDC-native on Circle with CCTP bridging; card spend runs through a regulated card partner. Mintware never custodies funds and never touches fiat.' },
     ],
   },
 
@@ -146,8 +146,8 @@ const C = {
     points: [
       { k: 'Non-custodial by construction', v: 'Self-custody (Privy + external wallets) or autonomous contracts hold the capital — never Mintware.' },
       { k: 'Formal verification, not just tests', v: 'Machine-checked (Coq) and symbolic (Halmos) proofs on the properties where money can be lost.' },
-      { k: 'Proven end-to-end on-chain', v: 'The whole YPN loop, plus a native-USDC Base→Arc bridge, executed on testnet with transaction hashes you can open in a block explorer.' },
-      { k: 'Circle / Arc rails', v: 'USDC-native settlement built on Circle’s Arc and CCTP; licensed partners carry the regulated legs.' },
+      { k: 'Proven end-to-end on-chain', v: 'The whole YPN loop, plus a native-USDC bridge, executed on testnet with transaction hashes you can open in a block explorer.' },
+      { k: 'Circle rails', v: 'USDC-native settlement built on Circle’s CCTP; licensed partners carry the regulated legs.' },
     ],
     cta: { label: 'See the whole loop run on-chain', href: '/proof' },
   },
@@ -165,7 +165,7 @@ const C = {
   },
 
   honesty:
-    'In testing on Base Sepolia and Circle’s Arc testnet — testnet, unaudited, valueless test USDC. Nothing here is an offer, a solicitation, investment / legal / tax advice, or a claim that Mintware manages, advises, or holds a fund’s capital: it is non-custodial software a fund operates itself. The senior balance is a claim on an autonomous vault, not a deposit, and is not guaranteed, insured, or a fixed rate. Yield figures are illustrative and historical, never a promise. An external audit precedes any real value.',
+    'In testing on Base Sepolia — testnet, unaudited, valueless test USDC. Nothing here is an offer, a solicitation, investment / legal / tax advice, or a claim that Mintware manages, advises, or holds a fund’s capital: it is non-custodial software a fund operates itself. The senior balance is a claim on an autonomous vault, not a deposit, and is not guaranteed, insured, or a fixed rate. Yield figures are illustrative and historical, never a promise. An external audit precedes any real value.',
 
   sources: [
     'Stablecoin supply ~$315–321B, ~$4.6B yield-bearing — Crypto-Economy, CoinDesk, KuCoin (2026)',
