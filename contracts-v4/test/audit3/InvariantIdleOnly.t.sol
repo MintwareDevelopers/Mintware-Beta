@@ -419,7 +419,11 @@ contract IdleOnlyHandler is Test {
             if (claimAfter + q > claimBefore + srcP + 2 + ownFeeShare) reCreditViolations++;
         }
         uint256 pmP = _pmPriceCeil(idle, ts);
-        globalSlack += srcP + 1; // adapter over-delivery + entitlement floor
+        // adapter over-delivery + entitlement floor + the re-credit FLOOR: a capped exit is re-credited
+        // floor(shares·shortfall/claim) shares, so < 1 PM share of the exiter's value stays IN the pool and accrues
+        // to the other holders pro-rata. It was only counted as the exiter's `ownLoss`, never as capturable slack —
+        // a 150k pre-deposit compound (1 share ≈ 0.15 USDG) + two capped exits broke A3 by ~0.07 USDG (2026-10-02).
+        globalSlack += srcP + 1 + pmP;
         globalLossSlack += srcP; // that over-delivery is borne by the remaining holders
         deficitBound += srcP;
         ownLoss[a] += pmP + 1; // re-credit floors (< 1 PM share) + entitlement floor
