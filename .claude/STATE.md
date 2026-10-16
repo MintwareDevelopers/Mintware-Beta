@@ -161,6 +161,8 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | Contract | Env · Chain | Address | Status |
 |---|---|---|---|
 | `AIAttribution` | mainnet · base | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` | live |
+| `AgentParkIdleAdapter` | testnet · base-sepolia | `0xCDA824fe74684C0632d343e96a34708c79eEdB11` | testnet |
+| `AgentParkVault` | testnet · base-sepolia | `0xEa2d7a3a52304558306480B2746D5D4624219b09` | testnet |
 | `EthCollateralVault` | testnet · base-sepolia | `0x09Cda8519737a60FD16D263f94fb56237CDb7E42` | testnet |
 | `EthSeniorDemo_Gateway` | testnet · base-sepolia | `0x16609c074C8A1b1CaB826248EA98877D8f5FA96F` | testnet |
 | `EthSeniorDemo_JitHook` | testnet · base-sepolia | `0xE21D937855a128c79D95305bFE0604Ae660160C8` | testnet |
@@ -190,7 +192,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVHook` | testnet · base-sepolia | `0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8` | testnet |
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | testnet |
 
-**29 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**31 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
 **35 of 43 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
