@@ -374,8 +374,10 @@ const mintwareX402PayAction = {
 }
 
 // Parking vault + USDC (env-overridable). Arc was dropped (2026-08-27); defaults are the base-sepolia
-// MintwareYieldVault stack. Override via MINTWARE_PARK_VAULT / _USDC / _RPC for another deployment.
-const PARK_VAULT = () => process.env.MINTWARE_PARK_VAULT ?? '0x09Cda8519737a60FD16D263f94fb56237CDb7E42'
+// USDC MintwareYieldVault (DeployAgentParkVault.s.sol, 2026-10-16 — the old 0x09Cd…7E42 default held mock
+// WETH, so every park reverted). TESTNET: its adapter holds USDC without yield. Override via
+// MINTWARE_PARK_VAULT / _USDC / _RPC for another deployment.
+const PARK_VAULT = () => process.env.MINTWARE_PARK_VAULT ?? '0xEa2d7a3a52304558306480B2746D5D4624219b09'
 const PARK_USDC = () => process.env.MINTWARE_PARK_USDC ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
 const PARK_RPC = () => process.env.MINTWARE_PARK_RPC ?? 'https://base-sepolia-rpc.publicnode.com'
 const APPROVE_SEL = '0x095ea7b3' //  approve(address,uint256)
@@ -394,10 +396,31 @@ async function ethCall(to: string, data: string): Promise<bigint> {
   return j.result && j.result !== '0x' ? BigInt(j.result) : 0n
 }
 
+/** Wait until `hash` is mined (polls the park RPC); throws if it reverted or never lands. The deposit must not
+ *  be sent before the approve is mined — a deposit estimated against a pre-approve state reverts. */
+async function waitForReceipt(hash: string, timeoutMs = 90_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const res = await fetch(PARK_RPC(), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [hash] }),
+    })
+    const j = (await res.json()) as { result?: { status?: string } | null }
+    if (j.result?.status) {
+      if (j.result.status !== '0x1') throw new Error(`Transaction ${hash} reverted.`)
+      return
+    }
+    await new Promise((r) => setTimeout(r, 2_000))
+  }
+  throw new Error(`Transaction ${hash} not mined within ${timeoutMs / 1000}s.`)
+}
+
 const mintwareParkAction = {
   name: 'MINTWARE_PARK',
   description:
-    'Park USDC into the Mintware yield vault so it earns while staying spendable in place (it never locks). ' +
+    'Park USDC into the Mintware vault so it stays spendable in place (it never locks) and earns whatever the ' +
+    "vault's yield source pays. " +
     'Deposits `amountUsd` USDC from the agent wallet: approves the vault, then deposits. On-chain — the ' +
     'agent pays gas. After parking, spend it per call with MINTWARE_X402_PAY and check it with MINTWARE_TREASURY.',
   schema: z.object({
@@ -415,14 +438,17 @@ const mintwareParkAction = {
 
     // 1) approve the vault to pull `amount` USDC.
     const approveTx = await wallet.sendTransaction({ to: usdc, data: APPROVE_SEL + pad32(vault) + padUint(amount) })
+    await waitForReceipt(approveTx)
     // 2) deposit(assets, receiver=agent) → mints vault shares to the agent.
     const depositTx = await wallet.sendTransaction({ to: vault, data: DEPOSIT_SEL + padUint(amount) + pad32(agent) })
+    await waitForReceipt(depositTx)
 
     return [
-      `Parked $${args.amountUsd} USDC into the Mintware yield vault.`,
+      `Parked $${args.amountUsd} USDC into the Mintware vault.`,
       `  approve: ${approveTx}`,
       `  deposit: ${depositTx}`,
-      `It's now earning yield and stays fully spendable in place — spend per call with MINTWARE_X402_PAY.`,
+      `It stays fully spendable in place — spend per call with MINTWARE_X402_PAY. It earns whatever the vault's ` +
+        `yield source pays (the default testnet vault holds USDC without yield).`,
     ].join('\n')
   },
 }
@@ -453,6 +479,7 @@ const mintwareUnparkAction = {
     if (sharesToBurn === 0n) return 'Nothing to un-park (amount rounds to zero).'
 
     const tx = await wallet.sendTransaction({ to: vault, data: REDEEM_SEL + padUint(sharesToBurn) })
+    await waitForReceipt(tx)
     const which = args.amountUsd != null ? `$${args.amountUsd}` : 'all parked USDC'
     return `Un-parked ${which} — redeemed ${sharesToBurn} shares. redeem tx: ${tx}. USDC is back in the agent wallet.`
   },

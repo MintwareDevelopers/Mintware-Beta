@@ -13,7 +13,7 @@
 //   PAY_X402                 — pay an x402 call in USDC (EIP-3009) and return the resource
 //
 // Contract (Base mainnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
-// Park vault (base-sepolia): 0x09Cda8519737a60FD16D263f94fb56237CDb7E42  (Arc dropped 2026-08-27)
+// Park vault (base-sepolia): 0xEa2d7a3a52304558306480B2746D5D4624219b09  (USDC; old 0x09Cd… held mock WETH)
 // API base:                https://mintware.finance
 // =============================================================================
 
@@ -543,7 +543,7 @@ const claimPendingActionsAction: Action = {
 
 // ── Parking vault + USDC (settings-overridable; base-sepolia — Arc dropped 2026-08-27) ────────────
 
-const PARK_VAULT_DEFAULT = '0x09Cda8519737a60FD16D263f94fb56237CDb7E42' // base-sepolia MintwareYieldVault
+const PARK_VAULT_DEFAULT = '0xEa2d7a3a52304558306480B2746D5D4624219b09' // base-sepolia USDC MintwareYieldVault (testnet: holds, no yield)
 const PARK_USDC_DEFAULT  = '0x036CbD53842c5426634e7929541eC2318f3dCF7e' // base-sepolia USDC
 const PARK_RPC_DEFAULT   = 'https://base-sepolia-rpc.publicnode.com'
 const PARK_CHAIN_ID_DEFAULT = 84532 // Base Sepolia
@@ -638,13 +638,19 @@ async function sendTx(
   })
   const client = createWalletClient({ account, chain, transport: http(rpc) })
 
-  return client.sendTransaction({
+  const hash = await client.sendTransaction({
     account,
     chain,
     to: tx.to as `0x${string}`,
     data: tx.data as `0x${string}`,
     value: tx.value ?? 0n,
   })
+  // Wait until mined: a deposit sent before its approve is mined is estimated against the pre-approve state
+  // and reverts (seen live on Base Sepolia, 2026-10-16).
+  const { createPublicClient } = await import('viem')
+  const receipt = await createPublicClient({ chain, transport: http(rpc) }).waitForTransactionReceipt({ hash, timeout: 90_000 })
+  if (receipt.status !== 'success') throw new Error(`Transaction ${hash} reverted.`)
+  return hash
 }
 
 // ── x402 (EIP-3009 pay-per-call) ──────────────────────────────────────────────
@@ -713,7 +719,7 @@ const parkUsdcAction: Action = {
   ],
 
   description:
-    'Parks USDC into the Mintware yield vault so it earns while staying spendable in place (it never locks). ' +
+    'Parks USDC into the Mintware vault so it stays spendable in place (it never locks) and earns whatever the vault yield source pays. ' +
     'Deposits the USDC amount from the message: approves the vault, then deposits (ERC-4626). ' +
     'On-chain — the agent pays gas. Requires AGENT_PRIVATE_KEY. Vault/USDC/RPC default to the base-sepolia YPN stack.',
 
@@ -790,10 +796,10 @@ const parkUsdcAction: Action = {
 
       await callback({
         text: [
-          `Parked $${amountUsd} USDC into the Mintware yield vault.`,
+          `Parked $${amountUsd} USDC into the Mintware vault.`,
           `  approve: ${approveTx}`,
           `  deposit: ${depositTx}`,
-          `It's now earning yield and stays fully spendable in place — spend per call with PAY_X402.`,
+          `It stays fully spendable in place — spend per call with PAY_X402. It earns whatever the vault yield source pays (the default testnet vault holds USDC without yield).`,
         ].join('\n'),
       })
       return true
@@ -812,7 +818,7 @@ const parkUsdcAction: Action = {
       {
         user: '{{agentName}}',
         content: {
-          text: 'Parked $25 USDC into the Mintware yield vault.\n  approve: 0xabc…\n  deposit: 0xdef…\nIt\'s now earning yield and stays fully spendable in place — spend per call with PAY_X402.',
+          text: 'Parked $25 USDC into the Mintware vault.\n  approve: 0xabc…\n  deposit: 0xdef…\nIt stays fully spendable in place — spend per call with PAY_X402.',
           action: 'PARK_USDC',
         },
       },
