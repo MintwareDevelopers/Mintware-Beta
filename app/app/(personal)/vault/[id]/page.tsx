@@ -415,7 +415,7 @@ function VaultDetailContent() {
   }, [vaultExecute.isSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return (
-    <div className="px-7 py-10 max-w-[900px] mx-auto">
+    <div className="px-7 max-[800px]:px-4 py-10 max-w-[900px] mx-auto">
       {[1, 2, 3].map(i => (
         <div key={i} className="h-20 rounded-2xl bg-ground-cool mw-shimmer mb-3" />
       ))}
@@ -423,7 +423,7 @@ function VaultDetailContent() {
   )
 
   if (!vault) return (
-    <div className="px-7 py-[60px] text-center text-ink-mid">
+    <div className="px-7 max-[800px]:px-4 py-[60px] text-center text-ink-mid">
       Vault not found. <Link href="/app/vaults" className="text-peri-deep">← Back to vaults</Link>
     </div>
   )

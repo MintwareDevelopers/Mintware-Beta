@@ -45,7 +45,7 @@ function WalletControl() {
     return (
       <button
         onClick={() => privy.login({ loginMethods: ['wallet', 'email'], walletChainType: 'ethereum-only' })}
-        className="glass-pill-primary !py-2 !px-4 text-[13px]"
+        className="glass-pill-primary !py-2 max-md:!py-2.5 !px-4 text-[13px]"
       >
         Connect
       </button>
@@ -104,7 +104,7 @@ export function AppShell({
         aria-current={on ? 'page' : undefined}
         className={
           mobile
-            ? `shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-medium whitespace-nowrap no-underline transition-colors ${on ? 'bg-peri text-white' :'text-ink-mid bg-ground-cool'}`
+            ? `shrink-0 rounded-full px-3.5 py-2.5 text-[13px] font-medium whitespace-nowrap no-underline transition-colors ${on ? 'bg-peri text-white' :'text-ink-mid bg-ground-cool'}`
             : `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[13.5px] font-medium no-underline transition-colors ${on ? 'bg-ground-cool text-ink' : 'text-ink-mid hover:text-ink hover:bg-ground-cool/60'}`
         }
       >
