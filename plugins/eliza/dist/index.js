@@ -13,7 +13,7 @@
 //   PAY_X402                 — pay an x402 call in USDC (EIP-3009) and return the resource
 //
 // Contract (Base mainnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
-// Park vault (Arc testnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
+// Park vault (base-sepolia): 0xEa2d7a3a52304558306480B2746D5D4624219b09  (USDC; old 0x09Cd… held mock WETH)
 // API base:                https://mintware.finance
 // =============================================================================
 import { elizaLogger, } from '@elizaos/core';
@@ -403,18 +403,18 @@ const claimPendingActionsAction = {
     ],
 };
 // =============================================================================
-// Capital-parking (Arc yield vault) + x402 pay-per-call
+// Capital-parking (base-sepolia yield vault) + x402 pay-per-call
 //
 // Mirrors the five AgentKit actions (MINTWARE_PARK / _UNPARK / _TREASURY /
 // _X402_QUOTE / _X402_PAY) in Eliza's action shape. On-chain writes use a viem
-// wallet client built from AGENT_PRIVATE_KEY; the Arc vault/USDC/RPC default to
-// the live Arc-testnet YPN yield stack and are overridable via runtime settings.
+// wallet client built from AGENT_PRIVATE_KEY; the vault/USDC/RPC default to the
+// base-sepolia YPN yield stack (Arc dropped 2026-08-27) and are overridable via runtime settings.
 // =============================================================================
-// ── Arc parking vault + USDC (settings-overridable) ───────────────────────────
-const PARK_VAULT_DEFAULT = '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421';
-const PARK_USDC_DEFAULT = '0x3600000000000000000000000000000000000000';
-const PARK_RPC_DEFAULT = 'https://rpc.testnet.arc.io';
-const PARK_CHAIN_ID_DEFAULT = 5042002; // Arc testnet
+// ── Parking vault + USDC (settings-overridable; base-sepolia — Arc dropped 2026-08-27) ────────────
+const PARK_VAULT_DEFAULT = '0xEa2d7a3a52304558306480B2746D5D4624219b09'; // base-sepolia USDC MintwareYieldVault (testnet: holds, no yield)
+const PARK_USDC_DEFAULT = '0x036CbD53842c5426634e7929541eC2318f3dCF7e'; // base-sepolia USDC
+const PARK_RPC_DEFAULT = 'https://base-sepolia-rpc.publicnode.com';
+const PARK_CHAIN_ID_DEFAULT = 84532; // Base Sepolia
 // ERC-20 / ERC-4626 selectors.
 const APPROVE_SEL = '0x095ea7b3'; // approve(address,uint256)
 const DEPOSIT_SEL = '0x6e553f65'; // deposit(uint256,address)  (ERC-4626)
@@ -466,8 +466,8 @@ function extractUsdAmount(text) {
     const n = Number(match[1]);
     return Number.isFinite(n) && n > 0 ? n : null;
 }
-// ── Arc read (eth_call) ───────────────────────────────────────────────────────
-async function arcEthCall(rpc, to, data) {
+// ── on-chain read (eth_call) ──────────────────────────────────────────────────
+async function ethCall(rpc, to, data) {
     const res = await fetch(rpc, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -476,26 +476,33 @@ async function arcEthCall(rpc, to, data) {
     const j = (await res.json());
     return j.result && j.result !== '0x' ? BigInt(j.result) : 0n;
 }
-// ── Arc write (viem wallet client from AGENT_PRIVATE_KEY) ──────────────────────
-async function sendArcTx(runtime, privateKey, tx) {
+// ── on-chain write (viem wallet client from AGENT_PRIVATE_KEY) ─────────────────
+async function sendTx(runtime, privateKey, tx) {
     const { createWalletClient, http, defineChain } = await import('viem');
     const { privateKeyToAccount } = await import('viem/accounts');
     const account = privateKeyToAccount(privateKey);
     const rpc = parkRpc(runtime);
     const chain = defineChain({
         id: parkChainId(runtime),
-        name: 'Arc',
+        name: 'Base Sepolia',
         nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
         rpcUrls: { default: { http: [rpc] } },
     });
     const client = createWalletClient({ account, chain, transport: http(rpc) });
-    return client.sendTransaction({
+    const hash = await client.sendTransaction({
         account,
         chain,
         to: tx.to,
         data: tx.data,
         value: tx.value ?? 0n,
     });
+    // Wait until mined: a deposit sent before its approve is mined is estimated against the pre-approve state
+    // and reverts (seen live on Base Sepolia, 2026-10-16).
+    const { createPublicClient } = await import('viem');
+    const receipt = await createPublicClient({ chain, transport: http(rpc) }).waitForTransactionReceipt({ hash, timeout: 90000 });
+    if (receipt.status !== 'success')
+        throw new Error(`Transaction ${hash} reverted.`);
+    return hash;
 }
 // ── x402 (EIP-3009 pay-per-call) ──────────────────────────────────────────────
 const API_BASE_X402 = API_BASE;
@@ -542,9 +549,9 @@ const parkUsdcAction = {
         'park my cash',
         'move usdc into the vault',
     ],
-    description: 'Parks USDC into the Mintware yield vault so it earns while staying spendable in place (it never locks). ' +
+    description: 'Parks USDC into the Mintware vault so it stays spendable in place (it never locks) and earns whatever the vault yield source pays. ' +
         'Deposits the USDC amount from the message: approves the vault, then deposits (ERC-4626). ' +
-        'On-chain — the agent pays gas. Requires AGENT_PRIVATE_KEY. Vault/USDC/RPC default to the Arc-testnet YPN stack.',
+        'On-chain — the agent pays gas. Requires AGENT_PRIVATE_KEY. Vault/USDC/RPC default to the base-sepolia YPN stack.',
     validate: async (runtime, _message) => {
         const key = runtime.getSetting('AGENT_PRIVATE_KEY');
         if (!key) {
@@ -591,22 +598,22 @@ const parkUsdcAction = {
         await callback({ text: `Parking $${amountUsd} USDC into the Mintware yield vault — submitting approve + deposit…` });
         try {
             // 1) approve the vault to pull `amount` USDC.
-            const approveTx = await sendArcTx(runtime, privateKey, {
+            const approveTx = await sendTx(runtime, privateKey, {
                 to: usdc,
                 data: APPROVE_SEL + pad32(vault) + padUint(amount),
             });
             // 2) deposit(assets, receiver=agent) → mints vault shares to the agent.
-            const depositTx = await sendArcTx(runtime, privateKey, {
+            const depositTx = await sendTx(runtime, privateKey, {
                 to: vault,
                 data: DEPOSIT_SEL + padUint(amount) + pad32(agent),
             });
             elizaLogger.info(`[mintware] Parked $${amountUsd} — approve: ${approveTx}, deposit: ${depositTx}`);
             await callback({
                 text: [
-                    `Parked $${amountUsd} USDC into the Mintware yield vault.`,
+                    `Parked $${amountUsd} USDC into the Mintware vault.`,
                     `  approve: ${approveTx}`,
                     `  deposit: ${depositTx}`,
-                    `It's now earning yield and stays fully spendable in place — spend per call with PAY_X402.`,
+                    `It stays fully spendable in place — spend per call with PAY_X402. It earns whatever the vault yield source pays (the default testnet vault holds USDC without yield).`,
                 ].join('\n'),
             });
             return true;
@@ -625,7 +632,7 @@ const parkUsdcAction = {
             {
                 user: '{{agentName}}',
                 content: {
-                    text: 'Parked $25 USDC into the Mintware yield vault.\n  approve: 0xabc…\n  deposit: 0xdef…\nIt\'s now earning yield and stays fully spendable in place — spend per call with PAY_X402.',
+                    text: 'Parked $25 USDC into the Mintware vault.\n  approve: 0xabc…\n  deposit: 0xdef…\nIt stays fully spendable in place — spend per call with PAY_X402.',
                     action: 'PARK_USDC',
                 },
             },
@@ -688,7 +695,7 @@ const unparkUsdcAction = {
         const wantsAll = /\ball\b|everything/i.test(text);
         const amountUsd = wantsAll ? null : extractUsdAmount(text);
         try {
-            const balShares = await arcEthCall(rpc, vault, SHARES_SEL + pad32(agent));
+            const balShares = await ethCall(rpc, vault, SHARES_SEL + pad32(agent));
             if (balShares === 0n) {
                 await callback({ text: 'Nothing parked to un-park.' });
                 return true;
@@ -696,14 +703,14 @@ const unparkUsdcAction = {
             let sharesToBurn = balShares; // default: un-park all
             if (amountUsd != null) {
                 const amount = BigInt(Math.round(amountUsd * 1000000));
-                const need = await arcEthCall(rpc, vault, PREVIEW_WITHDRAW_SEL + padUint(amount)); // shares to net `amount`
+                const need = await ethCall(rpc, vault, PREVIEW_WITHDRAW_SEL + padUint(amount)); // shares to net `amount`
                 sharesToBurn = need < balShares ? need : balShares;
             }
             if (sharesToBurn === 0n) {
                 await callback({ text: 'Nothing to un-park (amount rounds to zero).' });
                 return true;
             }
-            const tx = await sendArcTx(runtime, privateKey, {
+            const tx = await sendTx(runtime, privateKey, {
                 to: vault,
                 data: REDEEM_SEL + padUint(sharesToBurn),
             });
@@ -788,7 +795,7 @@ const showTreasuryAction = {
             const short = `${address.slice(0, 6)}…${address.slice(-4)}`;
             await callback({
                 text: [
-                    `Mintware parking account for ${short} (${t.network ?? 'arc'})`,
+                    `Mintware parking account for ${short} (${t.network ?? 'base-sepolia'})`,
                     `  Parked (earning): $${t.parkedUsdcFormatted ?? '0'} USDC`,
                     `  Spendable now:    $${t.spendableUsdcFormatted ?? '0'} USDC`,
                     t.earning
@@ -812,7 +819,7 @@ const showTreasuryAction = {
             {
                 user: '{{agentName}}',
                 content: {
-                    text: 'Mintware parking account for 0xabc1…ef12 (arc)\n  Parked (earning): $250 USDC\n  Spendable now:    $250 USDC\n  Status: earning yield, fully spendable in place — spend per call via PAY_X402.',
+                    text: 'Mintware parking account for 0xabc1…ef12 (base-sepolia)\n  Parked (earning): $250 USDC\n  Spendable now:    $250 USDC\n  Status: earning yield, fully spendable in place — spend per call via PAY_X402.',
                     action: 'SHOW_TREASURY',
                 },
             },
@@ -1073,7 +1080,7 @@ const showPoolsAction = {
 };
 const mintwarePlugin = {
     name: 'mintware-attribution',
-    description: 'Mintware AI Attribution + capital parking (yield vault) + x402 pay-per-call for AI agents on Base/Arc',
+    description: 'Mintware AI Attribution + capital parking (yield vault) + x402 pay-per-call for AI agents on Base',
     actions: [
         getAttributionScoreAction,
         registerMintwareAction,
