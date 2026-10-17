@@ -66,6 +66,22 @@
         "verified": "2026-08-21",
         "source": "broadcast"
       },
+      "AgentParkVault": {
+        "address": "0xEa2d7a3a52304558306480B2746D5D4624219b09",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "USDC MintwareYieldVault — the DEFAULT park/unpark vault for the agent toolkits (agentkit MINTWARE_PARK/UNPARK, eliza PARK_USDC/UNPARK_USDC). Asset = Circle testnet USDC 0x036C…CF7e. Adapter = production MintwareIdleYieldAdapter (holds, NO yield on testnet). Owner = agent-demo deployer 0x9c64…33AD. Round trip proven 2026-10-16 (deposit 0xb9c5…22d6, redeem 0x2ddf…fab2). Replaces the wrong 0x09Cd…7E42 default (mock-WETH vault).",
+        "deployed": "2026-10-16",
+        "source": "contracts-v4/script/DeployAgentParkVault.s.sol"
+      },
+      "AgentParkIdleAdapter": {
+        "address": "0xCDA824fe74684C0632d343e96a34708c79eEdB11",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "MintwareIdleYieldAdapter behind AgentParkVault — onlyVault, one-time setVault (done), depositCap 100,000 USDC, owner 0x9c64…33AD.",
+        "deployed": "2026-10-16",
+        "source": "contracts-v4/script/DeployAgentParkVault.s.sol"
+      },
       "MintwareTreasuryVaultRegistry": {
         "address": "0x0f6a05666c554671bbffa2079778ae47ec3f30e4",
         "chainId": 84532,

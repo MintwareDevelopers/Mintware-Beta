@@ -11,7 +11,7 @@
     },
     {
       "name": "MCP",
-      "endpoint": "https://registry.npmjs.org/@mintware/mcp-server",
+      "endpoint": "https://registry.npmjs.org/@mintwarehq/mcp-server",
       "version": "2025-06-18"
     },
     {
@@ -30,8 +30,8 @@
   "registry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
   "mintTx": "0x7fb33cbeb8da13ed45f353bbaf847ab1db0c0c320960beb3161bedda60ef1ca0",
   "sdk": {
-    "package": "@mintware/ai-attribution-sdk",
-    "registry": "https://www.npmjs.com/package/@mintware/ai-attribution-sdk",
-    "quickstart": "npm i @mintware/ai-attribution-sdk && await registerWithMintwareOracle({ privateKey })"
+    "package": "@mintwarehq/ai-attribution-sdk",
+    "registry": "https://www.npmjs.com/package/@mintwarehq/ai-attribution-sdk",
+    "quickstart": "npm i @mintwarehq/ai-attribution-sdk && await registerWithMintwareOracle({ privateKey })"
   }
 }

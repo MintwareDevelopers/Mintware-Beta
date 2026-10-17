@@ -191,7 +191,7 @@ function AgentsLeaderboardContent() {
             </a>
           </div>
           <pre className="rounded-2xl bg-ink text-white/80 px-[18px] py-[14px] text-[12px] font-mono leading-[1.7] self-center whitespace-pre shrink-0 overflow-x-auto">
-{`npm install @mintware/ai-attribution-sdk
+{`npm install @mintwarehq/ai-attribution-sdk
 
 await registerWithMintwareOracle({
   privateKey: process.env.KEY

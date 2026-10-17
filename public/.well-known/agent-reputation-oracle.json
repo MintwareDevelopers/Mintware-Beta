@@ -27,12 +27,12 @@
     "permissionless": true,
     "erc8004_required": false,
     "steps": [
-      "npm install @mintware/ai-attribution-sdk",
+      "npm install @mintwarehq/ai-attribution-sdk",
       "Call registerWithMintwareOracle({ privateKey }) — one-time, permissionless",
       "Add claimPendingActions() to your agent loop — oracle auto-detects activity every 60s"
     ],
     "sdk": {
-      "package": "@mintware/ai-attribution-sdk",
+      "package": "@mintwarehq/ai-attribution-sdk",
       "version": "0.2.0",
       "one_liner": "await registerWithMintwareOracle({ privateKey: '0x...' })"
     }

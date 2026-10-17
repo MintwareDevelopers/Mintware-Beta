@@ -28,9 +28,9 @@
     }
   ],
   "clients": {
-    "agentkit": "@mintware/agentkit-actions",
-    "mcp": "@mintware/mcp-server",
-    "eliza": "@mintware/eliza-plugin"
+    "agentkit": "@mintwarehq/agentkit-actions",
+    "mcp": "@mintwarehq/mcp-server",
+    "eliza": "@mintwarehq/eliza-plugin"
   },
   "spec": "https://mintware.finance/docs",
   "notes": "Testnet + unaudited; external audit gates real value. Reputation-gating is optional, not required — the facilitator authorizes on live NAV by default."
