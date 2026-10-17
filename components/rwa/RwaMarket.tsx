@@ -68,7 +68,7 @@ export function RwaMarket({ slug }: { slug: string }) {
             </div>
             <div className="mt-8">{unit ? <BandGauge unit={unit} demo={D} /> : <div className="h-[110px] mw-shimmer rounded-[14px]" />}</div>
             {u.liveTrade
-              ? <LiveTradeButton chainName={u.chain.name} onTraded={() => { reload(true); setTimeout(() => reload(true), 4000) }} />
+              ? <LiveTradeButton slug={u.slug} chainName={u.chain.name} onTraded={() => { reload(true); setTimeout(() => reload(true), 4000) }} />
               : <p className="mt-5 border-t border-hair-soft pt-4 text-[12.5px] text-ink-soft">Live demo trading runs on the Base Sepolia market.</p>}
           </div>
           <div className="rounded-[24px] border border-hair bg-white p-7">
@@ -135,7 +135,7 @@ export function RwaMarket({ slug }: { slug: string }) {
 }
 
 /** Operator-only: signs a message, the server places ONE real trade from the verified demo-trader wallet. */
-function LiveTradeButton({ onTraded, chainName }: { onTraded: () => void; chainName: string }) {
+function LiveTradeButton({ onTraded, chainName, slug }: { onTraded: () => void; chainName: string; slug: string }) {
   const { address, isConnected } = useMintwareIdentity()
   const { signMessageAsync } = useSignMessage()
   const [state, setState] = useState<{ busy: boolean; msg?: string; hash?: string; ok?: boolean }>({ busy: false })
@@ -170,7 +170,7 @@ function LiveTradeButton({ onTraded, chainName }: { onTraded: () => void; chainN
       {state.msg && (
         <p className={`mt-2 text-[12.5px] ${state.ok === false ? 'text-[#B4532A]' : 'text-ink-mid'}`}>
           {state.msg}
-          {state.hash && <> · <a href={explorer(RWA_UNITS[0]).tx(state.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-peri-deep no-underline hover:underline">{shortHash(state.hash)} ↗</a></>}
+          {state.hash && <> · <a href={explorer(getUnit(slug) ?? RWA_UNITS[0]).tx(state.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-peri-deep no-underline hover:underline">{shortHash(state.hash)} ↗</a></>}
         </p>
       )}
     </div>

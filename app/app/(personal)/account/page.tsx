@@ -80,7 +80,7 @@ function AccountContent() {
 
   const STATS: { l: string; v: string; hl?: boolean }[] = [
     { l: 'Total deposited', v: '$48,200' },
-    { l: 'Blended APY',     v: '7.4%', hl: true },
+    { l: 'Blended rate (example)', v: '7.4%', hl: true },
     { l: 'Accrued yield',   v: '$312.40' },
     { l: 'Positions',       v: String(POSITIONS.length) },
   ]
@@ -151,7 +151,7 @@ function AccountContent() {
           </div>
 
           <div className="flex items-center gap-3 mt-6 flex-wrap">
-            <Link href="/app/vaults" className="glass-pill-primary glass-pill-sm">Deposit →</Link>
+            <Link href="/app/vaults" className="glass-pill-primary glass-pill-sm">Add liquidity →</Link>
             <Link href="/app/swap" className="glass-pill glass-pill-sm">Swap</Link>
             <button disabled title="Coming soon" className="text-[11px] font-semibold text-ink-soft uppercase tracking-[0.06em]">Move money · coming</button>
           </div>

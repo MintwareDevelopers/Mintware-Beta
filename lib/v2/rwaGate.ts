@@ -1,4 +1,6 @@
-import { V2_COOKIE, v2Token } from './gate'
+import { V2_COOKIE, hasV2Unlock } from './gate'
+
+export { hasV2Unlock }
 
 // V2-RWAs gate (user decision 2026-10-02: "the V2 password is enough" — no separate RWA password):
 //   1. EXISTS — NEXT_PUBLIC_V2_RWA_ENABLED === 'true'. Off ⇒ the vertical does not exist (pages + APIs 404).
@@ -13,12 +15,6 @@ export function v2RwaFlagOn(): boolean {
 /** Layer 1 — the vertical exists (else 404). */
 export function isV2RwaVisible(): boolean {
   return v2RwaFlagOn()
-}
-
-/** The visitor really entered the V2 password (independent of the site-wide V1/V2 default). */
-export function hasV2Unlock(v2CookieVal: string | undefined): boolean {
-  const t = v2Token()
-  return !!t && v2CookieVal === t
 }
 
 type CookieJar = { get(name: string): { value: string } | undefined }

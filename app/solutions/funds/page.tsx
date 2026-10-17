@@ -23,7 +23,7 @@ import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
 export const metadata: Metadata = {
   title: 'For Funds — Dry powder that isn’t dead weight | Mintware',
   description:
-    'Infrastructure for crypto funds, VCs, and asset managers: uncalled capital that stays fully callable while it earns, agent strategies funded per-call over x402, and reputation-weighted allocation — non-custodial, native-USDC settlement. In testing on testnet, unaudited; not an offer or investment advice.',
+    'Infrastructure for crypto funds, VCs, and asset managers: uncalled capital that stays fully callable while it earns, agent strategies funded per-call over x402, and curated allocation — non-custodial, native-USDC settlement. In testing on testnet, unaudited; not an offer or investment advice.',
 }
 
 // ─── Copy + data (all figures dated + sourced; see SOURCES) ──────────────────

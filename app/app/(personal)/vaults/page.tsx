@@ -77,7 +77,7 @@ export default function AppVaultsPage() {
         <div className="max-w-[1100px] mx-auto px-6 py-2.5 max-[800px]:px-4 flex items-center gap-3 flex-wrap text-[11px]">
           <span className="live-chip"><span className="dot" aria-hidden />Base Sepolia · testnet beta</span>
           <span className="text-ink-mid">
-            Deposit test USDC and try the full flow. Figures shown are illustrative, not live TVL.
+            Supply test USDC and try the full flow. Figures shown are illustrative, not live TVL.
           </span>
           <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="ml-auto underline underline-offset-2 text-peri-deep hover:text-ink font-medium">
             Get test USDC →
@@ -89,7 +89,7 @@ export default function AppVaultsPage() {
       <div className="border-b border-hair-soft bg-ground-cool">
         <div className="max-w-[1100px] mx-auto px-6 py-8 max-[800px]:px-4 flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-peri-deep">DeFi surface · reputation-weighted yield</div>
+            <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-peri-deep">DeFi surface · two-sided Uniswap v4 vaults</div>
             <h1 className="font-atx-display font-semibold tracking-[-0.03em] text-[clamp(26px,3.4vw,38px)] mt-2 text-ink">Vaults</h1>
           </div>
           <Link href="/vaults" className="text-[12px] font-semibold text-peri-deep no-underline hover:underline">How vaults work →</Link>
@@ -160,7 +160,7 @@ export default function AppVaultsPage() {
                       <td className="px-4 py-3.5 text-right tabular-nums text-ink">{v.tvl_usdc != null ? fmtUSD(v.tvl_usdc) : '—'}</td>
                       <td className="px-4 max-[560px]:px-3 py-3.5 text-right tabular-nums text-coral2-deep max-[560px]:hidden">{ep?.total_pool != null ? fmtUSD(ep.total_pool) : '—'}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums text-ink-mid max-[820px]:hidden">{ep ? `#${ep.epoch_number}` : '—'}</td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-peri-deep max-[820px]:hidden">{BASE_APY.toFixed(1)}%</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-peri-deep max-[820px]:hidden">{v.status === 'active' ? `~${BASE_APY.toFixed(1)}% (example)` : '—'}</td>
                       <td className="px-4 py-3.5 text-[12px] text-ink-mid max-[680px]:hidden">{chainName(v.chain_id)}</td>
                       <td className="px-4 py-3.5 text-right">
                         <Link href={`/app/vault/${v.id}`} className="glass-pill glass-pill-sm whitespace-nowrap">Open →</Link>

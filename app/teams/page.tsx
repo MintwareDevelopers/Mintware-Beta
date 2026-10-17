@@ -139,7 +139,7 @@ function TeamsLandingPageV2() {
               </div>
               <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-3">
                 A standard LP position — provide one or both sides yourself, no locking, no matching. MEV-protected,
-                auto-managed range, and your Attribution score lifts your fee share up to 1.95×. Built for
+                auto-managed range, fees paid pro-rata to your share. Built for
                 <b className="text-ink"> ongoing or treasury liquidity</b>.
               </p>
               <Link href="/vaults" className="inline-block mt-4 text-[12px] uppercase tracking-[0.06em] font-semibold text-peri-deep no-underline hover:underline">See the LP side →</Link>
@@ -226,8 +226,8 @@ function TeamsLandingPageV2() {
           <div className="grid grid-cols-3 gap-3 mt-8 max-[760px]:grid-cols-1">
             {[
               ['Every backer gets a link', 'A referral link is deterministic from any wallet — no signup. Share it, and the liquidity it brings is attributed to you.'],
-              ['It builds Sharing — the heaviest signal', 'Referrals feed your Sharing score: up to 400 of 925 Attribution points, the single most-weighted signal. A real network is the hardest thing to fake.'],
-              ['A bigger score pays everywhere', 'That higher score lifts your reputation multiplier across the platform — up to 1.95× on the fees you earn. Widen the pool, earn more on your own position.'],
+              ['Your launch reaches further', 'Every backer who shares their link widens the pool of people who can fill your match — a real network is the hardest thing to fake.'],
+              ['Tracked on-chain, paid fairly', 'Referred liquidity is recorded per wallet. Pool fees stay pro-rata to each position — no reputation multiplier.'],
             ].map(([k, d]) => (
               <div key={k} className="soft-card p-6">
                 <div className="font-atx-display text-[15px] font-medium leading-tight text-ink">{k}</div>

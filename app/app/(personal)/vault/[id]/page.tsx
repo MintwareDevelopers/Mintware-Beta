@@ -134,7 +134,7 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
   }
 
   const stageLabel: Record<typeof stage, string> = {
-    idle:       'Deposit liquidity',
+    idle:       'Add liquidity',
     switching_chain: 'Switch to Base Sepolia…',
     approving:  `Approving ${TOKEN0_SYMBOL} + ${TOKEN1_SYMBOL}…`,
     approved:   'Approvals confirmed',
@@ -569,7 +569,7 @@ function VaultDetailContent() {
                       <div className="py-8 text-center text-ink-mid text-[13px]">
                         No active deposits.{' '}
                         <button onClick={() => setTab('deposit')} className="text-peri-deep font-semibold text-[13px]">
-                          Deposit now →
+                          Add liquidity →
                         </button>
                       </div>
                       )
@@ -681,13 +681,12 @@ function VaultDetailContent() {
             {/* Fee split */}
             <div className="soft-card p-6">
               <div className="uppercase tracking-[0.1em] text-[12px] font-semibold text-ink-soft mb-3.5">
-                Fee split
+                Fee split · illustrative
               </div>
               {[
-                { label: 'LPs (you)',              pct: 70, bar: 'bg-peri',      txt: 'text-peri-deep' },
+                { label: 'LPs, pro-rata',          pct: 75, bar: 'bg-peri',      txt: 'text-peri-deep' },
                 { label: 'Referrers',              pct: 15, bar: 'bg-coral2',    txt: 'text-coral2-deep' },
                 { label: 'Protocol treasury',      pct: 10, bar: 'bg-ink-soft',  txt: 'text-ink-soft' },
-                { label: 'Attribution bonus pool', pct: 5,  bar: 'bg-[#D14343]', txt: 'text-[#D14343]' },
               ].map(({ label, pct, bar, txt }) => (
                 <div key={label} className="mb-2.5">
                   <div className="flex justify-between mb-1">
@@ -716,7 +715,7 @@ function VaultDetailContent() {
                 </div>
               ))}
               <p className="text-[11px] text-ink-soft mt-3">
-                Combined with your Attribution score percentile for final payout.
+                Rewards are pro-rata to your share of the vault; a longer lock is a commitment option, set when you add liquidity.
               </p>
             </div>
 
@@ -730,7 +729,7 @@ function VaultDetailContent() {
 // ─── Page ────────────────────────────────────────────────────────────────────
 export default function VaultDetailPage() {
   return (
-    <MwAuthGuard>
+    <MwAuthGuard allowDisconnected>
       <VaultDetailContent />
     </MwAuthGuard>
   )

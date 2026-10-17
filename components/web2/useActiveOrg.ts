@@ -5,7 +5,7 @@
 // TeamOrgBar (the banner) can't drift into disagreeing about which org you're in.
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 export interface OrgRow {
@@ -33,8 +33,18 @@ export function useActiveOrg(): { orgs: OrgRow[] | null; active: OrgRow | null }
     return () => { alive = false }
   }, [address])
 
-  const activeSlug = typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_ORG_KEY) : null
-  const active = orgs?.find((o) => o.slug === activeSlug) ?? orgs?.[0] ?? null
+  // IA audit 2026-10-02: the key was read but never written, so a member of two orgs always got orgs[0] — the
+  // sidebar and org bar showed org A while the page showed org B. The URL is the truth on /app/org/<slug>/*; it is
+  // also remembered so the mock /app/team/* redirects and the workspace switcher land in the last-used org.
+  const pathname = usePathname()
+  const routeSlug = pathname?.match(/^\/app\/org\/([^/]+)/)?.[1] ?? null
+  const fromRoute = routeSlug && routeSlug !== 'new' ? orgs?.find((o) => o.slug === routeSlug) ?? null : null
+  useEffect(() => {
+    if (fromRoute) { try { window.localStorage.setItem(ACTIVE_ORG_KEY, fromRoute.slug) } catch { /* storage blocked */ } }
+  }, [fromRoute])
+  let stored: string | null = null
+  try { stored = typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_ORG_KEY) : null } catch { stored = null }
+  const active = fromRoute ?? orgs?.find((o) => o.slug === stored) ?? orgs?.[0] ?? null
 
   return { orgs, active }
 }

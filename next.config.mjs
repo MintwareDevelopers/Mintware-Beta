@@ -48,7 +48,11 @@ const nextConfig = {
       { source: '/dashboard', destination: '/app/rewards', permanent: true },
       // Vault action pages moved into the gated /app tier (IA Phase 1). `create`
       // must precede `:id` so it isn't captured as an id.
-      { source: '/vault/create', destination: '/app/vault/create', permanent: true },
+      { source: '/vault/create', destination: '/app/team/liquidity/create', permanent: true },
+      // 2026-10-02 IA audit: token-issuer flows moved Personal → Team.
+      { source: '/app/vault/create', destination: '/app/team/liquidity/create', permanent: false },
+      { source: '/app/liquidity', destination: '/app/team/liquidity', permanent: false },
+      { source: '/app/liquidity/:path*', destination: '/app/team/liquidity/:path*', permanent: false },
       { source: '/vault/:id', destination: '/app/vault/:id', permanent: true },
       // Functional app pages moved into the /app tier (IA Phase 1). Query params
       // (e.g. /swap?cid=, ?ref=) are preserved through Next redirects.

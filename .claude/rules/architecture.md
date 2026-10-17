@@ -141,3 +141,11 @@ User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` 
    `TeamTerminalShell` (now a thin AppShell config); RWA has `app/app/rwa/layout.tsx`. The menu is visible whether or
    not a wallet is connected. `MwNav` remains only for marketing/standalone pages (`/agents/leaderboard`, `/docs`, …,
    and the org invite-accept page). The marketing footer is hidden on every shell route (`isAppShellPath`).
+10. **IA audit + V2 gate (2026-10-02).** (a) **All of `/app` is behind the V2 password** — `components/web2/V2AppGate.tsx`
+   (server) wraps every workspace layout (`(personal)`, `team`, `org/(guarded)`, `org/[slug]/(guarded)`, `rwa`) and
+   renders `V2Access` instead of the page until `lib/v2/gate.ts#hasV2Unlock` passes. Stricter than `isV2FromCookie`
+   (true for everyone while `NEXT_PUBLIC_V1_MODE_ENABLED` is off), which is what let deep links skip the Launch modal's
+   password. `/app/org/[slug]/accept` stays ungated (invitees). (b) **Token-issuer flows are Team jobs**: the
+   liquidity router, community-matched launch, seed-a-pool (vault create) and staged single side moved from Personal to
+   `app/app/team/liquidity/{page,launch,create,staged}` (old `/app/liquidity*` + `/app/vault/create` redirect in
+   `next.config.mjs`). Personal is retail-only: Account · Swap · Earn (Vaults, LP Gateway ↗ /v1) · Agent account.

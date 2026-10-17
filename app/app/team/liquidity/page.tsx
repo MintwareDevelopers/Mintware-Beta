@@ -1,11 +1,11 @@
 'use client'
 
-// /app/liquidity — the liquidity MODEL ROUTER. Teams reach this from the intake ("Get liquidity for
-// our token"). There are several ways to provide liquidity depending on what the team holds; this
-// screens the situation and routes to the right model so every path flows well:
-//   • Full or matched   → fund your token (± the quote); the community matches the rest  → vault/create
-//   • Single-sided      → stage one asset, earn, opt-in pair on a match (staged buffer)  → /liquidity/staged
-//   • Just deposit      → add to a live reputation-weighted pool                          → /vaults
+// /app/team/liquidity — "Liquidity for your token", the Team workspace's model router (moved from Personal in the
+// 2026-10-02 IA audit: these are token-issuer jobs, never retail). Routes by what the team holds:
+//   • Your token only  → community-matched launch                         → ./launch
+//   • Both sides       → seed a balanced pool (records intent; ops deploys) → ./create
+//   • One asset        → stage one side, pair later (staged buffer)        → ./staged
+// Supplying into an existing pool is a retail job and lives in Personal › Vaults — not here.
 
 import Link from 'next/link'
 
@@ -14,47 +14,39 @@ const MODELS = [
     tag: 'Have your token',
     title: 'Launch with community matching',
     body: 'Commit your token on one side. The public funds the USDC side up to your target — and your token pairs proportionally as it fills, refunding whatever isn’t matched. One two-sided vault, fees + MEV captured.',
-    href: '/app/liquidity/launch',
+    href: '/app/team/liquidity/launch',
     cta: 'Preview the pairing →',
     tone: 'peri' as const,
   },
   {
     tag: 'Have both sides',
     title: 'Seed a balanced pool yourself',
-    body: 'Already hold your token and the quote? Fund both sides directly and open the vault immediately — no waiting on a community match.',
-    href: '/app/vault/create',
+    body: 'Already hold your token and the quote? Fund both sides directly and request the vault. We deploy it on testnet and it opens without waiting on a community match.',
+    href: '/app/team/liquidity/create',
     cta: 'Create a vault →',
     tone: 'peri' as const,
   },
   {
     tag: 'Have one asset',
     title: 'Stage a single side',
-    body: 'Only hold USDC (or one asset)? Stage it — it earns via Aave from day one and pairs into a pool only when a matching counterparty arrives. Opt-in, never automatic.',
-    href: '/app/liquidity/staged',
+    body: 'Only hold USDC (or one asset)? Stage it — it sits in a yield adapter (a testnet mock today) and pairs into a pool only when you choose. Opt-in, never automatic.',
+    href: '/app/team/liquidity/staged',
     cta: 'See how staging works →',
     tone: 'coral' as const,
-  },
-  {
-    tag: 'Ready now',
-    title: 'Deposit into a live pool',
-    body: 'Just want in? Add liquidity to an active, reputation-weighted vault and start capturing fees + MEV right away.',
-    href: '/app/vaults',
-    cta: 'Browse live vaults →',
-    tone: 'peri' as const,
   },
 ]
 
 export default function LiquidityRouter() {
   return (
-    <div className="min-h-screen bg-white font-atx-display text-ink">
-      <main className="mx-auto max-w-[860px] px-6 max-[700px]:px-4 py-[48px]">
-        <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep">Provide liquidity</div>
+    <div className="font-atx-display text-ink">
+      <main className="max-w-[860px] py-2">
+        <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep">Liquidity for your token</div>
         <h1 className="font-atx-display font-bold text-[clamp(1.9rem,4.6vw,2.8rem)] leading-[1.05] tracking-[-0.03em] mt-3">
           However much of the pair<br /><span className="text-gradient-accent">you hold.</span>
         </h1>
         <p className="text-ink-mid text-[clamp(1rem,2vw,1.18rem)] leading-[1.5] max-w-[62ch] mt-5">
-          There&apos;s a path whether you have both sides, just your token, or a single stablecoin.
-          Pick what matches your situation — every one keeps your capital productive.
+          There&apos;s a path whether your team holds both sides, just your token, or a single stablecoin.
+          Pick the one that matches your treasury.
         </p>
 
         <div className="grid grid-cols-1 gap-3 mt-9">
@@ -79,9 +71,9 @@ export default function LiquidityRouter() {
         </div>
 
         <p className="text-[12px] text-ink-soft mt-8 max-w-[64ch]">
-          Testnet. Two-sided pools are the standard model (`MintwarePairVault` / matched-liquidity);
-          single-sided staging earns via Aave today, with auto-match alerts + the atomic-pair router as
-          the next leg. Nothing here is an offer.
+          Testnet. Two-sided pools are the standard model (MintwarePairVault / matched liquidity). Staging runs
+          against a testnet mock yield adapter; real lending venues and auto-match alerts are the next leg. Nothing
+          here is an offer.
         </p>
       </main>
     </div>

@@ -175,7 +175,7 @@ function VaultsPageV2() {
             </div>
             <div className="flex gap-3 flex-wrap">
               <Link href="/app/vaults" className="glass-pill-primary whitespace-nowrap">Browse the vaults →</Link>
-              <Link href="/app/vault/create" className="glass-pill whitespace-nowrap">Create a vault</Link>
+              <Link href="/app/team/liquidity/create" className="glass-pill whitespace-nowrap">Create a vault</Link>
             </div>
           </GradientPanel>
         </div>

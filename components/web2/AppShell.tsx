@@ -158,14 +158,21 @@ export function AppShell({
   )
 }
 
-/** Personal workspace — retail account, swap, vaults, liquidity, agents. */
+/** Personal workspace — retail only (IA audit 2026-10-02): token-issuer flows live in Team, the agent
+ *  leaderboard is a public page, and the live LP product (V1 LP Gateway) is linked rather than duplicated. */
 export function PersonalShell({ children }: { children: ReactNode }) {
   return (
     <AppShell
       groups={[
         { items: [{ href: '/app/account', label: 'Account' }, { href: '/app/swap', label: 'Swap' }] },
-        { title: 'Earn', items: [{ href: '/app/vaults', label: 'Vaults' }, { href: '/app/liquidity', label: 'Provide liquidity' }] },
-        { title: 'Agents', items: [{ href: '/app/agents', label: 'Agent account' }, { href: '/agents/leaderboard', label: 'Leaderboard' }] },
+        {
+          title: 'Earn',
+          items: [
+            { href: '/app/vaults', label: 'Vaults', hint: 'Testnet' },
+            { href: '/v1', label: 'LP Gateway', hint: 'Live ↗' },
+          ],
+        },
+        { title: 'Agents', items: [{ href: '/app/agents', label: 'Agent account' }] },
       ]}
     >
       {children}

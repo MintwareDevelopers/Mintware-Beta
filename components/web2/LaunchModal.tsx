@@ -21,7 +21,7 @@ export function useLaunch() {
 }
 
 const MODES: { mode: AppMode; title: string; sub: string; tone: 'peri' | 'coral' }[] = [
-  { mode: 'user', title: 'I’m an individual', sub: 'Deposit into vaults and earn — your personal LP portal.', tone: 'peri' },
+  { mode: 'user', title: 'I’m an individual', sub: 'Add liquidity to vaults, swap, and run an agent account — your personal workspace.', tone: 'peri' },
   { mode: 'team', title: 'I’m a team', sub: 'Manage a treasury, curate vaults, and run cards.', tone: 'coral' },
   // V2-RWAs vertical — only offered while the flag is on (the /app/rwa layout 404s otherwise).
   ...(process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'
@@ -34,12 +34,12 @@ const MODES: { mode: AppMode; title: string; sub: string; tone: 'peri' | 'coral'
 // invisible; the label is the job. "Get liquidity" is the capital-constrained / staged-buffer path.
 // Every destination here stays inside the team/treasury shell (TeamTerminalShell) — none of these
 // used to be true: "Get liquidity" used to hand off to /app/liquidity, a page built entirely for an
-// individual LP (personal MwNav chrome, CTAs into /app/vault/create and /app/vaults). Route it to
+// individual LP (personal MwNav chrome, CTAs into /app/team/liquidity/create and /app/vaults). Route it to
 // the Team Terminal's own Vaults section instead so picking "I'm a team" never dead-ends on the
 // personal onboarding flow.
 const TEAM_JOBS: { title: string; sub: string; dest: string; tone: 'peri' | 'coral' }[] = [
-  { title: 'Earn on our idle cash', sub: 'Put treasury USDC to work — yield from day one.', dest: '/app/org', tone: 'peri' },
-  { title: 'Get liquidity for our token', sub: 'Fund any share of the pair — the public matches the rest — or stage a single side.', dest: '/app/team/vaults', tone: 'coral' },
+  { title: 'Earn on our idle cash', sub: 'Supply treasury USDC to a yield vault (testnet) — variable rate, withdraw any time.', dest: '/app/org', tone: 'peri' },
+  { title: 'Get liquidity for our token', sub: 'Fund any share of the pair — the public matches the rest — or stage a single side.', dest: '/app/team/liquidity', tone: 'coral' },
   { title: 'Run our money', sub: 'Spend, cards, payroll, roles — the treasury terminal.', dest: '/app/team', tone: 'peri' },
   { title: 'Fund an AI agent', sub: 'A balance that earns while your agent spends it (x402).', dest: '/app/agents', tone: 'coral' },
 ]

@@ -7,7 +7,26 @@ import { useEffect, useState, useCallback } from 'react'
 import { Command } from 'cmdk'
 import { useRouter } from 'next/navigation'
 import { useDisconnect } from 'wagmi'
-import { LayoutDashboard, ArrowLeftRight, Trophy, User, ExternalLink, LogOut, Search } from 'lucide-react'
+import { ExternalLink, LogOut, Search } from 'lucide-react'
+
+// Mirrors the AppShell workspace menus (Personal / Team / RWA) + the live V1 product, so ⌘K never offers a page the
+// sidebar doesn't (IA audit 2026-10-02 — it used to list only Vaults, Swap, the leaderboard and a Profile redirect).
+const RWA_ON = process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'
+const GROUPS: { heading: string; items: { href: string; label: string; external?: boolean }[] }[] = [
+  { heading: 'Personal', items: [
+    { href: '/app/account', label: 'Account' }, { href: '/app/swap', label: 'Swap' },
+    { href: '/app/vaults', label: 'Vaults' }, { href: '/app/agents', label: 'Agent account' },
+  ] },
+  { heading: 'Team', items: [
+    { href: '/app/team', label: 'Treasury overview' }, { href: '/app/team/liquidity', label: 'Liquidity for your token' },
+    { href: '/app/team/cards', label: 'Cards & Spend' }, { href: '/app/org/new', label: 'Create organization' },
+  ] },
+  ...(RWA_ON ? [{ heading: 'RWA', items: [
+    { href: '/app/rwa', label: 'RWA overview' }, { href: '/app/rwa/wcp7', label: 'Willow Creek market' },
+    { href: '/app/rwa/proof', label: 'On-chain proof' },
+  ] }] : []),
+  { heading: 'Live', items: [{ href: '/v1', label: 'LP Gateway (V1)', external: true }, { href: '/agents/leaderboard', label: 'Agent leaderboard', external: true }] },
+]
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
@@ -49,24 +68,16 @@ export function CommandPalette() {
         <Command.List>
           <Command.Empty>No results.</Command.Empty>
 
-          <Command.Group heading="Navigate">
-            <Command.Item onSelect={() => go('/app/vaults')}>
-              <div className="cmdk-icon"><LayoutDashboard size={14} /></div>
-              Vaults
-            </Command.Item>
-            <Command.Item onSelect={() => go('/app/swap')}>
-              <div className="cmdk-icon"><ArrowLeftRight size={14} /></div>
-              Swap
-            </Command.Item>
-            <Command.Item onSelect={() => go('/agents/leaderboard')}>
-              <div className="cmdk-icon"><Trophy size={14} /></div>
-              Agent leaderboard
-            </Command.Item>
-            <Command.Item onSelect={() => go('/app/profile')}>
-              <div className="cmdk-icon"><User size={14} /></div>
-              Profile
-            </Command.Item>
-          </Command.Group>
+          {GROUPS.map((g) => (
+            <Command.Group key={g.heading} heading={g.heading}>
+              {g.items.map((it) => (
+                <Command.Item key={it.href} value={`${g.heading} ${it.label}`} onSelect={() => go(it.href)}>
+                  <div className="cmdk-icon">{it.external ? <ExternalLink size={14} /> : <span className="text-[11px] font-semibold">{g.heading[0]}</span>}</div>
+                  {it.label}
+                </Command.Item>
+              ))}
+            </Command.Group>
+          ))}
 
           <Command.Group heading="Actions">
             <Command.Item onSelect={() => {

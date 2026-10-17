@@ -4,7 +4,7 @@
 // /swap — cross-chain LI.FI swap, front and centre. Design v2 (Privy-esque).
 //
 //   • The trade core is the real <SwapWidget/> (LI.FI fee-injection).
-//   • Cross-links to the reputation-weighted /vaults product.
+//   • Cross-links to the /vaults product (pro-rata, not reputation-weighted).
 //
 // Campaigns were shelved (2026-08-12) — this is a plain swap, no campaign
 // context, points, or reward crediting. The human-facing "Attribution score"
@@ -33,7 +33,7 @@ function SwapContent() {
               Trade like it <span className="text-gradient-accent">counts.</span>
             </h1>
             <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.5] mt-5 max-w-[58ch] mx-auto">
-              Best price across chains. Trade here, or provide liquidity in the reputation-weighted vaults.
+              Best price across chains. Trade here, or provide liquidity in the vaults.
             </p>
           </div>
         </section>
@@ -66,8 +66,7 @@ function SwapContent() {
                 <span className="ml-auto text-[16px] text-coral2-deep">→</span>
               </div>
               <p className="text-[13px] text-ink-mid leading-[1.5]">
-                Reputation-weighted Uniswap V4 vaults — the same position earns more as your
-                Attribution score climbs. In testing on Base.
+                Two-sided Uniswap v4 vaults — fees paid pro-rata to your share. In testing on Base Sepolia.
               </p>
             </Link>
           </div>
