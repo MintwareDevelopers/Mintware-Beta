@@ -263,16 +263,19 @@ const mintwareX402PayAction = {
         return `Paid $${priceUsd} USDC on ${reqs.network}. Resource:\n\n${body}`;
     },
 };
-// Arc parking vault + USDC (env-overridable). Defaults = the live Arc-testnet YPN yield stack.
-const PARK_VAULT = () => process.env.MINTWARE_PARK_VAULT ?? '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421';
-const PARK_USDC = () => process.env.MINTWARE_PARK_USDC ?? '0x3600000000000000000000000000000000000000';
-const PARK_RPC = () => process.env.MINTWARE_PARK_RPC ?? 'https://rpc.testnet.arc.io';
+// Parking vault + USDC (env-overridable). Arc was dropped (2026-08-27); defaults are the base-sepolia
+// USDC MintwareYieldVault (DeployAgentParkVault.s.sol, 2026-10-16 — the old 0x09Cd…7E42 default held mock
+// WETH, so every park reverted). TESTNET: its adapter holds USDC without yield. Override via
+// MINTWARE_PARK_VAULT / _USDC / _RPC for another deployment.
+const PARK_VAULT = () => process.env.MINTWARE_PARK_VAULT ?? '0xEa2d7a3a52304558306480B2746D5D4624219b09';
+const PARK_USDC = () => process.env.MINTWARE_PARK_USDC ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
+const PARK_RPC = () => process.env.MINTWARE_PARK_RPC ?? 'https://base-sepolia-rpc.publicnode.com';
 const APPROVE_SEL = '0x095ea7b3'; //  approve(address,uint256)
 const DEPOSIT_SEL = '0x6e553f65'; //  deposit(uint256,address)  (ERC-4626)
 const REDEEM_SEL = '0xdb006a75'; //  redeem(uint256)  (burns caller's shares → USDC to caller)
 const PREVIEW_WITHDRAW_SEL = '0x0a28a477'; //  previewWithdraw(uint256)  → shares needed
 const SHARES_SEL = '0xce7c2ac2'; //  shares(address)
-async function arcEthCall(to, data) {
+async function ethCall(to, data) {
     const res = await fetch(PARK_RPC(), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -281,9 +284,30 @@ async function arcEthCall(to, data) {
     const j = (await res.json());
     return j.result && j.result !== '0x' ? BigInt(j.result) : 0n;
 }
+/** Wait until `hash` is mined (polls the park RPC); throws if it reverted or never lands. The deposit must not
+ *  be sent before the approve is mined — a deposit estimated against a pre-approve state reverts. */
+async function waitForReceipt(hash, timeoutMs = 90000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const res = await fetch(PARK_RPC(), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [hash] }),
+        });
+        const j = (await res.json());
+        if (j.result?.status) {
+            if (j.result.status !== '0x1')
+                throw new Error(`Transaction ${hash} reverted.`);
+            return;
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+    }
+    throw new Error(`Transaction ${hash} not mined within ${timeoutMs / 1000}s.`);
+}
 const mintwareParkAction = {
     name: 'MINTWARE_PARK',
-    description: 'Park USDC into the Mintware yield vault so it earns while staying spendable in place (it never locks). ' +
+    description: 'Park USDC into the Mintware vault so it stays spendable in place (it never locks) and earns whatever the ' +
+        "vault's yield source pays. " +
         'Deposits `amountUsd` USDC from the agent wallet: approves the vault, then deposits. On-chain — the ' +
         'agent pays gas. After parking, spend it per call with MINTWARE_X402_PAY and check it with MINTWARE_TREASURY.',
     schema: z.object({
@@ -301,13 +325,16 @@ const mintwareParkAction = {
             return 'Nothing to park (amount rounds to zero).';
         // 1) approve the vault to pull `amount` USDC.
         const approveTx = await wallet.sendTransaction({ to: usdc, data: APPROVE_SEL + pad32(vault) + padUint(amount) });
+        await waitForReceipt(approveTx);
         // 2) deposit(assets, receiver=agent) → mints vault shares to the agent.
         const depositTx = await wallet.sendTransaction({ to: vault, data: DEPOSIT_SEL + padUint(amount) + pad32(agent) });
+        await waitForReceipt(depositTx);
         return [
-            `Parked $${args.amountUsd} USDC into the Mintware yield vault.`,
+            `Parked $${args.amountUsd} USDC into the Mintware vault.`,
             `  approve: ${approveTx}`,
             `  deposit: ${depositTx}`,
-            `It's now earning yield and stays fully spendable in place — spend per call with MINTWARE_X402_PAY.`,
+            `It stays fully spendable in place — spend per call with MINTWARE_X402_PAY. It earns whatever the vault's ` +
+                `yield source pays (the default testnet vault holds USDC without yield).`,
         ].join('\n');
     },
 };
@@ -324,18 +351,19 @@ const mintwareUnparkAction = {
         }
         const vault = PARK_VAULT();
         const agent = wallet.getAddress();
-        const balShares = await arcEthCall(vault, SHARES_SEL + pad32(agent));
+        const balShares = await ethCall(vault, SHARES_SEL + pad32(agent));
         if (balShares === 0n)
             return 'Nothing parked to un-park.';
         let sharesToBurn = balShares; // default: un-park all
         if (args.amountUsd != null) {
             const amount = BigInt(Math.round(args.amountUsd * 1000000));
-            const need = await arcEthCall(vault, PREVIEW_WITHDRAW_SEL + padUint(amount)); // shares to net `amount`
+            const need = await ethCall(vault, PREVIEW_WITHDRAW_SEL + padUint(amount)); // shares to net `amount`
             sharesToBurn = need < balShares ? need : balShares;
         }
         if (sharesToBurn === 0n)
             return 'Nothing to un-park (amount rounds to zero).';
         const tx = await wallet.sendTransaction({ to: vault, data: REDEEM_SEL + padUint(sharesToBurn) });
+        await waitForReceipt(tx);
         const which = args.amountUsd != null ? `$${args.amountUsd}` : 'all parked USDC';
         return `Un-parked ${which} — redeemed ${sharesToBurn} shares. redeem tx: ${tx}. USDC is back in the agent wallet.`;
     },
@@ -356,7 +384,7 @@ const mintwareTreasuryAction = {
         const t = (await res.json());
         const short = `${address.slice(0, 6)}…${address.slice(-4)}`;
         return [
-            `Mintware parking account for ${short} (${t.network ?? 'arc'})`,
+            `Mintware parking account for ${short} (${t.network ?? 'base-sepolia'})`,
             `  Parked (earning): $${t.parkedUsdcFormatted ?? '0'} USDC`,
             `  Spendable now:    $${t.spendableUsdcFormatted ?? '0'} USDC`,
             t.earning
