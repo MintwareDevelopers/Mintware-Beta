@@ -574,17 +574,22 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
 
         uint256 payout0 = requestedIdle0 + adapterReceived0 + lpReceived0;
         uint256 payout1 = requestedIdle1 + adapterReceived1 + lpReceived1;
-        if (!bucketComplete) complete = false;
 
-        uint256 owed0 = Math.mulDiv(idle0 + adapterAssets0, shares, supplyBefore);
-        uint256 owed1 = Math.mulDiv(idle1 + adapterAssets1, shares, supplyBefore);
+        uint256 portfolio0 = idle0 + adapterAssets0;
+        uint256 portfolio1 = idle1 + adapterAssets1;
         if (liquidityBefore != 0) {
             (uint256 lpOwed0, uint256 lpOwed1) = MWV4PositionMath.amountsForLiquidity(
                 sqrtPriceX96, TickMath.getSqrtPriceAtTick(tickLower), TickMath.getSqrtPriceAtTick(tickUpper), liquidityBefore
             );
-            owed0 += Math.mulDiv(lpOwed0, shares, supplyBefore);
-            owed1 += Math.mulDiv(lpOwed1, shares, supplyBefore);
+            portfolio0 += lpOwed0;
+            portfolio1 += lpOwed1;
         }
+        uint256 owed0 = Math.mulDiv(portfolio0, shares, supplyBefore);
+        uint256 owed1 = Math.mulDiv(portfolio1, shares, supplyBefore);
+        // A position's rounded token proceeds can exceed the estimated in-kind share by a few units.
+        // Cap before transfers so a later failure in the other token cannot strand an overpayment.
+        payout0 = Math.min(payout0, owed0);
+        payout1 = Math.min(payout1, owed1);
         uint256 fraction = 1e18;
         if (!complete) {
             if (!markAvailable) revert ExitMarkUnavailable();
@@ -593,20 +598,51 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
             _assertPoolSpotNearMark(price0, price1, currentSqrtPriceX96);
             if (owed0 != 0) fraction = Math.min(fraction, Math.mulDiv(payout0, 1e18, owed0));
             if (owed1 != 0) fraction = Math.min(fraction, Math.mulDiv(payout1, 1e18, owed1));
-            if (fraction > 1e18) fraction = 1e18;
             payout0 = Math.mulDiv(owed0, fraction, 1e18);
             payout1 = Math.mulDiv(owed1, fraction, 1e18);
         }
+        bool canPay0 = _exitTransferAvailable(token0, recipient);
+        bool canPay1 = _exitTransferAvailable(token1, recipient);
+        if (!canPay0 || !canPay1) {
+            if (!markAvailable) revert ExitMarkUnavailable();
+            _assertPoolSpotNearMark(price0, price1, sqrtPriceX96);
+            (uint160 currentSqrtPriceX96,,,) = poolManager.getSlot0(poolKey.toId());
+            _assertPoolSpotNearMark(price0, price1, currentSqrtPriceX96);
+            complete = false;
+            fraction = Math.min(fraction, Math.mulDiv(shares - 1, 1e18, shares));
+            payout0 = canPay0 ? Math.mulDiv(owed0, fraction, 1e18) : 0;
+            payout1 = canPay1 ? Math.mulDiv(owed1, fraction, 1e18) : 0;
+        }
         (amount0Out, bucketComplete) = _payExitBucket(token0, recipient, payout0);
+        bool transferFailed = !bucketComplete;
         if (!bucketComplete) complete = false;
         (amount1Out, bucketComplete) = _payExitBucket(token1, recipient, payout1);
+        if (!bucketComplete) transferFailed = true;
         if (!bucketComplete) complete = false;
 
         if (amount0Out < minAmount0 || amount1Out < minAmount1) revert ExitMinimumNotMet();
         if (amount0Out == 0 && amount1Out == 0) revert ZeroAmount();
         burned = shares;
         if (!complete) {
-            burned = Math.mulDiv(shares, fraction, 1e18, Math.Rounding.Ceil);
+            if (transferFailed) {
+                if (!markAvailable) revert ExitMarkUnavailable();
+                uint256 requiredBurn;
+                if (amount0Out != 0 && owed0 != 0) {
+                    requiredBurn = Math.mulDiv(shares, amount0Out, owed0, Math.Rounding.Ceil);
+                }
+                if (amount1Out != 0 && owed1 != 0) {
+                    requiredBurn = Math.max(
+                        requiredBurn, Math.mulDiv(shares, amount1Out, owed1, Math.Rounding.Ceil)
+                    );
+                }
+                burned = requiredBurn + 2;
+                if (burned >= shares) {
+                    if (shares == 1) revert MWMarketShareMath.IncompleteExitConsumesRequest();
+                    burned = shares - 1;
+                }
+            } else {
+                burned = Math.mulDiv(shares, fraction, 1e18, Math.Rounding.Ceil);
+            }
             if (burned == 0 || burned >= shares) revert MWMarketShareMath.IncompleteExitConsumesRequest();
         }
         _burn(msg.sender, burned);
@@ -669,6 +705,11 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
         } catch {
             return (0, false);
         }
+    }
+
+    /// @dev A zero-value transfer probe detects frozen/blacklisted recipient buckets before either payout.
+    function _exitTransferAvailable(IERC20 token, address recipient) private returns (bool) {
+        try this.payExact(token, recipient, 0) { return true; } catch { return false; }
     }
 
     /// @notice PoolManager callback for this engine's typed add/remove/fee-collection actions.

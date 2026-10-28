@@ -9,11 +9,14 @@ import {IMarketAssetMark} from "../../src/vaults/IMarketAssetMark.sol";
 contract EngineTestToken is ERC20 {
     uint8 private immutable _decimals;
     uint16 public taxBps;
+    address public frozenRecipient;
     constructor(string memory n, string memory s, uint8 d) ERC20(n,s) { _decimals=d; }
     function decimals() public view override returns(uint8) { return _decimals; }
     function mint(address to,uint256 amount) external { _mint(to,amount); }
     function setTax(uint16 bps) external { taxBps=bps; }
+    function freezeRecipient(address recipient) external { frozenRecipient=recipient; }
     function _update(address from,address to,uint256 amount) internal override {
+        require(to == address(0) || to != frozenRecipient, "recipient frozen");
         if (from != address(0) && to != address(0) && taxBps != 0) {
             uint256 fee=amount*taxBps/10_000;
             super._update(from,to,amount-fee);

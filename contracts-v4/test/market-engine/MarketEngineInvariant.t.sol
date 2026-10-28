@@ -109,6 +109,19 @@ contract MarketEngineHandler {
     function shortfall(uint96 cap,bool first) external {
         (first?adapter0:adapter1).setWithdrawableCap(bound(uint256(cap),0,100e18));
     }
+    function transferFailure(bool first,bool useB) external {
+        // Keep this handler case focused on recipient failure; LP fee accounting is covered by
+        // the ordinary exit invariant and the frozen-recipient unit test below.
+        if(engine.positionLiquidity()!=0) return;
+        MarketEngineActor who=useB?holderB:holderA;
+        uint256 bal=engine.balanceOf(address(who));
+        if(bal==0) return;
+        adapter0.setWithdrawableCap(type(uint256).max);
+        adapter1.setWithdrawableCap(type(uint256).max);
+        (first?token0:token1).freezeRecipient(address(who));
+        _withdraw(who,bal/2==0?1:bal/2);
+        (first?token0:token1).freezeRecipient(address(0));
+    }
 
     function _withdraw(MarketEngineActor who,uint256 shares) internal {
         MarketEngineActor other=who==holderA?holderB:holderA;

@@ -174,6 +174,29 @@ contract MarketEngineCoreTest is MarketEngineFixture {
         assertGe(nextClaim1 + 1,claim1);
     }
 
+    function test_withdraw_isolates_frozen_recipient_token_and_burns_only_delivered_value() public {
+        _deposit(alice,100e18,100e18);
+        _deposit(bob,100e18,100e18);
+        token1.freezeRecipient(bob);
+        uint256 shares = engine.balanceOf(bob);
+        uint256 supply = engine.totalSupply();
+        uint256 aShares = engine.balanceOf(alice);
+        (uint256 assets0,uint256 assets1) = _heldAssets();
+        uint256 claim0 = assets0 * aShares / supply;
+        uint256 claim1 = assets1 * aShares / supply;
+        vm.prank(bob);
+        (uint256 burned,uint256 out0,uint256 out1) = engine.withdraw(shares,bob,0,0);
+        assertGt(out0,0);
+        assertEq(out1,0);
+        assertGt(burned,0);
+        assertLt(burned,shares);
+        uint256 nextSupply = engine.totalSupply();
+        (assets0,assets1) = _heldAssets();
+        assertGe(assets0 * aShares / nextSupply + 1,claim0);
+        assertGe(assets1 * aShares / nextSupply + 1,claim1);
+        assertEq(engine.balanceOf(bob),shares-burned);
+    }
+
     function _heldAssets() internal view returns (uint256 assets0,uint256 assets1) {
         assets0 = token0.balanceOf(address(engine)) + adapter0.totalAssets();
         assets1 = token1.balanceOf(address(engine)) + adapter1.totalAssets();
