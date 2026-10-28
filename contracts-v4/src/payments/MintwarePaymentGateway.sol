@@ -13,36 +13,17 @@ import {IYieldVault} from "./IYieldVault.sol";
 import {MWTimelockedRiskParams} from "../lib/MWTimelockedRiskParams.sol";
 
 /// @title  MintwarePaymentGateway
-/// @notice YPN settlement gateway. A RELAYER submits `settleSpend` for a card charge the edge engine
-///         already authorized; the Gateway re-verifies the user's EIP-712 permit(s), enforces daily
-///         caps + liquidity, and burns the user's vault shares for USDC to the card rail.
-///
-/// @dev    Hybrid permit model: < $250 needs only a long-lived `DelegatedSpendPermit`; >= $250 also
-///         needs a short-lived (<= 5 min) `ShortLivedHoldAuth` signed by an EDGE_SIGNER.
-///
-/// @dev    NONCE SEMANTICS (fix vs the v2.1.1 draft): the permit nonce is **revocation-only**. The
-///         draft consumed `usedNonces[user][permit.nonce]` on every settle, which made the *long-lived*
-///         permit single-use — the 2nd spend would revert `NonceAlreadyUsed`. Here `settleSpend` only
-///         CHECKS the nonce (rejecting revoked permits) and never consumes it. Replay of a specific
-///         charge is prevented by `holds[holdId].settled`; over-spend by the daily cap. `revokeNonce`
-///         is the sole writer of `usedNonces`.
+/// @notice Legacy refill gateway. T7a removes merchant settlement; T7b replaces this refill flow.
 contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausable, MWTimelockedRiskParams {
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
 
     bytes32 public constant RELAYER_ROLE     = keccak256("RELAYER_ROLE");
-    bytes32 public constant EDGE_SIGNER_ROLE = keccak256("EDGE_SIGNER_ROLE");
     bytes32 public constant PAUSER_ROLE      = keccak256("PAUSER_ROLE");
 
     bytes32 public constant DELEGATED_SPEND_PERMIT_TYPEHASH = keccak256(
         "DelegatedSpendPermit(address user,uint256 maxDailySpendUSDC,uint256 nonce,uint256 deadline)"
     );
-    bytes32 public constant SHORT_LIVED_HOLD_AUTH_TYPEHASH = keccak256(
-        "ShortLivedHoldAuth(bytes32 holdId,address user,uint256 amountUSDC,uint256 nonce,uint256 expiry)"
-    );
-
-    uint256 public constant HIGH_VALUE_THRESHOLD      = 250_000_000;    // $250.00 (6dp)
-    uint256 public constant DEFAULT_GLOBAL_DAILY_CAP  = 1_000_000_000;  // $1,000.00
     uint256 public constant DEFAULT_GLOBAL_REFILL_CAP = 1_000_000_000;      // $1,000.00/day buffer-refill default
     uint256 public constant MAX_REFILL_CAP            = 1_000_000_000_000;  // $1,000,000 — fat-finger bound on a governed cap
     uint256 public constant MAX_SHORT_LIVED_WINDOW    = 5 minutes;
@@ -51,8 +32,6 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     IERC20 public immutable usdc;
     address public circleCpnTreasury;
 
-    mapping(address => mapping(uint256 => uint256)) public dailySpendUSDC; // user => epochDay => spent
-    mapping(address => uint256) public userDailyCap;
     mapping(address => mapping(uint256 => bool)) public usedNonces;        // user => nonce => revoked
 
     // ── card spend buffer (docs/developers/card-spend-buffer-spec.md, Option A) ──
@@ -63,34 +42,14 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     mapping(bytes32 => address) public refillCapParamUser;                  // timelock param tag => the user it caps
     mapping(address => bool) public userRefillPaused;                       // user's own on-chain refill kill-switch
 
-    struct Hold {
-        address user;
-        uint256 amountUSDC;
-        uint256 settledAt;
-        bool settled;
-        bool cancelled;
-    }
-    mapping(bytes32 => Hold) public holds;
-
     struct DelegatedSpendPermit {
         address user;
         uint256 maxDailySpendUSDC;
         uint256 nonce;
         uint256 deadline;
     }
-    struct ShortLivedHoldAuth {
-        bytes32 holdId;
-        address user;
-        uint256 amountUSDC;
-        uint256 nonce;
-        uint256 expiry;
-    }
-
-    event PaymentSettled(bytes32 indexed holdId, address indexed user, address indexed receiver, uint256 assets, uint256 sharesBurned);
-    event HoldCancelled(bytes32 indexed holdId, address indexed user);
     event NonceRevoked(address indexed user, uint256 indexed nonce);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
-    event UserDailyCapUpdated(address indexed user, uint256 newCap);
     event BufferAddressUpdated(address indexed user, address indexed oldBuffer, address indexed newBuffer);
     event BufferRefilled(bytes32 indexed refillId, address indexed user, address indexed buffer, uint256 assets, uint256 sharesBurned);
     event UserDailyRefillCapUpdated(address indexed user, uint256 newCap);
@@ -100,15 +59,8 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     error PermitExpired();
     error InvalidPermitSignature();
     error NonceRevokedError();
-    error EdgeSignatureRequired();
-    error InvalidEdgeSignature();
-    error EdgeAuthExpired();
     error InsufficientIdleLiquidity();
-    error ExceedsDailySpendLimit();
-    error HoldAlreadySettled();
-    error HoldCancelledError();
     error ZeroAddress();
-    error UnknownHold();
     error BufferNotSet();
     error RefillAlreadyDone();
     error ExceedsDailyRefillLimit();
@@ -127,7 +79,6 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
         _grantRole(RELAYER_ROLE, admin_);
-        _grantRole(EDGE_SIGNER_ROLE, admin_);
         _grantRole(PAUSER_ROLE, admin_);
     }
 
@@ -136,11 +87,6 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         if (newTreasury == address(0)) revert ZeroAddress();
         emit TreasuryUpdated(circleCpnTreasury, newTreasury);
         circleCpnTreasury = newTreasury;
-    }
-
-    function setUserDailyCap(address user, uint256 newCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        userDailyCap[user] = newCap;
-        emit UserDailyCapUpdated(user, newCap);
     }
 
     /// @notice Propose (or instantly apply) a per-user daily buffer-refill cap, through the 48h risk-param
@@ -211,6 +157,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         if (buffer == address(0)) revert ZeroAddress();
         emit BufferAddressUpdated(msg.sender, bufferOf[msg.sender], buffer);
         bufferOf[msg.sender] = buffer;
+        vault.registerDestination(msg.sender, buffer);
     }
 
     /// @notice A user pauses/unpauses THEIR OWN buffer refills on-chain (audit fix L4). msg.sender-pinned,
@@ -219,90 +166,6 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     function setRefillPaused(bool paused) external {
         userRefillPaused[msg.sender] = paused;
         emit RefillPauseSet(msg.sender, paused);
-    }
-
-    /// @notice Settle a card charge the edge engine authorized. RELAYER-only.
-    function settleSpend(
-        bytes32 holdId,
-        address user,
-        uint256 assets,
-        address receiver,
-        DelegatedSpendPermit calldata permit,
-        bytes calldata permitSig,
-        ShortLivedHoldAuth calldata edgeAuth,
-        bytes calldata edgeSig
-    ) external onlyRole(RELAYER_ROLE) nonReentrant whenNotPaused returns (uint256 sharesBurned) {
-        if (assets == 0) revert InvalidAmount();
-        // AUDIT C1: the settlement destination is ALWAYS the Circle treasury. `receiver` was previously
-        // relayer-chosen and bound by NEITHER signed struct, so a rogue/compromised relayer could burn a
-        // permit-signer's senior shares and redirect the USDC to an arbitrary address (up to the daily
-        // cap). Pin it. The `receiver` param is retained for ABI stability but is deliberately ignored.
-        receiver = circleCpnTreasury;
-
-        // ── long-lived delegated permit ──
-        if (block.timestamp > permit.deadline) revert PermitExpired();
-        if (permit.user != user) revert InvalidPermitSignature();
-        bytes32 permitHash = keccak256(abi.encode(
-            DELEGATED_SPEND_PERMIT_TYPEHASH, permit.user, permit.maxDailySpendUSDC, permit.nonce, permit.deadline
-        ));
-        if (_hashTypedDataV4(permitHash).recover(permitSig) != user) revert InvalidPermitSignature();
-        // Nonce is REVOCATION-ONLY — checked, never consumed (see contract NatSpec).
-        if (usedNonces[user][permit.nonce]) revert NonceRevokedError();
-
-        // ── high-value edge authorization ──
-        // AUDIT M2: the edge signature is required once CUMULATIVE daily spend crosses the threshold, not
-        // per-charge — otherwise a relayer trivially bypasses the second-signer control by splitting a
-        // large settlement into sub-$250 charges. Uses the pre-update daily tally (updated below).
-        uint256 spentTodayForGate = dailySpendUSDC[user][block.timestamp / 1 days];
-        if (spentTodayForGate + assets >= HIGH_VALUE_THRESHOLD) {
-            if (edgeSig.length == 0) revert EdgeSignatureRequired();
-            if (edgeAuth.holdId != holdId || edgeAuth.user != user || edgeAuth.amountUSDC != assets) {
-                revert InvalidEdgeSignature();
-            }
-            if (block.timestamp > edgeAuth.expiry) revert EdgeAuthExpired();
-            if (edgeAuth.expiry > block.timestamp + MAX_SHORT_LIVED_WINDOW) revert EdgeAuthExpired();
-            bytes32 edgeHash = keccak256(abi.encode(
-                SHORT_LIVED_HOLD_AUTH_TYPEHASH, edgeAuth.holdId, edgeAuth.user, edgeAuth.amountUSDC, edgeAuth.nonce, edgeAuth.expiry
-            ));
-            if (!hasRole(EDGE_SIGNER_ROLE, _hashTypedDataV4(edgeHash).recover(edgeSig))) revert InvalidEdgeSignature();
-        }
-
-        // ── liquidity + daily limit + hold idempotency (EFFECTS before the external burn — CEI) ──
-        if (vault.idleBuffer() < assets) revert InsufficientIdleLiquidity();
-
-        Hold storage h = holds[holdId];
-        if (h.settled) revert HoldAlreadySettled();
-        if (h.cancelled) revert HoldCancelledError();
-
-        _checkAndUpdateDailyLimit(user, assets, permit.maxDailySpendUSDC);
-        holds[holdId] = Hold({user: user, amountUSDC: assets, settledAt: block.timestamp, settled: true, cancelled: false});
-
-        // ── asset-denominated settlement ──
-        sharesBurned = vault.previewWithdraw(assets);                 // rounds UP → redeemed >= assets
-        uint256 redeemed = vault.burnForPayment(user, sharesBurned, receiver);
-        if (redeemed < assets) revert InsufficientIdleLiquidity();
-
-        emit PaymentSettled(holdId, user, receiver, assets, sharesBurned);
-    }
-
-    function cancelHold(bytes32 holdId) external onlyRole(RELAYER_ROLE) {
-        Hold storage h = holds[holdId];
-        // AUDIT (low): require the hold to actually exist. Cancelling a never-created holdId wrote
-        // cancelled=true onto an all-zero Hold — permanently blocking that id from ever settling and
-        // emitting a misleading HoldCancelled(_, address(0)).
-        if (h.user == address(0)) revert UnknownHold();
-        if (h.settled) revert HoldAlreadySettled();
-        h.cancelled = true;
-        emit HoldCancelled(holdId, h.user);
-    }
-
-    function _checkAndUpdateDailyLimit(address user, uint256 amount, uint256 permitMaxDaily) internal {
-        uint256 epochDay = block.timestamp / 1 days;
-        uint256 protocolCap = userDailyCap[user] > 0 ? userDailyCap[user] : DEFAULT_GLOBAL_DAILY_CAP;
-        uint256 effectiveCap = permitMaxDaily < protocolCap ? permitMaxDaily : protocolCap;
-        uint256 spent = dailySpendUSDC[user][epochDay];
-        if (spent + amount > effectiveCap) revert ExceedsDailySpendLimit();
-        dailySpendUSDC[user][epochDay] = spent + amount;
     }
 
     // ── card spend buffer refill (Option A — per-user, funded from the user's own senior shares) ──
@@ -362,7 +225,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
 
         // ── asset-denominated redemption into the user's buffer ──
         sharesBurned = vault.previewWithdraw(assets);                 // rounds UP → redeemed >= assets
-        uint256 redeemed = vault.burnForPayment(user, sharesBurned, receiver);
+        uint256 redeemed = vault.gatewayRedeem(user, sharesBurned);
         if (redeemed < assets) revert InsufficientIdleLiquidity();
 
         emit BufferRefilled(refillId, user, receiver, assets, sharesBurned);
