@@ -9,13 +9,11 @@
 // The order is dictated by real on-chain dependencies:
 //   1. issue_card    — create the Bridge card + link the funding wallet (crypto_wallet type:standard
 //                      = the Privy/bufferOf address).
-//   2. sign_permit   — the MEMBER signs their standing EIP-712 DelegatedSpendPermit with their own
-//                      wallet. Required BEFORE prime: Gateway.refillBuffer redeems the member's senior
-//                      shares and refuses without the permit (bufferRefill → 'not_activated'). This is
-//                      the one step the orchestrator cannot perform itself — it waits for the member.
+//   2. register_destination — the MEMBER proposes and accepts their Bridge funding wallet on-chain.
+//                      Acceptance is available only after the Gateway's 48-hour destination delay.
 //   3. grant_approval — Privy signs the capped USDC approve(spender, cap) so Bridge can pull.
-//   4. prime_buffer  — Gateway.refillBuffer redeems senior shares → the buffer wallet; wait for on-chain
-//                      confirmation. Depends on sign_permit.
+//   4. prime_buffer  — Gateway.refill redeems senior shares → the buffer wallet; wait for on-chain
+//                      confirmation. Depends on register_destination.
 //   5. go_live       — mark the card live + push-provision. Gated behind prime_buffer (cold-decline
 //                      guard) AND grant_approval (Bridge must be able to pull).
 //
@@ -24,18 +22,18 @@
 // pauses on member steps, and refuses `go_live` while `goLiveBlocked` returns a reason.
 
 /** The setup steps, in the only order they may run. */
-export type OnboardStep = 'issue_card' | 'sign_permit' | 'grant_approval' | 'prime_buffer' | 'go_live'
+export type OnboardStep = 'issue_card' | 'register_destination' | 'grant_approval' | 'prime_buffer' | 'go_live'
 
 export const ONBOARD_SEQUENCE: readonly OnboardStep[] = [
   'issue_card',
-  'sign_permit',
+  'register_destination',
   'grant_approval',
   'prime_buffer',
   'go_live',
 ] as const
 
 /** Steps the orchestrator cannot execute itself — it waits for the member to act (wallet signature). */
-export const MEMBER_STEPS: ReadonlySet<OnboardStep> = new Set<OnboardStep>(['sign_permit'])
+export const MEMBER_STEPS: ReadonlySet<OnboardStep> = new Set<OnboardStep>(['register_destination'])
 
 export function isMemberStep(step: OnboardStep): boolean {
   return MEMBER_STEPS.has(step)
@@ -44,8 +42,8 @@ export function isMemberStep(step: OnboardStep): boolean {
 export interface OnboardState {
   /** Bridge card created and the funding wallet linked. */
   cardIssued: boolean
-  /** The member's standing DelegatedSpendPermit is stored (enables refillBuffer). */
-  permitSigned: boolean
+  /** The member has accepted the Gateway funding destination. */
+  destinationRegistered: boolean
   /** The capped USDC allowance to Bridge's spender is live on-chain. */
   approvalGranted: boolean
   /** The initial refill is CONFIRMED on-chain and the buffer holds at least its minimum. */
@@ -57,7 +55,7 @@ export interface OnboardState {
 /** The next step to run, or 'complete'. Idempotent: re-deriving from the same state is a no-op. */
 export function nextOnboardStep(s: OnboardState): OnboardStep | 'complete' {
   if (!s.cardIssued) return 'issue_card'
-  if (!s.permitSigned) return 'sign_permit'
+  if (!s.destinationRegistered) return 'register_destination'
   if (!s.approvalGranted) return 'grant_approval'
   if (!s.bufferPrimed) return 'prime_buffer'
   if (!s.liveProvisioned) return 'go_live'
@@ -73,7 +71,7 @@ export function nextOnboardStep(s: OnboardState): OnboardStep | 'complete' {
 export function goLiveBlocked(s: OnboardState): string | null {
   if (s.liveProvisioned) return null
   if (!s.cardIssued) return 'card not issued'
-  if (!s.permitSigned) return 'permit not signed'
+  if (!s.destinationRegistered) return 'funding destination not registered'
   if (!s.approvalGranted) return 'approval not granted'
   if (!s.bufferPrimed) return 'buffer not primed'
   return null

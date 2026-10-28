@@ -222,7 +222,7 @@ describe('A-4 _FIXED: the "concurrent overwrite loses the credit" class is close
     const { syncBufferBalance } = await import('@/lib/org/bufferMonitor')
     const { client: orgDb } = fakeSupabase({
       tables: {
-        orgs: [{ id: 'org-1', treasury_vault_address: '0x' + '44'.repeat(20), treasury_chain_id: 84532 }],
+        orgs: [{ id: 'org-1', treasury_vault_address: '0x' + '44'.repeat(20), treasury_chain_id: 84532, card_funding_vault_address: '0x' + '55'.repeat(20), card_funding_chain_id: 84532 }],
         card_spend_buffers: [{ id: 'b-bob', org_card_id: 'card-bob', member_wallet: BOB, gateway_position_id: 'p-bob', buffer_balance_atomic: '9000000' }],
       },
     })

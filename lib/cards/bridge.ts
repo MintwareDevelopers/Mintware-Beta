@@ -6,7 +6,7 @@
 //
 // How Bridge pulls (verified against apidocs.bridge.xyz + docs.stripe.com/issuing, 2026-08):
 //   • The funding wallet is a non-custodial wallet — here, the user's OWN Privy embedded wallet, which
-//     is exactly the address they self-register on-chain as `bufferOf[user]` (Gateway.setBufferAddress,
+//     is exactly the address they self-register on-chain as `bufferOf[user]` (Gateway.proposeBuffer / acceptBuffer,
 //     msg.sender-pinned). Bridge's rule is ONE WALLET = ONE CARD in standard mode, which is precisely
 //     the per-user shape the buffer table already enforces (card_spend_buffers is 1:1 per org_card).
 //   • The wallet grants a plain ERC-20 `approve(spender, allowance)` on USDC, signed by the wallet's

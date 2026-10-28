@@ -12,10 +12,11 @@
 
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useSignMessage, useSignTypedData } from 'wagmi'
+import { useReadContracts, useSignMessage, useWriteContract } from 'wagmi'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
+import { PAYMENT_GATEWAY_ABI } from '@/lib/web3/artifacts/mintwarePaymentGateway'
 
 interface CardRow {
   id: string; member_wallet: string; provider: string; last_four: string
@@ -36,7 +37,7 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
   const { slug } = use(params)
   const { address } = useMintwareIdentity()
   const { signMessageAsync } = useSignMessage()
-  const { signTypedDataAsync } = useSignTypedData()
+  const { writeContractAsync } = useWriteContract()
 
   const [orgId, setOrgId] = useState<string | null>(null)
   const [orgName, setOrgName] = useState('')
@@ -46,6 +47,7 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
   const [events, setEvents] = useState<SwipeEvent[]>([])
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
+  const [nowSecs, setNowSecs] = useState(0)
 
   useEffect(() => {
     fetch(`/api/orgs/${slug}/treasury${address ? `?address=${address}` : ''}`).then((r) => r.json()).then((d) => {
@@ -65,33 +67,38 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
     if (res?.ok) { const d = await res.json(); setEvents(d.events ?? []) }
   }, [orgId, address, signMessageAsync])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void refreshCards(); void refreshEvents() }, [refreshCards, refreshEvents])
+  useEffect(() => {
+    const tick = () => setNowSecs(Math.floor(Date.now() / 1000))
+    tick()
+    const timer = setInterval(tick, 30_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const destinationReads = useReadContracts({
+    contracts: gateway ? cards.flatMap((card) => ([
+      { address: gateway.address as `0x${string}`, abi: PAYMENT_GATEWAY_ABI, functionName: 'bufferOf' as const, args: [card.member_wallet as `0x${string}`], chainId: gateway.chainId },
+      { address: gateway.address as `0x${string}`, abi: PAYMENT_GATEWAY_ABI, functionName: 'proposedBuffer' as const, args: [card.member_wallet as `0x${string}`], chainId: gateway.chainId },
+      { address: gateway.address as `0x${string}`, abi: PAYMENT_GATEWAY_ABI, functionName: 'bufferEta' as const, args: [card.member_wallet as `0x${string}`], chainId: gateway.chainId },
+    ])) : [],
+    query: { enabled: !!gateway && cards.length > 0 },
+  })
 
 
-  const activateCard = async (card: CardRow) => {
-    if (!address || !gateway) return setMsg('Treasury not readable yet — try again shortly.')
-    if (card.member_wallet.toLowerCase() !== address.toLowerCase()) return setMsg('Only the card holder can activate their own card.')
-    setBusy(`activate-${card.id}`); setMsg('')
+  const updateDestination = async (card: CardRow, action: 'proposeBuffer' | 'acceptBuffer' | 'revokeBuffer') => {
+    if (!address || !gateway) return setMsg('Card funding Gateway not readable yet — try again shortly.')
+    if (card.member_wallet.toLowerCase() !== address.toLowerCase()) return setMsg('Only the card holder can manage their own funding destination.')
+    setBusy(`destination-${card.id}`); setMsg('')
     try {
-      const nonce = BigInt(Date.now())
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 90 * 24 * 3600) // 90-day standing permit
-      const maxDailySpendUSDC = 100_000_000n // $100/day ceiling on the permit itself (belt #3, alongside the org role cap)
-      const signature = await signTypedDataAsync({
-        domain: { name: 'Mintware Payment Gateway', version: '2.0', chainId: gateway.chainId, verifyingContract: gateway.address as `0x${string}` },
-        types: { DelegatedSpendPermit: [
-          { name: 'user', type: 'address' }, { name: 'maxDailySpendUSDC', type: 'uint256' },
-          { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' },
-        ] },
-        primaryType: 'DelegatedSpendPermit',
-        message: { user: address as `0x${string}`, maxDailySpendUSDC, nonce, deadline },
+      const args = action === 'proposeBuffer' ? [card.member_wallet as `0x${string}`] as const : [] as const
+      const hash = await writeContractAsync({
+        address: gateway.address as `0x${string}`, abi: PAYMENT_GATEWAY_ABI,
+        functionName: action, args, chainId: gateway.chainId,
       })
-      const res = await fetch(`/api/orgs/${orgId}/cards/${card.id}/activate`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ maxDailySpendUsdc: maxDailySpendUSDC.toString(), nonce: nonce.toString(), deadline: deadline.toString(), signature }),
-      })
-      const d = await res.json()
-      if (res.ok && d.ok) refreshCards(); else setMsg(d.error ?? 'activation failed')
-    } catch (e) { setMsg(String(e)) } finally { setBusy('') }
+      setMsg(`Destination transaction submitted: ${explorerTx(gateway.chainId, hash)}`)
+      await destinationReads.refetch()
+    } catch (e) { setMsg((e as Error)?.message ?? 'destination update failed') } finally { setBusy('') }
   }
 
 
@@ -126,16 +133,28 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
           {cards.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-ink-soft">No cards yet.</div>}
           {cards.map((c) => {
             const mine = address && c.member_wallet.toLowerCase() === address.toLowerCase()
+            const readOffset = cards.indexOf(c) * 3
+            const currentDestination = destinationReads.data?.[readOffset]?.result as string | undefined
+            const proposedDestination = destinationReads.data?.[readOffset + 1]?.result as string | undefined
+            const eta = Number(destinationReads.data?.[readOffset + 2]?.result ?? 0n)
+            const matchesCurrent = currentDestination?.toLowerCase() === c.member_wallet.toLowerCase()
+            const matchesProposal = proposedDestination?.toLowerCase() === c.member_wallet.toLowerCase()
+            const canAccept = matchesProposal && eta > 0 && nowSecs >= eta
             return (
               <div key={c.id} className="flex items-center gap-4 px-5 py-3.5 border-b border-hair-soft last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="text-[13.5px] font-medium text-ink font-mono truncate">•••• {c.last_four} <span className="text-ink-soft font-sans">· {short(c.member_wallet)}</span></div>
                   <div className="text-[11.5px] text-ink-soft">{c.state}{c.activated_at ? ' · activated ✓' : ' · not activated'}</div>
                 </div>
-                {!c.activated_at && mine && (
-                  <button onClick={() => activateCard(c)} disabled={busy === `activate-${c.id}` || !gateway} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[12.5px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy === `activate-${c.id}` ? 'Signing…' : 'Activate (sign)'}</button>
+                {mine && !matchesCurrent && !matchesProposal && (
+                  <button onClick={() => updateDestination(c, 'proposeBuffer')} disabled={busy === `destination-${c.id}` || !gateway} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[12.5px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">Propose funding wallet</button>
                 )}
-                {!c.activated_at && !mine && <span className="shrink-0 text-[11.5px] text-ink-soft">Awaiting holder activation</span>}
+                {mine && matchesProposal && !canAccept && <span className="shrink-0 text-[11.5px] text-ink-soft">Destination pending 48-hour delay</span>}
+                {mine && canAccept && (
+                  <button onClick={() => updateDestination(c, 'acceptBuffer')} disabled={busy === `destination-${c.id}`} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[12.5px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">Accept destination</button>
+                )}
+                {mine && matchesCurrent && <button onClick={() => updateDestination(c, 'revokeBuffer')} disabled={busy === `destination-${c.id}`} className="shrink-0 rounded-full border border-hair px-4 py-2 text-[12.5px] font-semibold">Revoke destination</button>}
+                {!mine && !matchesCurrent && <span className="shrink-0 text-[11.5px] text-ink-soft">Awaiting holder destination registration</span>}
               </div>
             )
           })}

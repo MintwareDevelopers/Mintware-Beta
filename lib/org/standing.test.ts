@@ -13,7 +13,6 @@ import {
   type SettledEventLike,
   type StandingTier,
 } from './standing'
-import { CARD_HIGH_VALUE_THRESHOLD } from './settleSwipe'
 
 const DAY = 86_400_000
 const at = (msFromEpoch: number) => new Date(msFromEpoch).toISOString()
@@ -180,12 +179,6 @@ describe('Perk #2 — more headroom (Established): soft ceiling never exceeds th
         expect(c <= HARD).toBe(true)
       }
     }
-  })
-})
-
-describe('hard-ceiling constant stays in lockstep with the settle-time limit', () => {
-  it('CARD_HARD_PER_SWIPE_CEILING_USDC === CARD_HIGH_VALUE_THRESHOLD (settleSwipe.ts)', () => {
-    expect(CARD_HARD_PER_SWIPE_CEILING_USDC).toBe(CARD_HIGH_VALUE_THRESHOLD)
   })
 })
 

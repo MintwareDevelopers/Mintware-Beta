@@ -10,7 +10,7 @@ import { getServiceClient } from '@/lib/web2/supabase'
 import { log } from '@/lib/logger'
 import { PaymentRequirements, PaymentPayload, SettleResult } from './types'
 
-export type SettleProvider = 'direct' | 'relayer' | 'oracle' | 'deferred'
+export type SettleProvider = 'direct'
 
 /** Fire-and-forget — do not `await` this in a settle path. */
 export function logSettleEvent(
