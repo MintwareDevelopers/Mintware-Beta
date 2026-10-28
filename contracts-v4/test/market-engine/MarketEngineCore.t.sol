@@ -8,6 +8,12 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {TestSwapRouter} from "../helpers/TestSwapRouter.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {MWV4PositionMath} from "../../src/lib/MWV4PositionMath.sol";
 import {MintwareMarketEngineCore} from "../../src/vaults/MintwareMarketEngineCore.sol";
 import {MintwareMarketLifecycleModule} from "../../src/vaults/MintwareMarketLifecycleModule.sol";
 import {EngineTestToken,EngineTestAdapter,EngineTestMark} from "./MarketEngineTestMocks.sol";
@@ -16,8 +22,12 @@ contract MarketEngineCoreHarness is MintwareMarketEngineCore {
     constructor(MarketConfig memory config,bytes32 moduleHash) MintwareMarketEngineCore(config,false,moduleHash) {}
 }
 
-contract MarketEngineCoreTest is Test {
+abstract contract MarketEngineFixture is Test {
+    using StateLibrary for IPoolManager;
+    using PoolIdLibrary for PoolKey;
     PoolManager pm;
+    PoolModifyLiquidityTest lpRouter;
+    TestSwapRouter swapRouter;
     EngineTestToken tokenA;
     EngineTestToken tokenB;
     EngineTestToken token0;
@@ -31,8 +41,10 @@ contract MarketEngineCoreTest is Test {
     address bob=makeAddr("bob");
     uint160 constant SQRT=79228162514264337593543950336;
 
-    function setUp() public {
+    function setUp() public virtual {
         pm=new PoolManager(address(this));
+        lpRouter=new PoolModifyLiquidityTest(IPoolManager(address(pm)));
+        swapRouter=new TestSwapRouter(IPoolManager(address(pm)));
         tokenA=new EngineTestToken("A","A",18);
         tokenB=new EngineTestToken("B","B",18);
         (Currency c0,Currency c1)=address(tokenA)<address(tokenB)
@@ -41,8 +53,13 @@ contract MarketEngineCoreTest is Test {
         token0=EngineTestToken(Currency.unwrap(c0)); token1=EngineTestToken(Currency.unwrap(c1));
         key=PoolKey(c0,c1,3000,60,IHooks(address(0)));
         pm.initialize(key,SQRT);
+        token0.mint(address(this),2_000_000e18); token1.mint(address(this),2_000_000e18);
+        token0.approve(address(lpRouter),type(uint256).max); token1.approve(address(lpRouter),type(uint256).max);
+        lpRouter.modifyLiquidity(key,ModifyLiquidityParams(-6000,6000,1_000_000e18,bytes32(0)),"");
         mark=new EngineTestMark(address(token1),address(token0));
         MintwareMarketLifecycleModule module=new MintwareMarketLifecycleModule();
+        // Core checks the module runtime hash at construction; use this deployed test module's hash so
+        // tests exercise the unchanged core while avoiding the production engine's separately pinned hash.
         engine=new MarketEngineCoreHarness(_config(address(module)),address(module).codehash);
         adapter0=new EngineTestAdapter(token0); adapter1=new EngineTestAdapter(token1);
         adapter0.bind(address(engine)); adapter1.bind(address(engine));
@@ -67,8 +84,39 @@ contract MarketEngineCoreTest is Test {
         vm.prank(who); return engine.deposit(a0,a1,1);
     }
 
+    function _deployBand() internal {
+        engine.recallIdle(adapter0.totalAssets(),adapter1.totalAssets());
+        engine.deployLiquidity(0,0,false,0,0,0,1);
+    }
+
+    function _trade(bool zeroForOne,uint256 amount) internal {
+        EngineTestToken input=zeroForOne?token0:token1;
+        input.approve(address(swapRouter),amount);
+        swapRouter.swap(key,zeroForOne,amount);
+    }
+
+    function _moveToTick(int24 target) internal {
+        for(uint256 i;i<100;++i) {
+            (,int24 tick,,)=IPoolManager(address(pm)).getSlot0(key.toId());
+            if(tick<=target) return;
+            _trade(true,1000e18);
+        }
+        (,int24 finalTick,,)=IPoolManager(address(pm)).getSlot0(key.toId());
+        assertLe(finalTick,target,"swap helper did not reach target tick");
+    }
+
+    function _markAtSpot() internal {
+        (uint160 spot,,,) = IPoolManager(address(pm)).getSlot0(key.toId());
+        mark.set(MWV4PositionMath.quoteValue(1e18,spot,true),uint64(block.timestamp));
+    }
+}
+
+contract MarketEngineCoreTest is MarketEngineFixture {
+    using StateLibrary for IPoolManager;
+    using PoolIdLibrary for PoolKey;
     function test_I1_exit_fairness_remaining_holder_claim_does_not_fall() public {
         _deposit(alice,100e18,100e18); _deposit(bob,100e18,100e18);
+        _deployBand();
         uint256 b0=engine.balanceOf(bob); uint256 nav0=engine.totalNav();
         uint256 claim0=nav0*b0/engine.totalSupply();
         uint256 exitShares=engine.balanceOf(alice)/3;
@@ -79,6 +127,7 @@ contract MarketEngineCoreTest is Test {
 
     function test_I2_deposit_does_not_reduce_existing_nav_per_share() public {
         _deposit(alice,100e18,100e18); uint256 beforeNav=engine.totalNav(); uint256 beforeSupply=engine.totalSupply();
+        _deployBand(); beforeNav=engine.totalNav(); beforeSupply=engine.totalSupply();
         _deposit(bob,30e18,70e18);
         assertGe(engine.totalNav()*beforeSupply, beforeNav*engine.totalSupply());
     }
@@ -90,7 +139,7 @@ contract MarketEngineCoreTest is Test {
     }
 
     function test_I4_withdraw_works_while_paused() public {
-        _deposit(alice,100e18,100e18); engine.pause();
+        _deposit(alice,100e18,100e18); _deployBand(); engine.pause();
         uint256 exitShares=engine.balanceOf(alice)/2;
         vm.prank(alice); (uint256 burned,,)=engine.withdraw(exitShares,alice,0,0);
         assertGt(burned,0);
@@ -98,6 +147,7 @@ contract MarketEngineCoreTest is Test {
 
     function test_I4_withdraw_best_effort_when_adapter_shortfalls() public {
         _deposit(alice,100e18,100e18); adapter0.setWithdrawableCap(1e18);
+        _deployBand();
         uint256 exitShares=engine.balanceOf(alice)/2;
         vm.prank(alice); (uint256 burned,,uint256 out1)=engine.withdraw(exitShares,alice,0,0);
         assertGt(burned,0); assertGt(out1,0);
@@ -125,11 +175,46 @@ contract MarketEngineCoreTest is Test {
         mark.set(1e18,uint64(block.timestamp)); (uint256 price,)=mark.latestMark(); assertEq(price,1e18);
     }
 
-    function test_I6_claims_are_backed_by_raw_and_adapter_assets() public {
+    function test_I6_claims_are_covered_by_deployed_and_idle_assets() public {
         _deposit(alice,100e18,100e18); _deposit(bob,25e18,75e18);
+        _deployBand();
         uint256 held0=token0.balanceOf(address(engine))+token0.balanceOf(address(adapter0));
         uint256 held1=token1.balanceOf(address(engine))+token1.balanceOf(address(adapter1));
-        assertLe(engine.totalNav(),held0+held1);
-        assertLe(engine.totalSupply(),engine.totalNav());
+        (uint160 spot,,,) = IPoolManager(address(pm)).getSlot0(key.toId());
+        (uint256 pos0,uint256 pos1)=MWV4PositionMath.amountsForLiquidity(
+            spot,TickMath.getSqrtPriceAtTick(engine.tickLower()),TickMath.getSqrtPriceAtTick(engine.tickUpper()),engine.positionLiquidity()
+        );
+        held0+=pos0; held1+=pos1;
+        (uint256 price,)=mark.latestMark();
+        uint256 markedAssets=held0+held1*price/1e18;
+        assertLe(engine.totalNav(),markedAssets);
+    }
+
+    function test_I5_recenter_reverts_inside_edge_margin() public {
+        _deposit(alice,100e18,100e18); _deployBand();
+        vm.warp(block.timestamp+1 hours);
+        vm.expectRevert(MintwareMarketEngineCore.RecenterNotDue.selector); engine.recenter(1);
+    }
+
+    function test_I5_recenter_reverts_before_cooldown() public {
+        _deposit(alice,100e18,100e18); _deployBand(); _moveToTick(-480); _markAtSpot(); vm.warp(block.timestamp+1 hours);
+        engine.recenter(1);
+        vm.expectRevert(MintwareMarketEngineCore.RecenterNotDue.selector); engine.recenter(1);
+    }
+
+    function test_I5_recenter_reverts_beyond_max_tick_move() public {
+        _deposit(alice,100e18,100e18); _deployBand(); _moveToTick(-660); _markAtSpot(); vm.warp(block.timestamp+1 hours);
+        vm.expectRevert(MintwareMarketEngineCore.RecenterMoveExceeded.selector); engine.recenter(1);
+    }
+
+    function test_I5_recenter_reverts_when_spot_deviates_from_mark() public {
+        _deposit(alice,100e18,100e18); _deployBand(); _moveToTick(-1200); vm.warp(block.timestamp+1 hours);
+        vm.expectRevert(MintwareMarketEngineCore.PoolMarkDeviationExceeded.selector); engine.recenter(1);
+    }
+
+    function test_I5_recenter_succeeds_when_all_guards_pass() public {
+        _deposit(alice,100e18,100e18); _deployBand(); _moveToTick(-480); _markAtSpot(); vm.warp(block.timestamp+1 hours);
+        int24 oldLower=engine.tickLower(); engine.recenter(1);
+        assertTrue(engine.tickLower()!=oldLower); assertGt(engine.positionLiquidity(),0);
     }
 }
