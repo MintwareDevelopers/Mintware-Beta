@@ -191,12 +191,11 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `MintwareYieldVault` | testnet · base-sepolia | `0x09cda8519737a60fd16d263f94fb56237cdb7e42` | testnet |
 | `MWAmAuction` | testnet · base-sepolia | `0x11d7bda166a62ac9edb65152f8cf035c219c5e00` | testnet |
 | `MwTreasuryAddress` | testnet · base-sepolia | `0xcf2EA99639C038a475B710b2Be82b974D777C306` | testnet |
-| `SocialPairVault` | testnet · base-sepolia | `0x983c11b4afb39766ada3a69c66addbc73b456f6e` | testnet |
 | `ULVHook` | testnet · base-sepolia | `0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8` | testnet |
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | testnet |
 
-**31 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
-**35 of 43 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
+**30 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**18 of 20 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
 ---
@@ -230,11 +229,9 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 - `NEXT_PUBLIC_MW_ROUTER_ENABLED`
 - `NEXT_PUBLIC_MW_ROUTER_FEE_BPS`
 - `NEXT_PUBLIC_MW_ROUTER_MIN_MARGIN_BPS`
-- `NEXT_PUBLIC_MW_SOCIAL_HOOK_ADDRESS`
 - `NEXT_PUBLIC_MW_TREASURY_ADDRESS`
 - `NEXT_PUBLIC_PRIVY_APP_ID`
 - `NEXT_PUBLIC_SITE_URL`
-- `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_SUPABASE_REALTIME`
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -242,14 +239,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 - `NEXT_PUBLIC_V2_RWA_ENABLED`
 - `NEXT_PUBLIC_VAULTS_LOCKED`
 - `NEXT_PUBLIC_VAULT_ADDRESS`
-- `NEXT_PUBLIC_VAULT_CHAIN_ID`
 - `NEXT_PUBLIC_VAULT_SUBGRAPH_URL`
-- `NEXT_PUBLIC_VAULT_TOKEN0_ADDRESS`
-- `NEXT_PUBLIC_VAULT_TOKEN0_DECIMALS`
-- `NEXT_PUBLIC_VAULT_TOKEN0_SYMBOL`
-- `NEXT_PUBLIC_VAULT_TOKEN1_ADDRESS`
-- `NEXT_PUBLIC_VAULT_TOKEN1_DECIMALS`
-- `NEXT_PUBLIC_VAULT_TOKEN1_SYMBOL`
 <!-- /AUTO:public-env-flags -->
 
 ## App routes (generated)
@@ -288,16 +278,10 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/team` | `app/app/team/page.tsx` |
 | `/app/team/cards` | `app/app/team/cards/page.tsx` |
 | `/app/team/developers` | `app/app/team/developers/page.tsx` |
-| `/app/team/liquidity` | `app/app/team/liquidity/page.tsx` |
-| `/app/team/liquidity/create` | `app/app/team/liquidity/create/page.tsx` |
-| `/app/team/liquidity/launch` | `app/app/team/liquidity/launch/page.tsx` |
-| `/app/team/liquidity/staged` | `app/app/team/liquidity/staged/page.tsx` |
 | `/app/team/policy` | `app/app/team/policy/page.tsx` |
 | `/app/team/swap` | `app/app/team/swap/page.tsx` |
 | `/app/team/team` | `app/app/team/team/page.tsx` |
 | `/app/team/vaults` | `app/app/team/vaults/page.tsx` |
-| `/app/vault/[id]` | `app/app/(personal)/vault/[id]/page.tsx` |
-| `/app/vaults` | `app/app/(personal)/vaults/page.tsx` |
 | `/cards` | `app/cards/page.tsx` |
 | `/curate` | `app/curate/page.tsx` |
 | `/dataroom` | `app/dataroom/page.tsx` |
