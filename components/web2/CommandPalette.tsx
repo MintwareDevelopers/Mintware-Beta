@@ -15,10 +15,10 @@ const RWA_ON = process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'
 const GROUPS: { heading: string; items: { href: string; label: string; external?: boolean }[] }[] = [
   { heading: 'Personal', items: [
     { href: '/app/account', label: 'Account' }, { href: '/app/swap', label: 'Swap' },
-    { href: '/app/vaults', label: 'Vaults' }, { href: '/app/agents', label: 'Agent account' },
+    { href: '/app/agents', label: 'Agent account' },
   ] },
   { heading: 'Team', items: [
-    { href: '/app/team', label: 'Treasury overview' }, { href: '/app/team/liquidity', label: 'Liquidity for your token' },
+    { href: '/app/team', label: 'Treasury overview' },
     { href: '/app/team/cards', label: 'Cards & Spend' }, { href: '/app/org/new', label: 'Create organization' },
   ] },
   ...(RWA_ON ? [{ heading: 'RWA', items: [

@@ -137,7 +137,6 @@ export default function ProofPage() {
             The router is the real product bytecode; the yield source + pair vault here are an open-mint mock rig
             so the loop is self-contained. The real <span className="font-mono">AaveV3YieldAdapter</span> +{' '}
             <span className="font-mono">MintwareDeFiPairVault</span> implement the same interfaces (Forge-tested).{' '}
-            <Link href="/app/team/liquidity/staged" className="text-peri-deep no-underline hover:underline">Try it live →</Link>
           </p>
         </div>
 

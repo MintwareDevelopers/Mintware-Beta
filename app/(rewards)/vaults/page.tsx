@@ -2,7 +2,7 @@
 
 // /vaults — PURELY EDUCATIONAL (marketing tier). Design v2 (Privy-esque).
 // Explains the tech: the Unified Liquidity Vault, the two ways to LP, idle-capital
-// yield, pro-rata fees. Functional browse/deposit live in /app/vaults.
+// yield, pro-rata fees. Functional V1 liquidity is available through the LP Gateway.
 
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
@@ -110,7 +110,7 @@ function VaultsPageV2() {
           </div>
 
           <div className="flex flex-wrap gap-3 mt-9">
-            <Link href="/app/vaults" className="glass-pill-primary">Browse the vaults →</Link>
+            <Link href="/v1" className="glass-pill-primary">Browse the vaults →</Link>
             <a href="#how" className="glass-pill">How it works ↓</a>
           </div>
         </div>
@@ -174,8 +174,8 @@ function VaultsPageV2() {
               <p className="text-[15px] text-ink-mid mt-2.5">Browse the live vaults, or open your own — deposits run in the app.</p>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <Link href="/app/vaults" className="glass-pill-primary whitespace-nowrap">Browse the vaults →</Link>
-              <Link href="/app/team/liquidity/create" className="glass-pill whitespace-nowrap">Create a vault</Link>
+              <Link href="/v1" className="glass-pill-primary whitespace-nowrap">Browse the vaults →</Link>
+              <Link href="/curate" className="glass-pill whitespace-nowrap">Create a vault</Link>
             </div>
           </GradientPanel>
         </div>

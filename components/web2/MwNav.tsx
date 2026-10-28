@@ -37,7 +37,7 @@ export function MwNav() {
   const NAV_LINKS = [
     { href: '/app/account', label: 'Account' },
     { href: '/app/swap', label: 'Swap' },
-    { href: '/app/vaults', label: 'Vaults' },
+    { href: '/v1', label: 'LP Gateway' },
     { href: '/agents/leaderboard', label: 'Agents' },
   ]
 

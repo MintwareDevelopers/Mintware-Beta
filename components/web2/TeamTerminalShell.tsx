@@ -31,16 +31,6 @@ function buildNav(activeOrgSlug: string | null): { groups: { title?: string; ite
         ],
       },
       {
-        // IA audit 2026-10-02: the token-issuer flows moved here from Personal — they were never retail jobs.
-        title: 'Liquidity for your token',
-        items: [
-          { href: '/app/team/liquidity', label: 'Choose a model', exact: true },
-          { href: '/app/team/liquidity/launch', label: 'Community-matched launch' },
-          { href: '/app/team/liquidity/create', label: 'Seed a balanced pool' },
-          { href: '/app/team/liquidity/staged', label: 'Stage one side' },
-        ],
-      },
-      {
         title: 'Spend',
         items: [
           { href: org('cards') ?? '/app/team/cards', label: 'Cards & Spend' },
