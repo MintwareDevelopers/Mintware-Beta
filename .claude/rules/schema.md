@@ -134,3 +134,11 @@ Source of truth: `docs/schema.sql`
   and therefore **readable with the public anon key**; now `security_invoker = on` + `REVOKE ALL` from `PUBLIC`/
   `anon`/`authenticated`, and `EXECUTE` on `record_gateway_harvest` revoked from `PUBLIC` (service role only).
   Rule: every view over an RLS table must be `security_invoker` — a plain view runs as its owner and bypasses RLS.
+- `20261028000001_drop_dead_tables.sql` — **cleanup (Disk IO / memory pressure on the Free instance):** drops 18
+  relations nothing on `main` references — `participants`, `campaign_leaderboard` (view), `campaign_payouts`,
+  `epoch_state`, `swap_events`, `swap_quotes`, `token_pool_deductions`, `vault_deals`/`vault_issuers`/
+  `vault_deal_documents`/`vault_redemptions`/`vault_seeding`, `seed_contributions`, `team_seeds`,
+  `ai_campaign_volume`, `ai_volume_campaigns`, `auth_nonces`, `wallet_activity` — plus the uncalled campaign-era
+  functions over them, and the `campaigns.linked_deal_id` FK (column kept). No CASCADE: any outside dependency
+  aborts the whole migration. Sections above describing these tables are historical. `campaigns`, `activity`,
+  `distributions`, `pending_rewards` and the vault reward tables stay until their code is deleted.
