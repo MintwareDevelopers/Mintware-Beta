@@ -119,23 +119,23 @@ contract MintwareYieldVaultTest is Test {
         assertEq(gateway.redeem(vault, alice, s / 2), 50e6);
         assertEq(token.balanceOf(destination), 50e6);
         uint256 bobShares = _deposit(bob, 100e6);
-        vm.prank(bob); vault.setDestination(bob);
         uint256 aliceSharesBefore = vault.balanceOf(alice);
+        vm.expectRevert(MintwareYieldVault.ZeroAddress.selector);
         gateway.redeem(vault, bob, bobShares);
         assertEq(vault.balanceOf(alice), aliceSharesBefore);
-        assertEq(token.balanceOf(bob), 1_000_000e6 - 100e6 + 100e6);
+        assertEq(token.balanceOf(bob), 1_000_000e6 - 100e6);
         vm.expectRevert(MintwareYieldVault.InsufficientShares.selector);
         gateway.redeem(vault, alice, s);
-        vm.prank(bob); vm.expectRevert(MintwareYieldVault.InsufficientShares.selector);
+        vm.prank(bob); vm.expectRevert(MintwareYieldVault.ZeroAddress.selector);
         gateway.redeem(vault, bob, 1);
     }
     function test_gateway_destination_cannot_be_chosen_by_gateway() public {
         uint256 s = _deposit(alice, 100e6);
-        vm.prank(alice); vault.setDestination(destination);
         vm.expectRevert(MintwareYieldVault.OnlyGateway.selector);
         vault.registerDestination(alice, bob);
-        assertEq(vault.destinationOf(alice), destination);
+        assertEq(vault.destinationOf(alice), address(0));
         uint256 bobBefore = token.balanceOf(bob);
+        vm.expectRevert(MintwareYieldVault.ZeroAddress.selector);
         gateway.redeem(vault, alice, s);
         assertEq(token.balanceOf(bob), bobBefore);
     }

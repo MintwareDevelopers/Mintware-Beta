@@ -56,11 +56,6 @@ contract MintwareYieldVault is ERC4626, Ownable, Pausable, ReentrancyGuard {
         gateway = who;
         emit GatewaySet(who);
     }
-    function setDestination(address destination) external {
-        if (destination == address(0)) revert ZeroAddress();
-        destinationOf[msg.sender] = destination;
-        emit DestinationSet(msg.sender, destination);
-    }
     function registerDestination(address member, address destination) external onlyGateway {
         if (member == address(0) || destination == address(0)) revert ZeroAddress();
         if (IRegisteredMemberDestination(msg.sender).bufferOf(member) != destination) revert DestinationNotRegistered();
