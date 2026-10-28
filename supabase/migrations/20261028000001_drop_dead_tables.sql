@@ -34,13 +34,13 @@ begin
   end loop;
 end $$;
 
--- Views first, then tables in dependency order (children before parents).
+-- Some of these were created in the dashboard, so their FKs between each other are
+-- not all visible in the repo. Drop in passes: anything blocked only by another
+-- listed relation succeeds on a later pass; a pass with no progress means an
+-- outside dependency, so re-raise and roll back.
 do $$
 declare
-  rel text;
-  kind "char";
-begin
-  foreach rel in array array[
+  pending text[] := array[
     'campaign_leaderboard',
     'campaign_payouts',
     'participants',
@@ -59,23 +59,39 @@ begin
     'ai_volume_campaigns',
     'auth_nonces',
     'wallet_activity'
-  ]
-  loop
-    select c.relkind into kind
-      from pg_class c join pg_namespace n on n.oid = c.relnamespace
-     where n.nspname = 'public' and c.relname = rel;
-
-    if kind is null then
-      raise notice 'skip %: not present', rel;
-    elsif kind = 'v' then
-      execute format('drop view public.%I', rel);
-    elsif kind = 'm' then
-      execute format('drop materialized view public.%I', rel);
-    elsif kind in ('r', 'p') then
-      execute format('drop table public.%I', rel);
-    else
-      raise exception 'unexpected relkind % for %', kind, rel;
+  ];
+  remaining text[];
+  rel text;
+  kind "char";
+  last_err text;
+begin
+  while cardinality(pending) > 0 loop
+    remaining := '{}';
+    foreach rel in array pending loop
+      select c.relkind into kind
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = 'public' and c.relname = rel;
+      begin
+        if kind is null then
+          raise notice 'skip %: not present', rel;
+        elsif kind = 'v' then
+          execute format('drop view public.%I', rel);
+        elsif kind = 'm' then
+          execute format('drop materialized view public.%I', rel);
+        elsif kind in ('r', 'p') then
+          execute format('drop table public.%I', rel);
+        else
+          raise exception 'unexpected relkind % for %', kind, rel;
+        end if;
+      exception when dependent_objects_still_exist then
+        last_err := sqlerrm;
+        remaining := remaining || rel;
+      end;
+    end loop;
+    if cardinality(remaining) = cardinality(pending) then
+      raise exception 'blocked by an outside dependency: %', last_err;
     end if;
+    pending := remaining;
   end loop;
 end $$;
 
