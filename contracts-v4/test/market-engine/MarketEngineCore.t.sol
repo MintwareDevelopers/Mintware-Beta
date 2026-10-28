@@ -153,6 +153,41 @@ contract MarketEngineCoreTest is MarketEngineFixture {
         assertGt(burned,0); assertGt(out1,0);
     }
 
+    function test_I1_incomplete_full_holder_exit_preserves_other_holder_token_claims() public {
+        _deposit(alice,200e18,0);
+        _deposit(bob,100e18,100e18);
+        adapter1.setWithdrawableCap(1e18);
+        uint256 shares = engine.balanceOf(bob);
+        uint256 supply = engine.totalSupply();
+        uint256 aShares = engine.balanceOf(alice);
+        (uint256 assets0,uint256 assets1) = _heldAssets();
+        uint256 claim0 = assets0 * aShares / supply;
+        uint256 claim1 = assets1 * aShares / supply;
+        vm.prank(bob);
+        (uint256 burned,,) = engine.withdraw(shares,bob,0,0);
+        assertLt(burned,shares);
+        uint256 nextSupply = engine.totalSupply();
+        (assets0,assets1) = _heldAssets();
+        uint256 nextClaim0 = assets0 * aShares / nextSupply;
+        uint256 nextClaim1 = assets1 * aShares / nextSupply;
+        assertGe(nextClaim0 + 1,claim0);
+        assertGe(nextClaim1 + 1,claim1);
+    }
+
+    function _heldAssets() internal view returns (uint256 assets0,uint256 assets1) {
+        assets0 = token0.balanceOf(address(engine)) + adapter0.totalAssets();
+        assets1 = token1.balanceOf(address(engine)) + adapter1.totalAssets();
+        uint128 liquidity = engine.positionLiquidity();
+        if (liquidity != 0) {
+            (uint160 spot,,,) = IPoolManager(address(pm)).getSlot0(key.toId());
+            (uint256 lp0,uint256 lp1) = MWV4PositionMath.amountsForLiquidity(
+                spot,TickMath.getSqrtPriceAtTick(engine.tickLower()),TickMath.getSqrtPriceAtTick(engine.tickUpper()),liquidity
+            );
+            assets0 += lp0;
+            assets1 += lp1;
+        }
+    }
+
     function test_dust_repeated_partial_withdrawals_do_not_revert_or_overdraw() public {
         _deposit(alice,100e18,100e18); _deposit(bob,100e18,100e18);
         for(uint256 i;i<24;++i) {

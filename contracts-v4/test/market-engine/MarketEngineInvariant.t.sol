@@ -157,8 +157,7 @@ contract MarketEngineInvariantTest is StdInvariant,MarketEngineFixture {
         excludeSelector(FuzzSelector(address(handler),excluded));
     }
     // Scenario: holderA makes a single-sided token0 deposit, adapter1 withdrawal is capped, then holderB exits fully.
-    // Incomplete delivery burns shares by aggregate quote NAV while the other token bucket pays its full pro-rata amount.
-    function invariant_FINDING_I1_adapter_shortfall_partial_exit_cross_token_dilution() public view { assertFalse(handler.fairnessBroken()); }
+    function invariant_I1_exit_fairness() public view { assertFalse(handler.fairnessBroken()); }
     function invariant_I2_deposit_fairness() public view { assertFalse(handler.depositDilution()); }
     function invariant_I6_nav_is_bounded_by_marked_assets_held() public view {
         if(engine.totalSupply()!=0) assertLe(engine.totalNav(),handler.markedAssets());
