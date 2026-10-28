@@ -33,13 +33,13 @@ export const NETWORKS = {
     nativeCurrency: { name: 'XRP', symbol: 'XRP', decimals: 18 },
     explorer: 'https://explorer.testnet.xrplevm.org',
     // Uniswap has NOT deployed v4 here (absent from Uniswap's v4 deployments list; no code at any canonical v4
-    // address). 'deploy' ⇒ deploy-rwa-demo.mjs deploys v4-core's PoolManager from the Forge artifacts, owner = the
-    // signer. v4-core is BUSL-1.1 — this is a testnet / non-production deployment.
+    // address). 'deploy' indicates that the network needs a separately provided testnet PoolManager before
+    // running the Foundry liquidity-unit script; v4-core is BUSL-1.1 and must remain testnet-only here.
     poolManager: 'deploy',
     verifier: { kind: 'blockscout', url: 'https://explorer.testnet.xrplevm.org/api/' },
     files: { deployment: 'rwaDemo.xrpl.deployment.json', demo: 'rwaDemo.xrpl.json', wallets: '.rwa-demo-wallets.xrpl.json' },
     gasFundWei: 20_000_000_000_000_000n, // 0.02 XRP per demo wallet (gas ≈ 1 gwei here vs ≈ 0.001 gwei on Base Sepolia)
-    minRunWei: 500_000_000_000_000_000n, // 0.5 XRP: deploy + lifecycle + 6 × demo-wallet gas, with headroom
+    minRunWei: 500_000_000_000_000_000n, // 0.5 XRP minimum funding reserve for the demo deployment
     faucet: 'https://faucet.xrplevm.org (select Testnet)',
   },
 }

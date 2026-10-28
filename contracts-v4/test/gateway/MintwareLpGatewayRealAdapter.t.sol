@@ -4,10 +4,8 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MintwareLpGatewayStaging} from "../../src/gateway/MintwareLpGatewayStaging.sol";
-import {MintwareLpGatewayFactory} from "../../src/gateway/MintwareLpGatewayFactory.sol";
 import {MintwareLpGatewayPositionManager, IPermit2Minimal} from "../../src/gateway/MintwareLpGatewayPositionManager.sol";
 import {MintwareERC4626YieldAdapter} from "../../src/vaults/MintwareERC4626YieldAdapter.sol";
-import {IYieldAdapter} from "../../src/vaults/IYieldAdapter.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockERC4626} from "../mocks/MockERC4626.sol";
 import {MockFeeERC4626} from "../mocks/MockFeeERC4626.sol";
@@ -164,17 +162,18 @@ contract MintwareLpGatewayRealAdapterTest is Test {
         new MintwareERC4626YieldAdapter(address(usdg), address(wrong), address(0), address(this));
     }
 
-    // Factory path: the factory creates the staging internally, so the adapter's vault MUST be wired to
-    // that staging afterwards — until then every deposit fails closed (OnlyVault), it can't silently
-    // mis-route. This is the operational step the deploy script now performs (`adapter.setVault(staging)`).
-    function test_A5_factoryPath_depositsFailClosedUntilVaultWired() public {
+    // A directly deployed staging/position-manager pair leaves the adapter fail-closed until explicitly wired.
+    function test_A5_directDeployment_failsClosedUntilVaultWired() public {
         MintwareERC4626YieldAdapter fa =
             new MintwareERC4626YieldAdapter(address(usdg), address(yieldSource), address(0), address(this));
-        MintwareLpGatewayFactory factory =
-            new MintwareLpGatewayFactory(IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub), address(this));
-        (address stagingAddr, address pmAddr) =
-            factory.createGateway(key, IERC20(address(usdg)), IYieldAdapter(address(fa)), -600, 600, address(this), harvestSink, 2000, type(uint256).max);
-        MintwareLpGatewayPositionManager fpm = MintwareLpGatewayPositionManager(pmAddr);
+        MintwareLpGatewayStaging directStaging = new MintwareLpGatewayStaging(IERC20(address(usdg)), fa);
+        MintwareLpGatewayPositionManager fpm = new MintwareLpGatewayPositionManager(
+            IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
+            key, IERC20(address(usdg)), -600, 600, directStaging, address(this), harvestSink, 2000,
+            type(uint256).max
+        );
+        directStaging.setController(address(fpm));
+        address pmAddr = address(fpm);
 
         vm.prank(alice);
         usdg.approve(pmAddr, type(uint256).max);
@@ -182,7 +181,7 @@ contract MintwareLpGatewayRealAdapterTest is Test {
         vm.expectRevert(MintwareERC4626YieldAdapter.OnlyVault.selector);
         fpm.deposit(1_000e6);
 
-        fa.setVault(stagingAddr);
+        fa.setVault(address(directStaging));
         vm.roll(block.number + 1);
         vm.prank(alice);
         assertEq(fpm.deposit(1_000e6), 1_000e6);

@@ -15,15 +15,14 @@ import {LPFeeLibrary}          from "@uniswap/v4-core/src/libraries/LPFeeLibrary
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
 
-/// @dev The vault's public `poolKey` struct getter (MintwarePairVault).
+/// @dev The bound liquidity actor's public `poolKey` struct getter.
 interface IVaultPoolKey {
     function poolKey() external view returns (Currency currency0, Currency currency1, uint24 fee, int24 tickSpacing, IHooks hooks);
 }
 
 /// @title  MintwareRwaAppraisalHook
 /// @notice V2-RWAs — the Uniswap v4 hook for ONE real-world-asset / USDC pool. It anchors trading to the
-///         issuer's appraised NAV and doubles as the price oracle the `MintwareTreasuryVault` values its
-///         position against (`oracleTick()`, the same selector the vault reads from its JIT hook).
+///         issuer's appraised NAV and exposes the oracle tick for the bound liquidity actor.
 ///
 ///           • Band. Swaps that END outside ±`specBandTicks` of the appraisal revert — unless they move the
 ///             price TOWARD the appraisal (so a fresh appraisal never freezes the market: the arb that closes
@@ -36,8 +35,7 @@ interface IVaultPoolKey {
 ///             appraisal is posted. A high appraisal can never inflate the senior claim (the vault takes the min).
 ///           • LP gate. Only the bound liquidity vault may add or remove liquidity.
 ///           • Vault exemption. The vault's own seniority unwind swaps skip the band: they are already capped
-///             at ±500 ticks around this oracle by `MWTreasuryPositionLib._swapLimit`, and a trading rule must
-///             not block a senior redemption.
+///             within the configured appraisal band; a trading rule must not block liquidity removal.
 ///           • Fee. Chosen from the PRE-swap tick (the post-swap tick is unknown in `beforeSwap`): one swap that
 ///             starts in the core band pays the core fee even if it ends in the spec band. Accepted — the band
 ///             itself still bounds where it can end.
@@ -87,7 +85,7 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
 
     IPoolManager public immutable poolManager;
 
-    address public vault;          // the bound MintwareTreasuryVault (set once)
+    address public vault;          // the bound liquidity actor (set once)
     PoolId  public expectedPoolId; // pinned at setVault from the vault's own pool key
     PoolId  public poolId;         // the one pool this hook serves (bound at initialize)
     bool    public poolBound;

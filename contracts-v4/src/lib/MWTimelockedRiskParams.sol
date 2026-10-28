@@ -5,8 +5,7 @@ pragma solidity ^0.8.26;
 /// @notice Reusable 48h-timelocked, bounded, publicly-disclosed change process for RISK PARAMETERS —
 ///         the governance rail legal asked for on the ETH-senior vault stack. Sits alongside its sibling
 ///         `MWTimelockedOracleSigner` (same shape: `propose → wait 48h → confirm`, with `cancel`), and is
-///         shared verbatim by `MintwareTreasuryVault`, `MintwareEthSettlement`, and
-///         `MintwareTreasuryJitHook` so the rule set is written once, not copy-pasted three times.
+///         shared by the kept payment gateway and other protocol governance surfaces.
 ///
 /// @dev    THE GOVERNANCE MODEL (why each rule exists):
 ///           • BOUNDED       — every proposal is range-checked at PROPOSE time (`_validateRiskParam`), so a

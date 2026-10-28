@@ -5,7 +5,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /// @title  SeniorSharesMath
 /// @notice The ONE audited copy of the senior-share ⇄ assets conversion used by the payment vaults
-///         (`MintwareYieldVault` v1 and `MintwareTreasuryVault` v2). Both applied the identical symmetric
+///         (`MintwareYieldVault` and the LP Gateway position manager). Both use the identical symmetric
 ///         virtual-offset formula inline; this extracts it so the inflation defense lives in exactly one
 ///         place (Phase 1 of the vault consolidation plan).
 ///
