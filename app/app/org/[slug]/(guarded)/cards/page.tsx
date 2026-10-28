@@ -44,10 +44,6 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
   const [cards, setCards] = useState<CardRow[]>([])
   const [gateway, setGateway] = useState<Gateway>(null)
   const [events, setEvents] = useState<SwipeEvent[]>([])
-  const [issueWallet, setIssueWallet] = useState('')
-  const [simCard, setSimCard] = useState('')
-  const [simAmount, setSimAmount] = useState('4.20')
-  const [simMerchant, setSimMerchant] = useState('MINTWARE DEMO MERCHANT')
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
 
@@ -71,17 +67,6 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
 
   useEffect(() => { void refreshCards(); void refreshEvents() }, [refreshCards, refreshEvents])
 
-  const issueCard = async () => {
-    if (!orgId || !address || !/^0x[a-fA-F0-9]{40}$/.test(issueWallet)) return setMsg('Enter a valid member wallet.')
-    setBusy('issue'); setMsg('')
-    try {
-      const res = await signedOrgFetch({ path: `/api/orgs/${orgId}/cards`, action: 'mintware-org-card-issue', payload: { memberWallet: issueWallet }, address, signMessageAsync })
-      const d = await res.json()
-      if (res.ok && d.ok) { setIssueWallet(''); refreshCards() }
-      else if (res.status === 503 && d.gated === 'lithic_unconfigured') setMsg('LITHIC_API_KEY is not set on the server.')
-      else setMsg(d.error ?? 'issuance failed')
-    } catch (e) { setMsg(String(e)) } finally { setBusy('') }
-  }
 
   const activateCard = async (card: CardRow) => {
     if (!address || !gateway) return setMsg('Treasury not readable yet — try again shortly.')
@@ -109,22 +94,6 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
     } catch (e) { setMsg(String(e)) } finally { setBusy('') }
   }
 
-  const simulate = async () => {
-    if (!orgId || !address || !simCard) return setMsg('Pick a card to simulate a swipe on.')
-    const amountUsd = parseFloat(simAmount)
-    if (!Number.isFinite(amountUsd) || amountUsd <= 0) return setMsg('Enter a valid amount.')
-    setBusy('simulate'); setMsg('')
-    try {
-      const res = await signedOrgFetch({
-        path: `/api/orgs/${orgId}/cards/simulate-swipe`, action: 'mintware-org-card-simulate-swipe',
-        payload: { cardId: simCard, amountUsd, merchantDescriptor: simMerchant }, address, signMessageAsync,
-      })
-      const d = await res.json()
-      if (!res.ok || !d.ok) setMsg(d.error ?? 'simulate failed')
-      // Poll the feed a few times — the decision lands asynchronously via the ASA webhook.
-      for (let i = 0; i < 5; i++) { await new Promise((r) => setTimeout(r, 800)); await refreshEvents() }
-    } catch (e) { setMsg(String(e)) } finally { setBusy('') }
-  }
 
   const settle = async (event: SwipeEvent) => {
     if (!orgId || !address) return
@@ -150,20 +119,11 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
         </p>
         {msg && <div className="text-[12.5px] text-[#D14343] mt-3">{msg}</div>}
 
-        {/* issue */}
-        {isOwner && (
-          <div className="soft-card p-5 mt-6 flex items-end gap-3 max-[640px]:flex-col max-[640px]:items-stretch">
-            <label className="flex-1 block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Member wallet</span>
-              <input value={issueWallet} onChange={(e) => setIssueWallet(e.target.value)} placeholder="0x…" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] font-mono outline-none focus:border-peri" />
-            </label>
-            <button onClick={issueCard} disabled={busy === 'issue' || !issueWallet} className="rounded-full bg-peri text-white px-5 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy === 'issue' ? 'Signing…' : 'Issue card'}</button>
-          </div>
-        )}
 
         {/* card directory */}
         <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-8 mb-3">Cards · {cards.length}</div>
         <div className="soft-card overflow-hidden">
-          {cards.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-ink-soft">No cards yet{isOwner ? ' — issue the first one above.' : '.'}</div>}
+          {cards.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-ink-soft">No cards yet.</div>}
           {cards.map((c) => {
             const mine = address && c.member_wallet.toLowerCase() === address.toLowerCase()
             return (
@@ -181,24 +141,6 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
           })}
         </div>
 
-        {/* simulate swipe */}
-        <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-8 mb-3">Simulate a swipe</div>
-        <div className="soft-card p-5 flex items-end gap-3 flex-wrap max-[640px]:flex-col max-[640px]:items-stretch">
-          <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Card</span>
-            <select value={simCard} onChange={(e) => setSimCard(e.target.value)} className="mt-1.5 rounded-[10px] border border-hair px-3 py-2.5 text-[14px] bg-white outline-none focus:border-peri min-w-[160px]">
-              <option value="">Select…</option>
-              {cards.filter((c) => c.activated_at).map((c) => <option key={c.id} value={c.id}>•••• {c.last_four} · {short(c.member_wallet)}</option>)}
-            </select>
-          </label>
-          <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Amount (USD)</span>
-            <input value={simAmount} onChange={(e) => setSimAmount(e.target.value)} inputMode="decimal" className="mt-1.5 w-[110px] rounded-[10px] border border-hair px-3 py-2.5 text-[14px] tabular-nums outline-none focus:border-peri" />
-          </label>
-          <label className="flex-1 block min-w-[160px]"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Merchant</span>
-            <input value={simMerchant} onChange={(e) => setSimMerchant(e.target.value)} className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
-          </label>
-          <button onClick={simulate} disabled={busy === 'simulate' || !simCard} className="rounded-full bg-peri text-white px-5 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy === 'simulate' ? 'Swiping…' : 'Swipe'}</button>
-        </div>
-        {cards.length > 0 && cards.every((c) => !c.activated_at) && <div className="text-[11.5px] text-ink-soft mt-2">No activated cards yet — the holder needs to sign a standing permit first.</div>}
 
         {/* spend feed */}
         <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-8 mb-3">Spend feed</div>

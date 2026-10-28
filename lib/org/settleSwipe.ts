@@ -1,9 +1,8 @@
 // Shared card-settlement core — the exact settleSpend() call proven live (lib/proof/latestRun.ts leg 3,
 // tx 0x7fd4b3f0…), extracted so BOTH the owner-clicked "Settle" button
 // (app/api/orgs/[id]/cards/settle) AND the automatic capture webhook
-// (app/api/cards/lithic/capture-webhook) run the identical code. No auth here — the CALLER decides
-// who may invoke it (the button is owner-gated; the webhook is gated by Lithic signature + an explicit
-// enable flag + a low auto-settle ceiling). This function only settles an already-approved swipe.
+// (card-provider capture handlers) run the identical code. No auth here — the CALLER decides
+// who may invoke it. This function only settles an already-approved swipe.
 //
 // It still moves real on-chain funds via the oracle/Privy signer in the RELAYER_ROLE seat
 // (getOracleSigner('root')) — the same on-demand demo-settlement pattern, NOT a new always-on relayer.

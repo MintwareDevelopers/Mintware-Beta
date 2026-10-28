@@ -1,7 +1,7 @@
 // Settle an approved swipe on demand — the owner-clicked "Settle" button. It authorizes the caller
 // (owner-only; moves real on-chain funds even on testnet) and then delegates to the SHARED settle
 // core (lib/org/settleSwipe.ts) — the exact settleSpend() call proven live (lib/proof/latestRun.ts
-// leg 3, tx 0x7fd4b3f0…). The capture webhook (app/api/cards/lithic/capture-webhook) runs that same
+// leg 3, tx 0x7fd4b3f0…). The capture webhook runs that same
 // core automatically for small swipes; keeping one implementation means the manual and automatic
 // paths can never drift.
 //

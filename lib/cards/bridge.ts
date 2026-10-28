@@ -1,6 +1,5 @@
 // Bridge (bridge.xyz / Stripe Issuing) provider leg — the non-custodial "standard" card rail.
-// Sibling to lib/cards/lithic.ts: this file is the Bridge-SPECIFIC plumbing only. Unlike the Lithic
-// rail, Bridge AUTHORIZES the swipe itself (Stripe does not hand us the issuing_authorization.request
+// Bridge AUTHORIZES the swipe itself (Stripe does not hand us the issuing_authorization.request
 // webhook), so there is deliberately NO decision logic here — lib/org/cardAuthorize.ts's ASA path is
 // Lithic-only. On Bridge our control surface is just two levers: how much USDC sits in the buffer, and
 // how large a standing allowance we grant. This file owns the allowance lever.

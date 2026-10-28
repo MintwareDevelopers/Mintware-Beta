@@ -1,5 +1,5 @@
 // Shared "is this caller an active member (or the owner) of this org" check — used by every card
-// route that needs it (issue, list, simulate-swipe, settle). Pulled out once these routes started
+// route that needs it (list, settle). Pulled out once these routes started
 // duplicating it rather than let the copies drift.
 
 import { policyForRole, type RolePolicy } from '@/lib/org/rolePresets'
