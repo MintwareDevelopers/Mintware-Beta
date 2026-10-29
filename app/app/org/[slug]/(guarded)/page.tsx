@@ -118,7 +118,7 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
                     <div className="font-atx-display font-semibold text-[16px] text-ink">Liquidity for your token</div>
                     <span className="text-[9.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft rounded-full border border-hair px-2 py-0.5 shrink-0">Both assets</span>
                   </div>
-                  <p className="text-[12.5px] text-ink-mid mt-2 leading-[1.5]">Pair your token with USDC in a two-sided pool — matched by the community, seeded yourself, or staged one side at a time. Earns trading fees; carries LP exposure.</p>
+                  <p className="text-[12.5px] text-ink-mid mt-2 leading-[1.5]">Current curated pools use one MarketEngine per Uniswap v4 pool. Community matching and staged one-sided deployment are retired.</p>
                   <div className="text-[12.5px] font-semibold text-peri-deep mt-3">Choose a model →</div>
                 </div>
               </div>
@@ -144,7 +144,7 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
             )}
 
             {!isMember && !isOwner && isConnected && (
-              <div className="text-[12.5px] text-ink-soft mt-6">You're viewing this treasury as a guest. Ask an owner to invite your wallet to spend.</div>
+              <div className="text-[12.5px] text-ink-soft mt-6">You&apos;re viewing this treasury as a guest. Ask an owner to invite your wallet to spend.</div>
             )}
           </>
         )}

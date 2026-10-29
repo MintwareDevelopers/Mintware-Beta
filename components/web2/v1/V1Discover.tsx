@@ -116,8 +116,8 @@ export function V1Discover() {
         <span style={{ backgroundImage: 'linear-gradient(100deg,#8A82F4,#F0A183)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>never locked.</span>
       </h1>
       <p className="text-[14.5px] leading-[1.6] mt-3 max-w-[58ch]" style={{ color: '#9B9BAD' }}>
-        Deposit USDG — your full deposit is paired into a pool we&rsquo;ve screened and earns trading fees,
-        compounded back into your position. Withdraw anytime for both legs.
+        Add one or both pool tokens to a curated MarketEngine. Your shares track a quote-valued pool portfolio;
+        withdraw pro-rata in both tokens.
       </p>
 
       {/* stats strip */}

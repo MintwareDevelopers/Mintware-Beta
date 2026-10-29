@@ -388,12 +388,12 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       {isDevRig && (
         <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
           <span style={{ fontWeight: 600 }}>Single-instance dev rig.</span>{' '}
-          <span style={{ color: '#9B9BAD' }}>No curated instances are registered yet, so this page is served from the operator’s environment-configured gateway ({shortId(meta!.positionManager)}). Testnet only — not a curated, live pool.</span>
+          <span style={{ color: '#9B9BAD' }}>No curated instances are registered yet. This view uses a configured MarketEngine ({shortId(meta!.positionManager)}); it is not currently registered for deposits.</span>
         </div>
       )}
       {metaState === 'not_live' && (
         <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#9B9BAD' }}>
-          This pool has no live gateway — nothing here accepts funds.{' '}
+          This pool has no active MarketEngine — nothing here accepts funds.{' '}
           <Link href="/v1" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Pick a live pool from Discover →</Link>
         </div>
       )}
@@ -411,13 +411,13 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             <span style={{ width: '100%', background: 'linear-gradient(90deg,#8A82F4,#6C6CF0)' }} />
           </div>
           <div className="flex flex-col gap-2 mt-3 text-[13px]">
-            <AllocRow color="#8A82F4" label={`Deployed as liquidity in ${base}/${quote}`} sub="your full deposit — no held-back reserve" pct="100%" />
+            <AllocRow color="#8A82F4" label={`MarketEngine portfolio · ${base}/${quote}`} sub="resting v4 liquidity plus token adapters" pct="100%" />
           </div>
           <div className="relative h-9 mt-4 rounded-[10px] overflow-hidden" style={INNER}>
             <div className="absolute inset-y-0" style={{ left: '12%', right: '12%', background: 'linear-gradient(180deg,rgba(138,130,244,0.28),rgba(138,130,244,0.08))', borderLeft: '2px solid rgba(138,130,244,0.5)', borderRight: '2px solid rgba(138,130,244,0.5)' }} />
             <div className="absolute inset-y-0" style={{ left: '50%', width: '2px', background: '#F4F4FA' }} />
           </div>
-          <div className="text-[11.5px] mt-1.5" style={{ color: '#63636F' }}>Fixed wide range (~10× up / −90% down) — always in range, no rebalancing. Carries impermanent loss — 100% of it is yours; Mintware supplies no capital to the position.</div>
+          <div className="text-[11.5px] mt-1.5" style={{ color: '#63636F' }}>The engine holds a resting v4 band and can recenter it under guarded lifecycle rules. Liquidity positions carry impermanent loss.</div>
 
           {/* metadata rows */}
           <div className="mt-6 flex flex-col">
@@ -431,7 +431,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             <Meta2 k="Pool age" v={m?.poolAgeDays != null ? `${m.poolAgeDays}d` : '—'} />
             <Meta2 k="Network" v="Robinhood Testnet (46630)" />
             <Meta2 k="Pool ID" v={shortId(meta?.poolAddress ?? m?.poolAddress ?? decoded)} mono />
-            {meta && <Meta2 k="Gateway (deposit target)" v={`${shortId(meta.positionManager)} · ${meta.source === 'registry' ? 'registry-verified' : 'env-configured'}`} mono />}
+            {meta && <Meta2 k="MarketEngine" v={`${shortId(meta.engineAddress ?? meta.positionManager)} · ${meta.source === 'registry' ? 'registry-verified' : 'env-configured'}`} mono />}
           </div>
 
           {/* trust */}
@@ -614,26 +614,16 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="rounded-[16px] p-5" style={PANEL}>
             <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>The loop</div>
             <div className="flex flex-col gap-3 mt-3">
-              <Loop
-                n="01"
-                t="Briefly staged"
-                d={
-                  meta?.adapterKind === 'real'
-                    ? 'A short window before the next scheduled deploy — already earning yield while it waits.'
-                    : meta?.adapterKind === 'idle'
-                      ? 'A short window before the next scheduled deploy — held ready, not yet earning.'
-                      : 'A short window before the next scheduled deploy.'
-                }
-              />
-              <Loop n="02" t="Deployed as liquidity" d="Your full deposit — no held-back reserve — is paired into this pool and earns trading fees." />
-              <Loop n="03" t="Fees compound back in" d="Trading fees lift your position's value pro-rata. Withdraw anytime for both legs." />
+              <Loop n="01" t="Deposit into the engine" d="Deposit one or both pool tokens with a minimum-shares floor; shares are valued in the quote asset." />
+              <Loop n="02" t="Liquidity plus adapters" d="The portfolio is held across a resting v4 band and per-token adapters. Robinhood testnet adapters hold assets ready without earning yield." />
+              <Loop n="03" t="Withdraw in kind" d="Withdraw pro-rata in both pool tokens, with minimum-output limits." />
             </div>
           </div>
         </div>
       </div>
 
       <p className="text-[12px] mt-6" style={{ color: '#63636F' }}>
-        Robinhood testnet · metrics live from GeckoTerminal · every figure above is an estimate, not a projection ·{' '}
+        Robinhood Chain testnet · unaudited · metrics from GeckoTerminal · every figure above is an estimate, not a projection ·{' '}
         <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>
