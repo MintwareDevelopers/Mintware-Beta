@@ -18,7 +18,7 @@ import { AVATAR_ALLOWED_MIMES, AVATAR_MAX_BYTES, buildProfileAvatarMessage, snif
 import type { ProfileMeta } from '@/lib/rewards/useProfileMeta'
 
 const INPUT = 'w-full rounded-[10px] px-3 py-2.5 text-[13.5px] font-atx-display outline-none transition-colors'
-const inputStyle = { background: '#0E0E16', border: '1px solid rgba(255,255,255,0.1)', color: '#F4F4FA' } as const
+const inputStyle = { background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(22,22,44,0.1)', color: '#191923' } as const
 const ACCEPT = AVATAR_ALLOWED_MIMES.join(',')
 
 type UploadState =
@@ -150,11 +150,11 @@ export function V1EditProfile({ wallet, meta, onClose, onSaved }: { wallet: stri
     : null
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto py-[6vh] px-4 font-atx-display" style={{ background: 'rgba(6,6,12,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose} role="dialog" aria-modal="true">
-      <div className="w-full max-w-[440px] rounded-[18px] p-6" style={{ background: '#12121C', border: '1px solid rgba(255,255,255,0.08)' }} onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto py-[6vh] px-4 font-atx-display" style={{ background: 'rgba(40,36,90,0.28)', backdropFilter: 'blur(4px)' }} onClick={onClose} role="dialog" aria-modal="true">
+      <div className="w-full max-w-[440px] rounded-[18px] p-6" style={{ background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-[18px]">Edit profile</h2>
-          <button onClick={onClose} className="text-[18px] cursor-pointer" style={{ color: '#63636F' }} aria-label="Close">×</button>
+          <button onClick={onClose} className="text-[18px] cursor-pointer" style={{ color: '#8A8A9E' }} aria-label="Close">×</button>
         </div>
 
         {/* avatar: picker + preview + progress */}
@@ -165,7 +165,7 @@ export function V1EditProfile({ wallet, meta, onClose, onSaved }: { wallet: stri
             disabled={uploading}
             aria-label="Choose a profile picture"
             className="relative w-[64px] h-[64px] rounded-full overflow-hidden flex items-center justify-center shrink-0 cursor-pointer disabled:cursor-default"
-            style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', border: '2px solid rgba(255,255,255,0.1)' }}
+            style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', border: '2px solid rgba(22,22,44,0.1)' }}
           >
             {shownAvatar ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -175,7 +175,7 @@ export function V1EditProfile({ wallet, meta, onClose, onSaved }: { wallet: stri
             )}
             {upload.phase === 'uploading' && (
               <span className="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: 'rgba(0,0,0,0.5)' }}>
-                <span className="block h-full transition-[width]" style={{ width: `${upload.pct}%`, background: '#C9C6FF' }} />
+                <span className="block h-full transition-[width]" style={{ width: `${upload.pct}%`, background: '#4C4CD6' }} />
               </span>
             )}
           </button>
@@ -187,15 +187,15 @@ export function V1EditProfile({ wallet, meta, onClose, onSaved }: { wallet: stri
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
                 className="text-[12.5px] font-semibold px-3 py-1.5 rounded-[9px] cursor-pointer disabled:cursor-default"
-                style={uploading ? { background: 'rgba(255,255,255,0.06)', color: '#63636F' } : { background: 'rgba(138,130,244,0.14)', color: '#C9C6FF', border: '1px solid rgba(138,130,244,0.25)' }}
+                style={uploading ? { background: 'rgba(22,22,44,0.06)', color: '#8A8A9E' } : { background: 'rgba(138,130,244,0.14)', color: '#4C4CD6', border: '1px solid rgba(138,130,244,0.25)' }}
               >
                 {uploading ? 'Working…' : avatarUrl ? 'Replace image' : 'Upload image'}
               </button>
-              <span className="text-[11px]" style={{ color: '#63636F' }}>PNG · JPEG · WebP · up to 2 MB</span>
+              <span className="text-[11px]" style={{ color: '#8A8A9E' }}>PNG · JPEG · WebP · up to 2 MB</span>
             </div>
             <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={(e) => void pickFile(e.target.files?.[0] ?? null)} />
-            {statusLine && <div className="text-[12px] mt-1.5" style={{ color: upload.phase === 'done' ? '#7FD6A8' : '#9B9BAD' }}>{statusLine}</div>}
-            {upload.phase === 'error' && <div className="text-[12px] mt-1.5" style={{ color: '#F0736E' }}>{upload.message}</div>}
+            {statusLine && <div className="text-[12px] mt-1.5" style={{ color: upload.phase === 'done' ? '#7FD6A8' : '#494957' }}>{statusLine}</div>}
+            {upload.phase === 'error' && <div className="text-[12px] mt-1.5" style={{ color: '#DC4A44' }}>{upload.message}</div>}
           </div>
         </div>
 
@@ -214,18 +214,18 @@ export function V1EditProfile({ wallet, meta, onClose, onSaved }: { wallet: stri
           <div><Label>Website</Label><input className={INPUT} style={inputStyle} placeholder="you.xyz" value={website} onChange={(e) => setWebsite(e.target.value)} /></div>
         </div>
 
-        {error && <div className="text-[12.5px] mt-3" style={{ color: '#F0736E' }}>{error}</div>}
+        {error && <div className="text-[12.5px] mt-3" style={{ color: '#DC4A44' }}>{error}</div>}
 
         <div className="flex gap-2.5 mt-5">
-          <button onClick={save} disabled={busy || uploading} className="flex-1 text-[14px] font-semibold py-3 rounded-[12px] text-white cursor-pointer disabled:cursor-default" style={busy || uploading ? { background: 'rgba(255,255,255,0.08)', color: '#9B9BAD' } : { background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }}>{busy ? 'Sign to save…' : uploading ? 'Finishing upload…' : 'Save profile'}</button>
-          <button onClick={onClose} className="text-[14px] font-semibold px-5 py-3 rounded-[12px] cursor-pointer" style={{ color: '#9B9BAD', border: '1px solid rgba(255,255,255,0.12)' }}>Cancel</button>
+          <button onClick={save} disabled={busy || uploading} className="flex-1 text-[14px] font-semibold py-3 rounded-[12px] text-white cursor-pointer disabled:cursor-default" style={busy || uploading ? { background: 'rgba(22,22,44,0.08)', color: '#494957' } : { background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }}>{busy ? 'Sign to save…' : uploading ? 'Finishing upload…' : 'Save profile'}</button>
+          <button onClick={onClose} className="text-[14px] font-semibold px-5 py-3 rounded-[12px] cursor-pointer" style={{ color: '#494957', border: '1px solid rgba(22,22,44,0.12)' }}>Cancel</button>
         </div>
-        <div className="text-[11px] mt-3 leading-[1.5]" style={{ color: '#63636F' }}>Saved on-chain-adjacent: you sign a message to prove this wallet is yours — no gas. Uploads are signed per image, so no one can swap your picture.</div>
+        <div className="text-[11px] mt-3 leading-[1.5]" style={{ color: '#8A8A9E' }}>Saved on-chain-adjacent: you sign a message to prove this wallet is yours — no gas. Uploads are signed per image, so no one can swap your picture.</div>
       </div>
     </div>
   )
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-[11px] uppercase tracking-[0.06em] font-semibold mb-1.5" style={{ color: '#63636F' }}>{children}</div>
+  return <div className="text-[11px] uppercase tracking-[0.06em] font-semibold mb-1.5" style={{ color: '#8A8A9E' }}>{children}</div>
 }
