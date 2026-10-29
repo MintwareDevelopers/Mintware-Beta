@@ -499,7 +499,7 @@ export default function ProofPage() {
           Recorded {run.date} · {run.networkLabel} · unaudited. To reproduce or extend the run, see the deploy
           scripts in <span className="font-mono">contracts-v4/script</span> and the runbook{' '}
           <span className="font-mono">docs/developers/session-handoff-arc.md</span>.{' '}
-          <Link href="/yield-payment-network" className="text-peri-deep no-underline hover:underline">What is YPN? →</Link>
+          <Link href="/cards" className="text-peri-deep no-underline hover:underline">See the card →</Link>
         </p>
       </main>
     </div>

@@ -6,25 +6,20 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { useLaunch } from '@/components/web2/LaunchModal'
-import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 
 const FEATURES = [
-  { key: 'vaults', href: '/vaults', label: 'Vaults' },
-  { key: 'ypn', href: '/yield-payment-network', label: 'Liquid Sovereign Account' },
-  { key: 'cards', href: '/cards', label: 'Cards' },
+  { key: 'markets', href: '/markets', label: 'Markets' },
+  { key: 'rwas', href: '/rwas', label: 'RWAs' },
+  { key: 'issuers', href: '/issuers', label: 'Issuers' },
+  { key: 'cards', href: '/cards', label: 'Card' },
   { key: 'agents', href: '/agents', label: 'Agents' },
-  { key: 'teams', href: '/teams', label: 'For Teams' },
 ] as const
 
-export type V2NavActive = 'vaults' | 'ypn' | 'cards' | 'agents' | 'teams' | 'defi'
+export type V2NavActive = 'markets' | 'rwas' | 'issuers' | 'cards' | 'agents'
 
 export function V2Nav({ active }: { active?: V2NavActive }) {
-  const { isConnected } = useMintwareIdentity()
-  const { launch } = useLaunch()
   const [open, setOpen] = useState(false)
-  const launchLabel = isConnected ? 'Go to the app' : 'Launch app'
 
   return (
     <header className="sticky top-0 z-30 bg-white/70 backdrop-blur-[16px] border-b border-hair-soft">
@@ -47,8 +42,9 @@ export function V2Nav({ active }: { active?: V2NavActive }) {
         </nav>
 
         <div className="flex items-center gap-3.5">
+          <span className="rounded-full border border-hair px-2.5 py-1 text-[11px] font-semibold text-ink-mid">Testnet</span>
           <button onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} className="md:hidden glass-pill glass-pill-sm w-11 h-11 !px-0">{open ? '✕' : '☰'}</button>
-          <button onClick={() => launch('/app')} className="glass-pill glass-pill-sm">{launchLabel} →</button>
+          <Link href="/v1" className="glass-pill glass-pill-sm">Open app →</Link>
         </div>
       </div>
 
@@ -57,6 +53,7 @@ export function V2Nav({ active }: { active?: V2NavActive }) {
           {FEATURES.map((f) => (
             <Link key={f.key} href={f.href} onClick={() => setOpen(false)} className={`px-6 py-3.5 text-[15px] font-medium no-underline border-t border-hair-soft ${active === f.key ? 'text-ink' : 'text-ink-mid'}`}>{f.label}</Link>
           ))}
+          <Link href="/v1" onClick={() => setOpen(false)} className="px-6 py-3.5 text-[15px] font-semibold no-underline border-t border-hair-soft text-peri-deep">Open app →</Link>
         </div>
       )}
     </header>

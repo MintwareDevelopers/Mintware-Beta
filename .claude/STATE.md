@@ -6,6 +6,15 @@
 
 **Last reconciled:** 2026-10-29
 
+## Public site map
+
+The public marketing site uses one light design system and the owner-approved vision copy. Primary routes are
+`/`, `/markets`, `/rwas`, `/issuers`, `/cards`, and `/agents`; the header carries the Testnet chip and
+links to `/v1`. Pool detail is `/markets/[pool]`. Earn (the stablecoin vault) is presented as the card's
+earning balance, not a standalone page. Legacy `/about`, `/earn`, `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
+`/solutions/:path*`, `/yield-payment-network`, and `/explorer` redirect to their current destinations. Legal and
+risk content remain on their existing routes. Canonical route inventory is generated in the AUTO block below.
+
 ## Current products and status
 
 - **V1 liquidity: MarketEngine** — one engine per curated Uniswap v4 pool, with one quote-valued share token,
@@ -136,9 +145,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_SUPABASE_REALTIME`
 - `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_V1_MODE_ENABLED`
 - `NEXT_PUBLIC_V2_RWA_ENABLED`
-- `NEXT_PUBLIC_VAULTS_LOCKED`
 - `NEXT_PUBLIC_VAULT_SUBGRAPH_URL`
 <!-- /AUTO:public-env-flags -->
 
@@ -149,7 +156,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | Route | File |
 |---|---|
 | `/` | `app/page.tsx` |
-| `/about` | `app/about/page.tsx` |
 | `/agent/[address]` | `app/(web3)/agent/[address]/page.tsx` |
 | `/agents` | `app/agents/page.tsx` |
 | `/agents/leaderboard` | `app/(web3)/agents/leaderboard/page.tsx` |
@@ -186,28 +192,21 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/curate` | `app/curate/page.tsx` |
 | `/dataroom` | `app/dataroom/page.tsx` |
 | `/deck` | `app/deck/page.tsx` |
-| `/defi` | `app/defi/page.tsx` |
 | `/docs` | `app/docs/page.tsx` |
-| `/earn/[pool]` | `app/earn/[pool]/page.tsx` |
-| `/explorer` | `app/explorer/page.tsx` |
+| `/issuers` | `app/issuers/page.tsx` |
 | `/legal` | `app/legal/page.tsx` |
+| `/markets` | `app/markets/page.tsx` |
+| `/markets/[pool]` | `app/markets/[pool]/page.tsx` |
 | `/org/[slug]` | `app/org/[slug]/page.tsx` |
 | `/org/[slug]/badge` | `app/org/[slug]/badge/page.tsx` |
 | `/privacy` | `app/privacy/page.tsx` |
 | `/proof` | `app/proof/page.tsx` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
 | `/risk-disclosures` | `app/risk-disclosures/page.tsx` |
-| `/solutions/companies` | `app/solutions/companies/page.tsx` |
-| `/solutions/funds` | `app/solutions/funds/page.tsx` |
-| `/solutions/network-states` | `app/solutions/network-states/page.tsx` |
-| `/solutions/treasuries` | `app/solutions/treasuries/page.tsx` |
-| `/teams` | `app/teams/page.tsx` |
+| `/rwas` | `app/rwas/page.tsx` |
 | `/terms` | `app/terms/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` |
 | `/v1` | `app/v1/page.tsx` |
 | `/v1/referrals` | `app/v1/referrals/page.tsx` |
 | `/v1/swap` | `app/v1/swap/page.tsx` |
-| `/v2` | `app/v2/page.tsx` |
-| `/vaults` | `app/(rewards)/vaults/page.tsx` |
-| `/yield-payment-network` | `app/yield-payment-network/page.tsx` |
 <!-- /AUTO:pages -->

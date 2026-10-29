@@ -1,126 +1,64 @@
-import type { Metadata } from 'next'
+import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
-import { CardsCTA } from '@/components/marketing/cards/CardsCTA'
-import {
-  CARDS_STATUS,
-  CARDS_HERO,
-  CARDS_FLOW,
-  CARDS_STANDING,
-  CARDS_WHY,
-} from '@/constants/cards-landing'
+import { WaitlistForm } from '@/components/marketing/WaitlistForm'
+import { Section, Eyebrow, H2, Hero, Rows, Kicker, CTA } from '@/components/marketing/Story'
+import { CardVisual } from '@/components/marketing/CardVisual'
+import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { FlowDiagram } from '@/components/ui2/FlowDiagram'
 
-// =============================================================================
-// /cards — PUBLIC marketing surface for the Liquid Sovereign Account's card/spend
-// side. Top-of-funnel only; NOT the authenticated app. Companion to
-// /yield-payment-network (the fuller yield thesis) — this page goes deep on the
-// planned spend experience, including roadmap Standing service tiers.
-//
-// v2 Privy-esque design system (same as /yield-payment-network) — periwinkle
-// pastel + translucent glass, V2Nav, GradientPanel. All copy lives in
-// constants/cards-landing.ts. Bridge + Stripe integrations are in development.
-// No "Launch app" CTA, no guarantee-of-limit language.
-// =============================================================================
-
-export const metadata: Metadata = {
-  title: 'Cards — Mintware',
-  description:
-    'A planned card backed by a balance designed to stay productive. Bridge + Stripe card integrations and service tiers are coming soon.',
-}
+export const metadata = { title: 'Card — Mintware', description: 'Spend what you’ve earned. A card whose balance never stops working.' }
 
 export default function CardsPage() {
-  return (
-    <div className="min-h-screen bg-white text-ink overflow-x-clip">
-      <V2Nav active="cards" />
+  return <main className="min-h-screen bg-white text-ink">
+    <V2Nav active="cards" />
 
-      {/* hero */}
-      <section className="bg-ground-cool border-b border-hair-soft">
-        <div className="mx-auto max-w-[1080px] px-6 max-[800px]:px-4 pt-[64px] pb-[56px] max-[800px]:pt-[40px] max-[800px]:pb-[40px]">
-          <div className="glass-pill inline-flex text-[11px] font-semibold tracking-[0.02em]">{CARDS_STATUS.label}</div>
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-5">{CARDS_HERO.eyebrow}</div>
-          <h1 className="font-atx-display font-semibold text-ink tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.6vw,3.6rem)] mt-3 max-w-[18ch] [text-wrap:balance]">
-            {CARDS_HERO.title} <span className="text-gradient-accent">{CARDS_HERO.titleAccent}</span>
-          </h1>
-          <p className="text-ink-mid text-[clamp(15px,2vw,18px)] leading-[1.6] mt-5 max-w-[62ch]">{CARDS_HERO.body}</p>
-          <p className="font-mono text-[11px] text-ink-soft mt-6 max-w-[70ch] leading-[1.5]">{CARDS_STATUS.note}</p>
-        </div>
-      </section>
+    <Hero
+      eyebrow="Card"
+      title="Spend what"
+      soft="you’ve earned."
+      lede="Most cards spend money that’s doing nothing. Yours spends from a balance that’s earning — and refills itself as you go, so everything you don’t spend keeps working."
+      actions={<div className="w-full max-w-[480px]"><WaitlistForm source="card" /></div>}
+      tone="coral"
+      aside={<CardVisual />}
+    />
 
-      {/* how it works — spend, hold, settle */}
-      <section className="bg-white border-b border-hair-soft">
-        <div className="mx-auto max-w-[1080px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px]">
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{CARDS_FLOW.eyebrow}</div>
-          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3 max-w-[18ch] [text-wrap:balance]">
-            {CARDS_FLOW.title}
-          </h2>
-          <div className="grid grid-cols-3 max-[820px]:grid-cols-1 gap-4 mt-9">
-            {CARDS_FLOW.steps.map((s, i) => (
-              <div key={s.key} className="rounded-[var(--radius-card)] border border-hair bg-ground-cool p-6">
-                <div className="text-[11px] font-semibold text-peri-deep tabular-nums">{String(i + 1).padStart(2, '0')}</div>
-                <div className="font-atx-display font-semibold text-[17px] tracking-[-0.01em] text-ink mt-1.5">{s.label}</div>
-                <p className="text-[14px] leading-[1.55] text-ink-mid mt-2">{s.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+    <Section tint>
+      <Eyebrow>What you get</Eyebrow>
+      <H2 soft="until the moment you spend it.">Every dollar earning</H2>
+      <Rows items={[
+        ['No idle float.', 'You don’t pre-load a card and watch it sit. Your card balance stays working, until a purchase needs it.'],
+        ['Spend without selling.', 'Pay for coffee, flights or payroll without unwinding anything. Only what you spend leaves.'],
+        ['Everywhere cards work.', 'Issued on established card rails with Bridge and Stripe, for the places you already pay.'],
+      ]} />
+      <Kicker>Your money earns while you live your life — not just while it sits still.</Kicker>
+    </Section>
 
-      {/* Standing — the flagship mechanic */}
-      <section className="bg-ground-cool border-b border-hair-soft">
-        <div className="mx-auto max-w-[1080px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px]">
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{CARDS_STANDING.eyebrow}</div>
-          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3 max-w-[18ch] [text-wrap:balance]">
-            {CARDS_STANDING.title} <span className="text-gradient-accent">{CARDS_STANDING.titleAccent}</span>
-          </h2>
-          <p className="text-ink-mid text-[clamp(15px,1.7vw,17px)] leading-[1.6] mt-5 max-w-[64ch]">{CARDS_STANDING.body}</p>
+    <Section>
+      <Eyebrow>How it works</Eyebrow>
+      <H2 soft="You spend it.">Your balance earns.</H2>
+      <GradientPanel tone="coral" className="p-8 max-[800px]:p-4 mt-12">
+        <FlowDiagram steps={[
+          { label: 'Your balance earns', sub: 'Stablecoins in a curated lending market' },
+          { label: 'You tap to pay', sub: 'Anywhere cards are accepted' },
+          { label: 'Your card refills', sub: 'Only the amount you spent, within your limits' },
+          { label: 'The rest keeps working', sub: 'Nothing else moves' },
+        ]} />
+      </GradientPanel>
+    </Section>
 
-          <div className="grid grid-cols-3 max-[820px]:grid-cols-1 gap-4 mt-8">
-            {CARDS_STANDING.tiers.map((t, i) => (
-              <div key={t.name} className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-6">
-                <div className="text-[11px] font-semibold text-peri-deep tabular-nums">{String(i + 1).padStart(2, '0')}</div>
-                <div className="font-atx-display font-semibold text-[17px] tracking-[-0.01em] text-ink mt-1.5">{t.name}</div>
-                <div className="text-[11px] uppercase tracking-[0.08em] text-ink-soft mt-2">{t.unlock}</div>
-                <div className="font-atx-display font-semibold text-[14px] text-peri-deep mt-3">{t.perk}</div>
-                <p className="text-[13.5px] leading-[1.5] text-ink-mid mt-1.5">{t.detail}</p>
-              </div>
-            ))}
-          </div>
+    <Section tint>
+      <Eyebrow>Always in control</Eyebrow>
+      <H2 soft="and when.">You decide what can move,</H2>
+      <Rows items={[
+        ['Daily limits you set.', 'Refills never exceed the limits you choose.'],
+        ['Every card link is yours to approve.', 'A new card wallet goes live after 48 hours, and you can cut one off instantly.'],
+        ['Non-custodial underneath.', 'Your balance sits in your own wallet as shares. Nobody can move it but you.'],
+      ]} />
+    </Section>
 
-          <div className="grid grid-cols-1 gap-2 mt-8 max-w-[70ch]">
-            {CARDS_STANDING.guardrails.map((g) => (
-              <div key={g} className="flex items-start gap-2.5 text-[13.5px] text-ink-mid leading-[1.5]">
-                <span className="text-peri-deep mt-[2px] shrink-0" aria-hidden>✓</span>
-                <span>{g}</span>
-              </div>
-            ))}
-          </div>
-
-          <p className="font-mono text-[11px] text-ink-soft mt-6 max-w-[74ch] leading-[1.5]">{CARDS_STANDING.note}</p>
-        </div>
-      </section>
-
-      {/* why this isn't a generic crypto card */}
-      <section className="bg-white border-b border-hair-soft">
-        <div className="mx-auto max-w-[1080px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px]">
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{CARDS_WHY.eyebrow}</div>
-          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3 max-w-[18ch] [text-wrap:balance]">
-            {CARDS_WHY.title}
-          </h2>
-          <p className="text-ink-mid text-[clamp(15px,1.7vw,17px)] leading-[1.6] mt-5 max-w-[64ch]">{CARDS_WHY.intro}</p>
-          <div className="flex flex-col gap-3 mt-8">
-            {CARDS_WHY.rows.map((r) => (
-              <div
-                key={r.product}
-                className={`rounded-[var(--radius-card)] border p-5 ${r.us ? 'border-[rgba(108,108,240,0.3)] bg-ground-cool' : 'border-hair bg-white'}`}
-              >
-                <div className="font-atx-display font-semibold text-[15px] tracking-[-0.01em] text-ink">{r.product}</div>
-                <p className="text-[13.5px] leading-[1.5] text-ink-mid mt-1.5">{r.tradeoff}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <CardsCTA />
-    </div>
-  )
+    <CTA title="A card for money" soft="that never sits still." tone="coral">
+      <div className="w-full max-w-[480px] mx-auto"><WaitlistForm source="card" /></div>
+      <div className="w-full flex justify-center mt-2"><Link href="/markets" className="glass-pill">Explore markets</Link></div>
+    </CTA>
+  </main>
 }

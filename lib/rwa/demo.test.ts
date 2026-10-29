@@ -48,14 +48,12 @@ describe('V2-RWAs gate', () => {
     expect(canSeeRwa(jar({ [V2_COOKIE]: v2Token() }))).toBe(false)
   })
 
-  it('opens only with a real V2 unlock — even while the site-wide V1/V2 split is off (V2 shown to all)', async () => {
+  it('opens only with a real V2 unlock', async () => {
     vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', 'true')
-    vi.stubEnv('NEXT_PUBLIC_V1_MODE_ENABLED', '')
     vi.stubEnv('V2_PASSWORD', 'pw')
     const { canSeeRwa } = await import('@/lib/v2/rwaGate')
-    const { v2Token, V2_COOKIE, isV2FromCookie } = await import('@/lib/v2/gate')
-    expect(isV2FromCookie(undefined)).toBe(true) // the site default is open…
-    expect(canSeeRwa(jar({}))).toBe(false) // …but RWA is not
+    const { v2Token, V2_COOKIE } = await import('@/lib/v2/gate')
+    expect(canSeeRwa(jar({}))).toBe(false)
     expect(canSeeRwa(jar({ [V2_COOKIE]: 'wrong' }))).toBe(false)
     expect(canSeeRwa(jar({ [V2_COOKIE]: v2Token() }))).toBe(true)
   })

@@ -37,6 +37,6 @@ All contract products are testnet-only and unaudited; external audit gates real 
 2. `proxy.ts`, `TeamGuard`, and `V2AppGate` implement separate route and workspace gates; check their code before
    changing access claims.
 3. Personal, Team, organization, and RWA workspaces share the `AppShell` family.
-4. The explorer is static at `public/explorer.html`; `/explorer` redirects there.
+4. `/explorer` redirects to `/`; the historical static explorer file, if present, is not in the current site map.
 5. Keep archived product designs clearly historical. A source file or retained deployed contract does not make a
    retired product current.

@@ -4,12 +4,12 @@
 // /swap — cross-chain LI.FI swap, front and centre. Design v2 (Privy-esque).
 //
 //   • The trade core is the real <SwapWidget/> (LI.FI fee-injection).
-//   • Cross-links to the /vaults product (pro-rata, not reputation-weighted).
+//   • Cross-links to the /markets product (pro-rata, not reputation-weighted).
 //
 // Campaigns were shelved (2026-08-12) — this is a plain swap, no campaign
 // context, points, or reward crediting. The human-facing "Attribution score"
 // framing/reputation stat band was removed 2026-08-28 (see
-// attribution_review_2026_08_28 memory) — the vaults cross-link below still
+// attribution_review_2026_08_28 memory) — the liquidity cross-link below still
 // accurately describes the real vault-weighted reward mechanic, just without
 // branding this page itself around a personal score.
 // =============================================================================
