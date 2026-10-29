@@ -11,7 +11,7 @@ import { usePathname, useRouter } from 'next/navigation'
 export type AppMode = 'user' | 'team' | 'rwa'
 
 export const APP_MODE_COOKIE = 'mw_app_mode'
-const HOMES: Record<AppMode, string> = { user: '/app/account', team: '/app/team', rwa: '/app/rwa' }
+const HOMES: Record<AppMode, string> = { user: '/app/account', team: '/app/team', rwa: '/v1/rwas' }
 
 export function persistAppMode(mode: AppMode) {
   if (typeof document === 'undefined') return
@@ -24,7 +24,7 @@ export function appModeHome(mode: AppMode) {
 
 /** Route → workspace. /app/org/* is the real side of the Team workspace. */
 export function modeForPath(pathname: string | null | undefined): AppMode {
-  if (pathname?.startsWith('/app/rwa')) return 'rwa'
+  if (pathname?.startsWith('/v1/rwas')) return 'rwa'
   if (pathname?.startsWith('/app/team') || pathname?.startsWith('/app/org')) return 'team'
   return 'user'
 }

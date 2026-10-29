@@ -24,7 +24,7 @@ function Card({ tone, className = '' }: { tone: 'peri' | 'coral'; className?: st
   )
 }
 
-export function CardVisual() {
+export function CardVisual({ label = 'Card balance · earning', amount = '$2,480.00' }: { label?: string; amount?: string }) {
   const [earned, setEarned] = useState(18.4)
   useEffect(() => {
     const id = window.setInterval(() => setEarned(e => e + 0.01), 150)
@@ -35,8 +35,8 @@ export function CardVisual() {
       <Card tone="coral" className="left-8 top-4 rotate-[-9deg]" />
       <Card tone="peri" className="left-12 top-20 rotate-[4deg]" />
       <div className="glass-card absolute right-0 bottom-2 px-5 py-4 !rounded-2xl">
-        <div className="text-[11px] text-ink-mid">Card balance · earning</div>
-        <div className="font-atx-display font-medium text-[22px] tracking-[-0.02em] text-ink">$2,480.00</div>
+        <div className="text-[11px] text-ink-mid">{label}</div>
+        <div className="font-atx-display font-medium text-[22px] tracking-[-0.02em] text-ink">{amount}</div>
         <div className="font-mono text-[12px] text-mw-green font-semibold">+${fmt(earned)} this month</div>
       </div>
     </div>

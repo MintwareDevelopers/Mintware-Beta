@@ -58,7 +58,7 @@ export default function IssuersPage() {
           <Eyebrow>Built for regulated assets</Eyebrow>
           <h3 className="font-atx-display font-medium text-[clamp(1.6rem,3vw,2.2rem)] tracking-[-0.03em] leading-[1.1] mt-4">Your rules travel with your token.</h3>
           <p className="text-[15px] text-ink-mid leading-[1.65] mt-4">Identity and transfer rules stay with the token, so only verified holders take part. See it working with a tokenized property in our RWA demo.</p>
-          <Link href="/app/rwa" className="inline-block mt-6 text-[14px] font-semibold text-peri-deep no-underline hover:underline">View the RWA demo →</Link>
+          <Link href="/v1/rwas" className="inline-block mt-6 text-[14px] font-semibold text-peri-deep no-underline hover:underline">View the RWA demo →</Link>
         </div>
         <div className="soft-card p-10">
           <Eyebrow>Where the market is going</Eyebrow>

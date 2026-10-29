@@ -10,7 +10,9 @@
 
 The public marketing site uses one light design system and the owner-approved vision copy. Primary routes are
 `/`, `/markets`, `/rwas`, `/issuers`, `/cards`, and `/agents`; the header carries the Testnet chip and
-links to `/v1`. Pool detail is `/markets/[pool]`. Earn (the stablecoin vault) is presented as the card's
+links to `/v1`. The `/v1` platform shell carries five lanes: Markets (`/v1`), RWAs (`/v1/rwas`), Issuers
+(`/v1/issuers`), Card (`/v1/card`) and Agents (`/v1/agents`); Card, the issuer request flow and the agent wallet/call
+log are Simulated (tagged on screen). Pool detail is `/markets/[pool]`. Earn (the stablecoin vault) is presented as the card's
 earning balance, not a standalone page. Legacy `/about`, `/earn`, `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
 `/solutions/:path*`, `/yield-payment-network`, and `/explorer` redirect to their current destinations. Legal and
 risk content remain on their existing routes. Canonical route inventory is generated in the AUTO block below.
@@ -28,7 +30,7 @@ risk content remain on their existing routes. Canonical route inventory is gener
   integration is Bridge + Stripe in pre-enable state; see [`rules/payments-ypn.md`](rules/payments-ypn.md).
 - **Discover and curation** — GeckoTerminal data feeds candidate discovery; risk scores rank candidates and never
   certify them. Curated MarketEngine instances are verified against on-chain configuration.
-- **RWA demo** — `/app/rwa` and `MintwareRwaAppraisalHook` remain a testnet demo. See
+- **RWA demo** — the RWAs tab (`/v1/rwas`) and `MintwareRwaAppraisalHook` remain a testnet demo. See
   [`rules/rwa-liquidity.md`](rules/rwa-liquidity.md).
 - **Attribution** — the AIAttribution v3 contract is deployed on Base mainnet; this is a fundless attestation
   ledger. User-facing agent reputation surfaces remain documented in [`rules/agents.md`](rules/agents.md).
@@ -176,10 +178,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/org/[slug]/roles` | `app/app/org/[slug]/(guarded)/roles/page.tsx` |
 | `/app/org/new` | `app/app/org/(guarded)/new/page.tsx` |
 | `/app/profile` | `app/app/(personal)/profile/page.tsx` |
-| `/app/rwa` | `app/app/rwa/page.tsx` |
-| `/app/rwa/[unit]` | `app/app/rwa/[unit]/page.tsx` |
-| `/app/rwa/how` | `app/app/rwa/how/page.tsx` |
-| `/app/rwa/proof` | `app/app/rwa/proof/page.tsx` |
 | `/app/swap` | `app/app/(personal)/swap/page.tsx` |
 | `/app/team` | `app/app/team/page.tsx` |
 | `/app/team/cards` | `app/app/team/cards/page.tsx` |
@@ -207,6 +205,13 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/terms` | `app/terms/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` |
 | `/v1` | `app/v1/page.tsx` |
+| `/v1/agents` | `app/v1/agents/page.tsx` |
+| `/v1/card` | `app/v1/card/page.tsx` |
+| `/v1/issuers` | `app/v1/issuers/page.tsx` |
 | `/v1/referrals` | `app/v1/referrals/page.tsx` |
+| `/v1/rwas` | `app/v1/rwas/page.tsx` |
+| `/v1/rwas/[unit]` | `app/v1/rwas/[unit]/page.tsx` |
+| `/v1/rwas/how` | `app/v1/rwas/how/page.tsx` |
+| `/v1/rwas/proof` | `app/v1/rwas/proof/page.tsx` |
 | `/v1/swap` | `app/v1/swap/page.tsx` |
 <!-- /AUTO:pages -->

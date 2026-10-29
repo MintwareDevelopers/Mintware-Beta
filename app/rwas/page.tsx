@@ -87,7 +87,7 @@ export default function RwasPage() {
           <Eyebrow>See it working</Eyebrow>
           <H2 soft="with a market of its own.">A tokenized property,</H2>
           <P>Our RWA demo runs a market for a tokenized property that only verified holders can trade, priced against an independent appraisal.</P>
-          <Link href="/app/rwa" className="inline-block mt-7 glass-pill-primary">Open the RWA demo</Link>
+          <Link href="/v1/rwas" className="inline-block mt-7 glass-pill-primary">Open the RWA demo</Link>
         </div>
         <GradientPanel tone="lavender" className="p-8 max-[800px]:p-4">
           <div className="glass-card p-7">

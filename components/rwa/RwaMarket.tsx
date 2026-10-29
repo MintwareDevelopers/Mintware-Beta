@@ -1,7 +1,7 @@
 'use client'
 
 // V2-RWAs — the live market for one RWA liquidity unit. Every number is read from the chain via /api/rwa/unit
-// (useRwaUnit, polled). The lifecycle proof + contracts live on /app/rwa/proof. Light-only.
+// (useRwaUnit, polled). The lifecycle proof + contracts live on /v1/rwas/proof. Light-only.
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -36,7 +36,7 @@ export function RwaMarket({ slug }: { slug: string }) {
               {RWA_UNITS.map((x) => (
                 <Link
                   key={x.slug}
-                  href={`/app/rwa/${x.slug}`}
+                  href={`/v1/rwas/${x.slug}`}
                   role="tab"
                   aria-selected={x.slug === u.slug}
                   className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}
@@ -97,7 +97,7 @@ export function RwaMarket({ slug }: { slug: string }) {
               <div className={EY}>Trades</div>
               <h2 className={`${H2} mt-1.5`}>Settled on-chain{unit ? ` · ${unit.tradeCount}` : ''}</h2>
             </div>
-            <Link href={`/app/rwa/proof?unit=${u.slug}`} className="text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">Lifecycle proof + contracts →</Link>
+            <Link href={`/v1/rwas/proof?unit=${u.slug}`} className="text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">Lifecycle proof + contracts →</Link>
           </div>
           <div className="mt-5 overflow-x-auto rounded-[22px] border border-hair bg-white">
             <table className="w-full min-w-[640px] text-[13.5px]">

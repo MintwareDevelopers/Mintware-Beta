@@ -22,8 +22,8 @@ const GROUPS: { heading: string; items: { href: string; label: string; external?
     { href: '/app/team/cards', label: 'Cards & Spend' }, { href: '/app/org/new', label: 'Create organization' },
   ] },
   ...(RWA_ON ? [{ heading: 'RWA', items: [
-    { href: '/app/rwa', label: 'RWA overview' }, { href: '/app/rwa/wcp7', label: 'Willow Creek market' },
-    { href: '/app/rwa/proof', label: 'On-chain proof' },
+    { href: '/v1/rwas', label: 'RWA overview' }, { href: '/v1/rwas/wcp7', label: 'Willow Creek market' },
+    { href: '/v1/rwas/proof', label: 'On-chain proof' },
   ] }] : []),
   { heading: 'Live', items: [{ href: '/v1', label: 'LP Gateway (V1)', external: true }, { href: '/agents/leaderboard', label: 'Agent leaderboard', external: true }] },
 ]
