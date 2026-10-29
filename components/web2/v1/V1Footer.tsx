@@ -17,22 +17,21 @@ const V1_LINKS = [
 // The marketing site (the wider vision). Re-declared locally so the dark footer never couples to
 // MwFooter's light-theme link list; kept in sync with the real marketing pages.
 const V2_LINKS = [
-  { href: '/defi', label: 'DeFi' },
-  { href: '/vaults', label: 'Vaults' },
-  { href: '/yield-payment-network', label: 'Yield Network' },
+  { href: '/markets', label: 'Markets' },
+  { href: '/issuers', label: 'Issuers' },
+  { href: '/earn', label: 'Earn' },
+  { href: '/cards', label: 'Card' },
   { href: '/agents', label: 'Agents' },
+  { href: '/about', label: 'About' },
   { href: '/the-math', label: 'The Math' },
-  { href: '/teams', label: 'For Teams' },
   { href: '/proof', label: 'Proof' },
   { href: '/docs', label: 'Docs' },
-  { href: '/about', label: 'About' },
-]
-
-const LEGAL_LINKS = [
+  { href: '/legal', label: 'Legal' },
+  { href: '/risk-disclosures', label: 'Risk' },
   { href: '/terms', label: 'Terms' },
   { href: '/privacy', label: 'Privacy' },
-  { href: '/risk-disclosures', label: 'Risk Disclosures' },
 ]
+
 
 function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-3.5" style={{ color: '#63636F' }}>{children}</div>
@@ -91,11 +90,6 @@ export function V1Footer() {
         {/* bottom bar */}
         <div className="flex items-center justify-between gap-4 flex-wrap mt-10 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           <div className="text-[12px]" style={{ color: '#63636F' }}>© 2026 Mintware · Liquidity should be a public good</div>
-          <div className="flex items-center gap-4">
-            {LEGAL_LINKS.map((l) => (
-              <Link key={l.href} href={l.href} className="text-[12px] no-underline hover:underline" style={{ color: '#63636F' }}>{l.label}</Link>
-            ))}
-          </div>
         </div>
 
         <p className="text-[11px] leading-[1.6] mt-6" style={{ color: '#4A4A55' }}>

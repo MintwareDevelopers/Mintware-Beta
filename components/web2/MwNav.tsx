@@ -2,7 +2,7 @@
 
 import Link                   from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { useMintwarePrivy }   from '@/components/web2/providers'
 import { useLaunch }          from '@/components/web2/LaunchModal'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
@@ -20,8 +20,7 @@ export function MwNav() {
   const [menuOpen, setMenuOpen] = useState(false)
   // Client-mount guard — avoids a hydration flash between server (disconnected)
   // and the wallet state wagmi/Privy resolve on the client.
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
 
   const { address, isConnected, disconnect } = useMintwareIdentity()
   const privy = useMintwarePrivy()
@@ -125,10 +124,10 @@ export function MwNav() {
       ) : (
         <div className="flex items-center gap-3">
           <Link
-            href="/explorer"
+            href="/markets"
             className="text-[13px] font-medium text-ink-mid no-underline hover:text-ink max-[560px]:hidden"
           >
-            Explorer
+            Markets
           </Link>
           <button onClick={() => launch()} className="glass-pill glass-pill-sm">
             Launch app →

@@ -1,6 +1,6 @@
 'use client'
 
-// /earn/[pool] — dark two-column pool terminal (Meteora DAMM-v2 detail as the standard), adapted to our
+// /markets/[pool] — dark two-column pool terminal (Meteora DAMM-v2 detail as the standard), adapted to our
 // single-sided USDG model. LEFT: pool-info panel (TVL, curated allocation + fixed range, current price,
 // 24h vol/activity, age/trades, pool id, explorer links, trust score + reasons). RIGHT: position
 // summary + Deposit/Withdraw tabs + a Swap tab link. No par/guaranteed language.

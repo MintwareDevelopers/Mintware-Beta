@@ -140,7 +140,7 @@ export function V1Discover() {
               return (
                 <Link
                   key={p.poolAddress}
-                  href={`/earn/${slug(p)}`}
+                  href={`/markets/${slug(p)}`}
                   className="rounded-[14px] p-4 no-underline transition-transform hover:-translate-y-0.5"
                   style={{ background: '#12121C', border: '1px solid rgba(255,255,255,0.07)', color: '#F4F4FA', display: 'block' }}
                 >
@@ -265,7 +265,7 @@ export function V1Discover() {
             return (
               <Link
                 key={p.poolAddress}
-                href={`/earn/${slug(p)}`}
+                href={`/markets/${slug(p)}`}
                 className="grid items-center px-5 py-4 no-underline transition-colors min-w-[840px]"
                 style={{ gridTemplateColumns: COLS, color: '#F4F4FA', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}

@@ -54,6 +54,14 @@ const nextConfig = {
       { source: '/create-campaign', destination: '/app/create-campaign', permanent: true },
       { source: '/manage/:campaign_id', destination: '/app/manage/:campaign_id', permanent: true },
       { source: '/rewards', destination: '/app/rewards', permanent: true },
+      { source: '/v2', destination: '/', permanent: true },
+      { source: '/vaults', destination: '/markets', permanent: true },
+      { source: '/defi', destination: '/markets', permanent: true },
+      { source: '/teams', destination: '/issuers', permanent: true },
+      { source: '/solutions/:path*', destination: '/issuers', permanent: true },
+      { source: '/yield-payment-network', destination: '/earn', permanent: true },
+      { source: '/explorer', destination: '/', permanent: true },
+      { source: '/earn/:pool', destination: '/markets/:pool', permanent: true },
     ]
   },
 

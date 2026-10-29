@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { cookies } from 'next/headers'
 import { Plus_Jakarta_Sans, DM_Mono, Space_Grotesk, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Providers } from '@/components/web2/providers'
@@ -7,8 +6,6 @@ import { Toaster } from 'sonner'
 import { CommandPalette } from '@/components/web2/CommandPalette'
 import { MwFooter } from '@/components/web2/MwFooter'
 import { ScrollProgress, RevealObserver } from '@/components/web2/motion'
-import { V2ModeProvider } from '@/components/web2/V2ModeProvider'
-import { isV2FromCookie, V2_COOKIE } from '@/lib/v2/gate'
 import './globals.css'
 
 const jakarta = Plus_Jakarta_Sans({
@@ -39,8 +36,8 @@ const jetbrainsMono = JetBrains_Mono({
 const BASE_URL = 'https://mintware.finance'
 
 export const metadata: Metadata = {
-  title:       'Mintware — Never idle. Never locked. Always yours.',
-  description: 'Never idle, never locked, always yours. USDC designed to earn three ways at once and stay spendable — where the LPs who bring real, committed liquidity earn the most.',
+  title:       'Mintware — The liquidity layer for on-chain value.',
+  description: 'Never idle. Never locked. Always yours. Mintware gives on-chain assets deep, fair markets.',
   metadataBase: new URL(BASE_URL),
   icons: {
     icon: [
@@ -56,22 +53,21 @@ export const metadata: Metadata = {
     type:        'website',
     url:         BASE_URL,
     siteName:    'Mintware',
-    title:       'Mintware — Never idle. Never locked. Always yours.',
-    description: 'Never idle, never locked, always yours. USDC designed to earn three ways at once and stay spendable — where the LPs who bring real, committed liquidity earn the most.',
+    title:       'Mintware — The liquidity layer for on-chain value.',
+    description: 'Never idle. Never locked. Always yours. Mintware gives on-chain assets deep, fair markets.',
     images: [{ url: '/opengraph-image', width: 1200, height: 630 }],
   },
   twitter: {
     card:        'summary_large_image',
     site:        '@Mintware_Fi',
     creator:     '@Mintware_Fi',
-    title:       'Mintware — Never idle. Never locked. Always yours.',
-    description: 'Never idle, never locked, always yours. USDC designed to earn three ways at once and stay spendable — where the LPs who bring real, committed liquidity earn the most.',
+    title:       'Mintware — The liquidity layer for on-chain value.',
+    description: 'Never idle. Never locked. Always yours. Mintware gives on-chain assets deep, fair markets.',
     images:      ['/opengraph-image'],
   },
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const isV2 = isV2FromCookie((await cookies()).get(V2_COOKIE)?.value)
   return (
     <html lang="en">
       <body className={`${jakarta.variable} ${dmMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased`}>
@@ -80,23 +76,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js-motion')" }} />
         <ScrollProgress />
         <RevealObserver />
-        <V2ModeProvider isV2={isV2}>
-          <Providers>
-            {children}
-            <MwFooter />
-            <CommandPalette />
-            <Toaster
-              position="bottom-right"
-              toastOptions={{
-                style: {
-                  fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
-                  fontSize: 13,
-                  borderRadius: 12,
-                },
-              }}
-            />
-          </Providers>
-        </V2ModeProvider>
+        <Providers>
+          {children}
+          <MwFooter />
+          <CommandPalette />
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              style: {
+                fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+                fontSize: 13,
+                borderRadius: 12,
+              },
+            }}
+          />
+        </Providers>
         <Analytics />
       </body>
     </html>
