@@ -17,7 +17,7 @@ const STATS: [string, string][] = [
 const MARKETS: { tag: string; title: string; text: string; chips: string[] }[] = [
   { tag: 'Stock tokens', title: 'Equities, around the clock.', text: 'Back the markets for the stocks people trade most.', chips: ['TSLA', 'NVDA', 'AAPL', '+2,000'] },
   { tag: 'Real-world assets', title: 'Real assets, real depth.', text: 'Liquidity for tokenized treasuries, credit and property.', chips: ['Treasuries', 'Credit', 'Property'] },
-  { tag: 'Stablecoins', title: 'Dollars that never sit still.', text: 'Earn on stablecoins and spend them with your card.', chips: ['USDC', 'USDG'] },
+  { tag: 'Stablecoins', title: 'Dollars that never sit still.', text: 'Back stablecoin markets and spend with your card.', chips: ['USDC', 'USDG'] },
 ]
 
 const TRUST: [string, string][] = [
@@ -29,8 +29,8 @@ const TRUST: [string, string][] = [
 
 const FAQ: [string, string][] = [
   ['What is Mintware?', 'Mintware is the liquidity layer for on-chain value. It turns capital into always-working liquidity for markets in tokenized stocks, real-world assets and stablecoins — and lets you earn from it.'],
-  ['How does my money earn?', 'In Markets, your capital earns a share of the fees from every trade, plus yield on whatever the market doesn’t need. In Earn, stablecoins earn from one curated lending market.'],
-  ['Can I withdraw at any time?', 'Yes. There are no lockups. Markets pay you out in your share of both assets; Earn pays out in stablecoins.'],
+  ['How does my money earn?', 'Your capital earns a share of the fees from every trade in the markets you back, plus yield on whatever the market doesn’t need at that moment. Two sources, one balance.'],
+  ['Can I withdraw at any time?', 'Yes. There are no lockups — you’re paid out instantly in your share of the market’s assets.'],
   ['Who holds my funds?', 'You do. Mintware is non-custodial — your shares sit in your own wallet, and every contract and transaction is on-chain.'],
   ['Where does Mintware run?', 'Mintware is live on Robinhood Chain, home of the largest set of tokenized stocks.'],
   ['Are there risks?', 'Yes, as with any market. Providing liquidity carries price risk and impermanent loss, tokenized assets carry issuer risk, and smart contracts carry technical risk. Read the full risk disclosures before you use Mintware.'],
@@ -92,12 +92,12 @@ export default function HomePage() {
       </div>
     </section>
 
-    {/* Earn vs savings */}
+    {/* Blended yield vs savings */}
     <section className="bg-white">
       <div className={`${wrap} py-24 max-[800px]:py-16`}>
-        <Eyebrow>Mintware Earn</Eyebrow>
+        <Eyebrow>Why it earns more</Eyebrow>
         <H2 soft="earns more.">The same $10,000</H2>
-        <p className="text-ink-mid text-[17px] leading-[1.6] mt-5 max-w-[52ch]">Five years of stablecoins in Earn, against a savings account and T-bills. Markets add trading fees on top.</p>
+        <p className="text-ink-mid text-[17px] leading-[1.6] mt-5 max-w-[52ch]">A Mintware market earns trading fees on the capital in the pool and yield on the rest — two sources where lending, T-bills and savings have one.</p>
         <div className="mt-12"><GrowthChart /></div>
       </div>
     </section>

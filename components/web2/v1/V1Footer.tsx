@@ -19,7 +19,6 @@ const V1_LINKS = [
 const V2_LINKS = [
   { href: '/markets', label: 'Markets' },
   { href: '/issuers', label: 'Issuers' },
-  { href: '/earn', label: 'Earn' },
   { href: '/cards', label: 'Card' },
   { href: '/agents', label: 'Agents' },
   { href: '/about', label: 'About' },

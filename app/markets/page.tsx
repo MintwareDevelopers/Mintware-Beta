@@ -60,7 +60,7 @@ export default function MarketsPage() {
 
     <CTA title="Put your capital" soft="behind the markets that matter.">
       <Link href="/v1" className="glass-pill-primary">Open the app</Link>
-      <Link href="/earn" className="glass-pill">Just want to earn on dollars?</Link>
+      <Link href="/cards" className="glass-pill">Spend with the card</Link>
     </CTA>
   </main>
 }

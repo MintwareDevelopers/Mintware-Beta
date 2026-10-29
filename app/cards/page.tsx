@@ -23,7 +23,7 @@ export default function CardsPage() {
       <Eyebrow>What you get</Eyebrow>
       <H2 soft="until the moment you spend it.">Every dollar earning</H2>
       <Rows items={[
-        ['No idle float.', 'You don’t pre-load a card and watch it sit. Your money stays in Earn, working, until a purchase needs it.'],
+        ['No idle float.', 'You don’t pre-load a card and watch it sit. Your card balance stays working, until a purchase needs it.'],
         ['Spend without selling.', 'Pay for coffee, flights or payroll without unwinding anything. Only what you spend leaves.'],
         ['Everywhere cards work.', 'Issued on established card rails with Bridge and Stripe, for the places you already pay.'],
       ]} />
@@ -32,10 +32,10 @@ export default function CardsPage() {
 
     <Section>
       <Eyebrow>How it works</Eyebrow>
-      <H2 soft="You spend it.">Earn fills it.</H2>
+      <H2 soft="You spend it.">Your balance earns.</H2>
       <Steps items={[
-        ['Your balance earns in Earn', 'Stablecoins grow in a curated lending market.'],
-        ['Your card refills itself', 'As you spend, Earn tops your card up — within limits you set.'],
+        ['Your card balance earns', 'Stablecoins grow in a curated lending market until you need them.'],
+        ['Your card refills itself', 'As you spend, your earning balance tops your card up — within limits you set.'],
         ['Everything else keeps working', 'Only what you need ever moves. The rest stays put, earning.'],
       ]} />
     </Section>
@@ -46,13 +46,13 @@ export default function CardsPage() {
       <Rows items={[
         ['Daily limits you set.', 'Refills never exceed the limits you choose.'],
         ['Every card link is yours to approve.', 'A new card wallet goes live after 48 hours, and you can cut one off instantly.'],
-        ['Non-custodial underneath.', 'Your balance sits in your wallet as Earn shares. Nobody can move it but you.'],
+        ['Non-custodial underneath.', 'Your balance sits in your own wallet as shares. Nobody can move it but you.'],
       ]} />
     </Section>
 
     <CTA title="A card for money" soft="that never sits still." tone="coral">
       <div className="w-full max-w-[480px] mx-auto"><WaitlistForm source="card" /></div>
-      <div className="w-full flex justify-center mt-2"><Link href="/earn" className="glass-pill">How Earn works</Link></div>
+      <div className="w-full flex justify-center mt-2"><Link href="/markets" className="glass-pill">Explore markets</Link></div>
     </CTA>
   </main>
 }

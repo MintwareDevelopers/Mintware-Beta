@@ -11,7 +11,6 @@ import { MintwareMark } from '@/components/ui2/MintwareMark'
 const FEATURES = [
   { key: 'markets', href: '/markets', label: 'Markets' },
   { key: 'issuers', href: '/issuers', label: 'Issuers' },
-  { key: 'earn', href: '/earn', label: 'Earn' },
   { key: 'cards', href: '/cards', label: 'Card' },
   { key: 'agents', href: '/agents', label: 'Agents' },
   { key: 'about', href: '/about', label: 'About' },

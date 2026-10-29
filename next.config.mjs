@@ -59,7 +59,8 @@ const nextConfig = {
       { source: '/defi', destination: '/markets', permanent: true },
       { source: '/teams', destination: '/issuers', permanent: true },
       { source: '/solutions/:path*', destination: '/issuers', permanent: true },
-      { source: '/yield-payment-network', destination: '/earn', permanent: true },
+      { source: '/yield-payment-network', destination: '/cards', permanent: true },
+      { source: '/earn', destination: '/cards', permanent: true },
       { source: '/explorer', destination: '/', permanent: true },
       { source: '/earn/:pool', destination: '/markets/:pool', permanent: true },
     ]

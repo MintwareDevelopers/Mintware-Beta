@@ -9,8 +9,9 @@
 ## Public site map
 
 The public marketing site uses one light design system and the owner-approved vision copy. Primary routes are
-`/`, `/markets`, `/issuers`, `/earn`, `/cards`, `/agents`, and `/about`; the header carries the Testnet chip and
-links to `/v1`. Pool detail is `/markets/[pool]`. Legacy `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
+`/`, `/markets`, `/issuers`, `/cards`, `/agents`, and `/about`; the header carries the Testnet chip and
+links to `/v1`. Pool detail is `/markets/[pool]`. Earn (the stablecoin vault) is presented as the card's
+earning balance, not a standalone page. Legacy `/earn`, `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
 `/solutions/:path*`, `/yield-payment-network`, and `/explorer` redirect to their current destinations. Legal and
 risk content remain on their existing routes. Canonical route inventory is generated in the AUTO block below.
 
@@ -193,7 +194,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/dataroom` | `app/dataroom/page.tsx` |
 | `/deck` | `app/deck/page.tsx` |
 | `/docs` | `app/docs/page.tsx` |
-| `/earn` | `app/earn/page.tsx` |
 | `/issuers` | `app/issuers/page.tsx` |
 | `/legal` | `app/legal/page.tsx` |
 | `/markets` | `app/markets/page.tsx` |
