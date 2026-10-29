@@ -270,7 +270,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         if (receipt.status !== 'success') throw new Error('Token approval failed. No deposit was made.')
       }
       const quoteIs0 = meta.quoteAsset?.toLowerCase() === meta.token0?.toLowerCase()
-      const simulation = await pub.simulateContract({ address: target, abi: MARKET_ENGINE_ABI, functionName: 'deposit', account: address as `0x${string}`, args: [quoteIs0 ? atomic : 0n, quoteIs0 ? 0n : atomic, 0n] })
+      const simulation = await pub.simulateContract({ address: target, abi: MARKET_ENGINE_ABI, functionName: 'deposit', account: address as `0x${string}`, args: [quoteIs0 ? atomic : 0n, quoteIs0 ? 0n : atomic, 1n] }) // engine rejects minSharesOut == 0
       const estShares = BigInt(simulation.result)
       if (estShares <= 0n) throw new Error('Amount is too small to mint any shares at the current NAV.')
       const minShares = applyToleranceBps(estShares, SLIPPAGE_TOLERANCE_BPS)
