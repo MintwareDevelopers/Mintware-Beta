@@ -64,7 +64,8 @@ contract MintwareYieldVaultBaseForkTest is Test {
         uint256 requestedShares = vault.previewWithdraw(150e6);
         vm.prank(relayer);
         uint256 delivered = gateway.refill(refillId, member, requestedShares);
-        assertEq(delivered, REFILL_CAP, "refill was not clipped to cap");
+        assertLe(delivered, REFILL_CAP, "refill exceeded cap");
+        assertGe(delivered, REFILL_CAP - 1, "refill clipping left more than one asset unit");
         assertEq(IERC20(USDC).balanceOf(buffer), delivered, "buffer USDC mismatch");
         assertEq(gateway.userRefilled(member, block.timestamp / 1 days), delivered);
         uint256 replayShares = vault.previewWithdraw(1e6);

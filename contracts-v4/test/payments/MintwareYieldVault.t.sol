@@ -11,16 +11,26 @@ contract EarnAdapter is IYieldAdapter {
     MockERC20 public immutable token;
     uint256 public liquid = type(uint256).max;
     uint256 public feeBps;
+    uint256 public surchargeBps;
+    uint256 public depositFeeBps;
     constructor(MockERC20 t) { token = t; }
     function asset() external view returns (address) { return address(token); }
     function setLiquid(uint256 n) external { liquid = n; }
     function setFee(uint256 n) external { feeBps = n; }
-    function deposit(uint256 n) external { token.safeTransferFrom(msg.sender, address(this), n); }
+    function setSurcharge(uint256 n) external { surchargeBps = n; }
+    function setDepositFee(uint256 n) external { depositFeeBps = n; }
+    function deposit(uint256 n) external {
+        token.safeTransferFrom(msg.sender, address(this), n);
+        uint256 fee = n * depositFeeBps / 10_000;
+        if (fee != 0) token.safeTransfer(address(0xdead), fee);
+    }
     function withdraw(uint256 n) external returns (uint256 got) {
         uint256 amount = n < liquid ? n : liquid;
         uint256 fee = amount * feeBps / 10_000;
         token.safeTransfer(msg.sender, amount - fee);
         if (fee != 0) token.safeTransfer(address(0xdead), fee);
+        uint256 surcharge = amount * surchargeBps / 10_000;
+        if (surcharge != 0) token.safeTransfer(address(0xdead), surcharge);
         got = amount - fee;
     }
     function totalAssets() external view returns (uint256) { return token.balanceOf(address(this)); }
@@ -104,6 +114,23 @@ contract MintwareYieldVaultTest is Test {
         vm.prank(alice); uint256 paid = vault.redeem(s, alice, alice);
         assertLt(paid, 1_000e6);
         assertGe(vault.convertToAssets(vault.balanceOf(bob)), bobPpsBefore);
+    }
+    function test_withdraw_source_surcharge_does_not_reduce_remaining_holders_value() public {
+        _deposit(alice, 1_000e6); _deposit(bob, 1_000e6);
+        adapter.setSurcharge(100); // source debits 1% above the requested exit amount
+        uint256 bobValueBefore = vault.convertToAssets(vault.balanceOf(bob));
+        vm.prank(alice); vm.expectRevert(); vault.withdraw(1_000e6, alice, alice);
+        assertGe(vault.convertToAssets(vault.balanceOf(bob)), bobValueBefore);
+    }
+    function test_entry_deposit_fee_dilution_is_bounded_by_source_fee() public {
+        _deposit(alice, 1_000e6);
+        uint256 aliceValueBefore = vault.convertToAssets(vault.balanceOf(alice));
+        adapter.setDepositFee(100);
+        _deposit(bob, 1_000e6);
+        uint256 aliceValueAfter = vault.convertToAssets(vault.balanceOf(alice));
+        uint256 loss = aliceValueBefore - aliceValueAfter;
+        assertGt(loss, 0);
+        assertLe(loss, 10e6);
     }
     function test_donation_inflation_defense() public {
         _deposit(alice, 1);

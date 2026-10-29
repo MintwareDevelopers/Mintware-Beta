@@ -97,11 +97,12 @@ contract MintwareYieldVault is ERC4626, Ownable, Pausable, ReentrancyGuard {
         public override nonReentrant returns (uint256 shares_)
     {
         if (assets_ > maxWithdraw(owner_)) revert InsufficientLiquidity();
-        shares_ = previewWithdraw(assets_);
+        uint256 taBefore = totalAssets();
+        (uint256 paid, uint256 cost) = _pull(assets_);
+        if (paid < assets_) revert InsufficientLiquidity();
+        shares_ = Math.mulDiv(cost, totalSupply() + VIRTUAL, taBefore + 1, Math.Rounding.Ceil);
         _authorize(owner_, shares_);
         _burn(owner_, shares_);
-        (uint256 paid,) = _pull(assets_);
-        if (paid < assets_) revert InsufficientLiquidity();
         IERC20(asset()).safeTransfer(receiver, assets_);
         emit Withdraw(msg.sender, receiver, owner_, assets_, shares_);
     }
@@ -170,6 +171,7 @@ contract MintwareYieldVault is ERC4626, Ownable, Pausable, ReentrancyGuard {
     function _deposit(address caller, address receiver, uint256 assets_, uint256 shares_)
         internal override whenNotPaused
     {
+        // Source-side deposit fees become a NAV loss shared across holders, bounded by the source fee.
         super._deposit(caller, receiver, assets_, shares_);
         IERC20 token = IERC20(asset());
         uint256 supplyable;
