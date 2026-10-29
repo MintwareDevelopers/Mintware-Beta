@@ -1,8 +1,7 @@
 // GET /api/rwa/unit?unit=<slug> — V2-RWAs: LIVE on-chain state of one demo RWA liquidity unit (Base Sepolia
 // `wcp7` by default; XRPL EVM testnet `wcp7-xrpl`). Reads the vault / lending adapter / appraisal hook directly
 // (no DB), plus the pool's swap history, the demo router's trade events and the hook's appraisal events, so the
-// market page shows the chain as of now. Gated: 404 unless the V2-RWAs flag is on AND the visitor passes the V2
-// gate. Best-effort: an RPC hiccup returns { ok:false }; the page then shows its recorded proof run (legs +
+// market page shows the chain as of now. Public and read-only; the cache bypass is operator-only. Best-effort: an RPC hiccup returns { ok:false }; the page then shows its recorded proof run (legs +
 // contracts) but no live numbers. All state reads are pinned to ONE block. Testnet + unaudited.
 
 import { createPublicClient, http, keccak256, encodeAbiParameters, parseAbi, parseAbiItem, defineChain, type Log, type PublicClient } from 'viem'
@@ -118,11 +117,11 @@ const contexts = new Map<string, ReturnType<typeof makeContext>>()
 const contextFor = (u: RwaUnit) => contexts.get(u.slug) ?? (contexts.set(u.slug, makeContext(u)), contexts.get(u.slug)!)
 
 export const GET = createHandler(async (req, ctx) => {
-  if (!canSeeRwa(req.cookies)) return ctx.json({ ok: false, error: 'not_found' }, 404)
   const u = getUnit(req.nextUrl.searchParams.get('unit') ?? RWA_UNITS[0].slug)
   if (!u) return ctx.json({ ok: false, error: 'unknown_unit' }, 404)
   const k = contextFor(u)
-  const fresh = req.nextUrl.searchParams.get('fresh') === '1' // right after a live trade: skip the cache
+  // Public read (the /v1/rwas demo). Only an unlocked operator (the live-trade path) may bypass the cache.
+  const fresh = req.nextUrl.searchParams.get('fresh') === '1' && canSeeRwa(req.cookies)
   if (!fresh && k.cache && Date.now() - k.cache.at < 10_000) return ctx.json(k.cache.body)
 
   const d = u.demo

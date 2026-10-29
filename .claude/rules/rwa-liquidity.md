@@ -84,14 +84,20 @@ estimate × 1.6; `sepolia.base.org` works for viem but rejects anvil's fork prob
 - **getLogs ranges:** `sepolia.base.org` caps `eth_getLogs` at 1,000 blocks — the live API reads history from
   `RWA_LOGS_RPC_URL` (default publicnode, ~10k ranges), incrementally (warm instances only scan new blocks).
 
-## App surface (gated) — the RWA workspace
+## App surface — the RWAs tab of the V1 platform
 
-RWA is a **workspace** of the shared app shell (`components/web2/AppShell.tsx`, same chrome as Personal and Team;
-picked from the workspace switcher or the Launch modal's "Real-world assets" option). Pages, all under
-`app/app/rwa/` and gated once in `app/app/rwa/layout.tsx`:
-`/app/rwa` overview (`RwaOverview` — live band gauge, liquidity map, the on-chain refusals) · `/app/rwa/[unit]` live
-market (`RwaMarket`) · `/app/rwa/proof?unit=` lifecycle timeline + contracts (`RwaProof`) · `/app/rwa/how` explainer.
-Live data: one hook, `components/rwa/useRwaUnit.ts` → `GET /api/rwa/unit` (10 s cache). Visuals: `RwaVisuals.tsx`.
+**Moved 2026-10-29 (demo platform, user decision "public with Simulated tags"):** the RWA demo is the **RWAs tab**
+of the `/v1` platform shell (`V1Shell`), public, no unlock. Pages under `app/v1/rwas/`: `/v1/rwas` overview
+(`RwaOverview`) · `/v1/rwas/[unit]` live market (`RwaMarket`) · `/v1/rwas/proof?unit=` lifecycle timeline + contracts
+(`RwaProof`) · `/v1/rwas/how` explainer. Old `/app/rwa/*` URLs redirect there (`next.config.mjs`). The issuer view of
+the same units is `RwaIssuerConsole` on the **Issuers tab** (`/v1/issuers`). Live data: one hook,
+`components/rwa/useRwaUnit.ts` → `GET /api/rwa/unit` (10 s cache), now a **public read**; only the cache bypass
+(`fresh=1`) still requires `canSeeRwa`. ⚠ The cold history scan uses public RPCs that rate-limit it
+(publicnode 429, XRPL 502); the pages then fall back to the recorded run. Live numbers need a dedicated archive RPC
+in `RWA_LOGS_RPC_URL` / `RWA_XRPL_LOGS_RPC_URL`. Visuals: `RwaVisuals.tsx`.
+
+The paragraph below describes the earlier gated workspace; it now applies only to `POST /api/rwa/live-trade` and
+the cache bypass.
 
 **Gate (user decision 2026-10-02 — "the V2 password is enough"):** `lib/v2/rwaGate.ts#canSeeRwa` = flag
 `NEXT_PUBLIC_V2_RWA_ENABLED === 'true'` **and** a VALID V2 unlock cookie (`mw_v2` = `v2Token()`, set by

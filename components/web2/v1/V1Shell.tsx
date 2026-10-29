@@ -14,10 +14,13 @@ import { V1Footer } from '@/components/web2/v1/V1Footer'
 import { shortAddr } from '@/lib/web2/api'
 import { V1DisclaimerGate } from './V1DisclaimerGate'
 
+// The platform's five lanes, mirroring the public site. Swap and Referrals stay reachable from the footer.
 const NAV = [
-  { label: 'Discover', href: '/v1' },
-  { label: 'Swap', href: '/v1/swap' },
-  { label: 'Referrals', href: '/v1/referrals' },
+  { label: 'Markets', href: '/v1', match: (p: string) => p === '/v1' || p.startsWith('/markets') },
+  { label: 'RWAs', href: '/v1/rwas' },
+  { label: 'Issuers', href: '/v1/issuers' },
+  { label: 'Card', href: '/v1/card' },
+  { label: 'Agents', href: '/v1/agents' },
 ]
 
 export function V1Shell({ children }: { children: React.ReactNode }) {
@@ -42,7 +45,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
           {/* nav is a shrinkable scroll strip so it can never push Connect Wallet off-screen on mobile */}
           <nav className="flex items-center gap-1 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {NAV.map((n) => {
-              const active = pathname === n.href
+              const active = n.match ? n.match(pathname ?? '') : pathname?.startsWith(n.href) ?? false
               return (
                 <Link
                   key={n.href}
@@ -63,7 +66,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
             style={{ color: '#5A57DE', background: 'rgba(138,130,244,0.10)', border: '1px solid rgba(138,130,244,0.20)' }}
           >
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#5A57DE' }} />
-            Robinhood Testnet · Unaudited
+            Testnet · Unaudited
           </span>
 
           {isConnected && address ? (
