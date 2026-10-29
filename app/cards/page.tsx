@@ -13,18 +13,18 @@ import {
 // /cards — PUBLIC marketing surface for the Liquid Sovereign Account's card/spend
 // side. Top-of-funnel only; NOT the authenticated app. Companion to
 // /yield-payment-network (the fuller yield thesis) — this page goes deep on the
-// spend experience specifically, including the Standing service-tier mechanic.
+// planned spend experience, including roadmap Standing service tiers.
 //
 // v2 Privy-esque design system (same as /yield-payment-network) — periwinkle
 // pastel + translucent glass, V2Nav, GradientPanel. All copy lives in
-// constants/cards-landing.ts. Honesty framing: COMING SOON / sandbox-only card
-// issuance (see /legal). No "Launch app" CTA, no guarantee-of-limit language.
+// constants/cards-landing.ts. Bridge + Stripe integrations are in development.
+// No "Launch app" CTA, no guarantee-of-limit language.
 // =============================================================================
 
 export const metadata: Metadata = {
   title: 'Cards — Mintware',
   description:
-    'A card backed by a balance that never idles. Spend straight from a position that stays deployed, and get faster settlement, more headroom, and earlier access the more you actually use it. Coming soon.',
+    'A planned card backed by a balance designed to stay productive. Bridge + Stripe card integrations and service tiers are coming soon.',
 }
 
 export default function CardsPage() {

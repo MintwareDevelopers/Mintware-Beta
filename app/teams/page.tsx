@@ -25,7 +25,7 @@ import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 export const metadata: Metadata = {
   title: 'For Teams — Prove it, don’t say it | Mintware',
   description:
-    'Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock your fee share flows to the people who backed you. Trust us becomes check the contract.',
+    'Matched launch liquidity is a roadmap direction: lock team tokens alongside community capital, with a planned 90-day minimum and no early-exit path. The design directs fees to backers during the lock.',
 }
 
 const TWITTER = 'https://x.com/Mintware_Fi'
@@ -46,33 +46,33 @@ function Head({ n, label }: { n: string; label: string }) {
 
 // ── data ─────────────────────────────────────────────────────────────────────
 const FLOW: [string, string][] = [
-  ['You commit your token', 'Deposit your project token into the vault and pick a lock term — 90 days to 2 years.'],
-  ['Your community matches it', 'Backers deposit the quote asset (USDC, WETH…) up to a value cap, first-come, until the match is filled.'],
-  ['Threshold met → it activates', 'If the community fills the minimum within the funding window, the matched liquidity deploys as one Uniswap V4 position.'],
-  ['Two halves, one locked', 'The position splits 50/50 by liquidity — your half is locked for the full term, the community half stays free to redeem.'],
-  ['You can’t pull it — by design', 'There is no team early-unlock path in the contract. A guardian can freeze the vault, but can never release your locked liquidity early.'],
+  ['Team commits tokens · planned', 'The roadmap design lets a team commit its project token for a selected 90-day to 2-year term.'],
+  ['Community match · planned', 'The design lets backers contribute a quote asset (USDC, WETH…) up to a value cap.'],
+  ['Threshold activation · planned', 'The future flow would activate a Uniswap V4 position if the minimum is reached within the funding window.'],
+  ['Two sides · planned', 'The design splits liquidity 50/50, with a team lock and a redeemable community side.'],
+  ['No early exit · planned', 'The roadmap specifies no team early-unlock path; a guardian pause would not release locked liquidity.'],
 ]
 
 const LOCK_STATS: [string, string][] = [
-  ['≥ 90 days', 'Hard cliff — selectable up to 2 years'],
-  ['0', 'Team early-exit paths in the contract'],
-  ['50 / 50', 'Team (locked) / community (free) split'],
-  ['≥ 3', 'Independent backers required to activate'],
+  ['≥ 90 days', 'Planned cliff — selectable up to 2 years'],
+  ['0', 'Planned team early-exit paths'],
+  ['50 / 50', 'Proposed team-lock / community-free split'],
+  ['≥ 3', 'Planned minimum independent backers'],
 ]
 
 const TRUST: [string, string][] = [
-  ['Locked, not signed over', 'Your liquidity never changes owner. What’s restricted is your ability to withdraw it before the cliff — a restriction on withdrawal, not a transfer of ownership.'],
-  ['No early-unlock path', 'There is no function anywhere in the contract that lets a team pull locked liquidity early. It isn’t gated — it’s absent.'],
-  ['Guardian kill-switch', 'A guardian can pause the vault if something looks wrong. It can freeze funds — but it can never release team liquidity ahead of the cliff.'],
-  ['Anti-self-dealing floor', 'Activation requires a minimum of three independent community backers, so a team can’t quietly match its own launch.'],
-  ['Fee redirection on-chain', 'The community’s share accrues inside the contract, per unit of community liquidity — no off-chain merkle, no discretion, no rounding drift.'],
+  ['Locked, not signed over', 'The roadmap design restricts withdrawal before the cliff without transferring ownership.'],
+  ['No early-unlock path', 'The matched-vault design specifies no team path to withdraw locked liquidity early.'],
+  ['Guardian kill-switch', 'The design allows a guardian pause but no early release of team liquidity.'],
+  ['Anti-self-dealing floor', 'The design requires at least three independent community backers before activation.'],
+  ['Fee redirection on-chain', 'The roadmap directs community fees on-chain per unit of community liquidity.'],
 ]
 
 const TREASURY: [string, string][] = [
-  ['Spendable while earning', 'Member balances redeem at par while the treasury covers them, and stay instantly spendable — cards, x402, cross-chain. The treasury earns the spread while the money sits ready. Never idle, never locked.'],
-  ['Your team, by role', 'Invite by email and pick a preset — owner, manager, contributor, vendor. Each is a daily spend cap. On accept, every member gets a soulbound on-chain membership.'],
-  ['Pay vendors & run payroll', 'One payment or a CSV batch, straight from the treasury and authorized against live solvency. Route to any chain via Circle CCTP.'],
-  ['Proof of reserves, public', 'A live treasury page — NAV, coverage, members, backed on-chain — plus an embeddable badge. Your community verifies solvency without asking.'],
+  ['Spendable while earning', 'The roadmap pairs member balances with a planned treasury buffer for cards and payments; no yield or instant spending is currently available.'],
+  ['Your team, by role', 'The planned flow invites members by email and assigns role-based daily spend caps.'],
+  ['Pay vendors & run payroll', 'Vendor payments and payroll are planned treasury features, subject to future payment-rail integrations.'],
+  ['Proof of reserves, public', 'The roadmap includes a public treasury page for NAV, coverage, and membership information.'],
 ]
 
 function TeamsLandingPageV2() {
@@ -88,7 +88,7 @@ function TeamsLandingPageV2() {
             Prove it. <span className="text-gradient-accent">Don’t say it.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock, your fee share flows to the people who backed you. “Trust us” becomes “check the contract.”
+            Matched launch liquidity is a roadmap direction — designed to lock team tokens alongside community capital for at least 90 days, with a planned fee share for backers. “Trust us” becomes “check the contract.”
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
             <a href="#how" className="glass-pill">How it works ↓</a>
@@ -118,8 +118,7 @@ function TeamsLandingPageV2() {
           <Head n="02" label="Two ways to bring liquidity" />
           <h2 className={h2}>Matched, or a <span className="text-gradient-accent">traditional LP.</span></h2>
           <p className={lead}>
-            Not every team wants a locked, community-matched launch. Mintware runs the same reputation engine
-            under two vault models — pick the one that fits.
+            The roadmap includes a locked, community-matched launch and a traditional LP model, each designed for a different use.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
             <div className="rounded-2xl bg-white border border-hair p-6" style={{ borderTop: '4px solid var(--color-coral2)' }}>
@@ -128,8 +127,7 @@ function TeamsLandingPageV2() {
                 <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-coral2-deep rounded-full border border-[rgba(232,138,103,0.4)] px-2 py-0.5">You’re reading this ↓</span>
               </div>
               <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-3">
-                Your team locks its token; the community matches it in USDC. A hard ≥ 90-day cliff, no early exit,
-                and during the lock the fees flow to your backers. Built for launches where <b className="text-ink">trust is the bottleneck</b>.
+                The roadmap design locks a team token while the community matches it in USDC, with a planned ≥ 90-day cliff and fees directed to backers. For launches where <b className="text-ink">trust is the bottleneck</b>.
               </p>
             </div>
             <div className="rounded-2xl bg-white border border-hair p-6" style={{ borderTop: '4px solid var(--color-peri)' }}>
@@ -138,8 +136,7 @@ function TeamsLandingPageV2() {
                 <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Traditional LP</span>
               </div>
               <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-3">
-                A standard LP position — provide one or both sides yourself, no locking, no matching. MEV-protected,
-                auto-managed range, fees paid pro-rata to your share. Built for
+                The planned LP position supports one or both sides, without matching. The design targets an auto-managed range and pro-rata fees. Built for
                 <b className="text-ink"> ongoing or treasury liquidity</b>.
               </p>
               <Link href="/vaults" className="inline-block mt-4 text-[12px] uppercase tracking-[0.06em] font-semibold text-peri-deep no-underline hover:underline">See the LP side →</Link>
@@ -162,7 +159,7 @@ function TeamsLandingPageV2() {
           <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
             You lock. Your community matches. <span className="text-gradient-accent">The contract holds both.</span>
           </h2>
-          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[60ch] mt-4">A dual-sided pair vault — your token on one side, the community’s stable or ETH on the other. Both go in once; the contract does the rest.</p>
+          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[60ch] mt-4">The roadmap is a dual-sided pair vault — a team token on one side, community stablecoin or ETH on the other. The planned contract would handle the rest.</p>
           <div className="grid grid-cols-5 gap-3 mt-8 max-[900px]:grid-cols-1">
             {FLOW.map(([k, d], i) => (
               <div key={k} className="rounded-2xl bg-white/[0.06] border border-white/15 p-5 flex flex-col gap-2.5">
@@ -209,7 +206,7 @@ function TeamsLandingPageV2() {
             long-term trust. That’s the trade, and the contract enforces it exactly: during the lock, the team earns 0%.
           </p>
           <p className="text-[12px] text-ink-soft mt-4">
-            <b className="text-peri-deep">↳</b> Community fees today are shared pro-rata to liquidity provided. Reputation-weighting for backers is on the roadmap — we’ll say so here when it ships, not before.
+            <b className="text-peri-deep">↳</b> The matched-launch roadmap shares fees pro-rata to community liquidity; reputation-weighting is a separate future direction.
           </p>
         </div>
       </section>
@@ -270,11 +267,7 @@ function TeamsLandingPageV2() {
           <Head n="08" label="Beyond the launch · your treasury" />
           <h2 className={h2}>The capital doesn’t have to sit idle. <span className="text-gradient-accent">Or lock you out.</span></h2>
           <p className={lead}>
-            The money your team runs on lives in a Mintware treasury that keeps earning while it stays spendable —
-            cards, payroll, vendors, cross-chain — with a public page anyone can verify. Community capital is senior —
-            redeemable at par while the treasury covers it; your team’s capital is the junior tranche that absorbs
-            losses first and earns the spread. The order is fixed in the contract: the code pays the community first,
-            automatically — no admin override.
+            The treasury roadmap is designed to support cards, payroll, vendors, and a public status page. It also explores community senior capital and a team junior first-loss tranche; this structure is not currently offered.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
             {TREASURY.map(([k, d], i) => (
@@ -289,8 +282,7 @@ function TeamsLandingPageV2() {
             <Link href="/app" className="glass-pill">Open the app →</Link>
           </div>
           <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">
-            In testing on testnet, not yet audited — figures read live from the recorded vault; nothing here is an offer.
-            External audit gates real value.
+            Matched launch, lock tiers, and senior/junior tranches are roadmap designs, not currently usable features. Testnet work is unaudited; external audit gates any real value.
           </p>
         </div>
       </section>

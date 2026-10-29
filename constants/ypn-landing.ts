@@ -18,7 +18,7 @@
 
 export const YPN_STATUS = {
   label: 'Coming soon',
-  note: 'The Liquid Sovereign Account is in active development. The Unified Liquidity Vault is in testing on testnet; card settlement over Circle + Privy on Arc is designed, not yet live. Nothing here is live or an offer to deposit.',
+  note: 'The Liquid Sovereign Account is in development. The vault and spend-from-yield model are future designs; card settlement is not live. Nothing here is available for use.',
 } as const
 
 export const YPN_HERO = {
@@ -26,10 +26,10 @@ export const YPN_HERO = {
   title: 'Spend while you',
   titleAccent: 'earn.',
   bullets: [
-    { title: 'Institutional Yield', body: 'Combines Uniswap v4 market-making with best-rate lending, routed across venues, to continuously compound your principal.' },
-    { title: 'Instant Real-World Spending', body: 'Pays out instant card purchases.' },
-    { title: 'Yield-Only Spending', body: 'Card swipes draw on accrued yield while leaving your underlying position in place.' },
-    { title: 'Native USDC Gas', body: 'Frictionless transactions powered by USDC.' },
+    { title: 'Institutional Yield', body: 'Designed to combine Uniswap v4 market-making with best-rate lending, routed across venues, to compound your principal.' },
+    { title: 'Instant Real-World Spending', body: 'Designed for instant card purchases.' },
+    { title: 'Yield-Only Spending', body: 'The plan is for card swipes to draw on accrued yield while leaving your position in place.' },
+    { title: 'Native USDC Gas', body: 'Designed for frictionless transactions powered by USDC.' },
   ],
 } as const
 
@@ -53,30 +53,30 @@ export const YPN_FLOW = {
   steps: [
     {
       key: 'deposit',
-      label: 'Deposit USDC',
+      label: 'USDC position',
       sub: 'Zero extra tokens',
-      desc: 'Put USDC into the vault with zero extra tokens or complicated setups.',
+      desc: 'The design puts USDC into the vault without extra tokens or complicated setups.',
       accent: 'text-atx-blue',
     },
     {
       key: 'grow',
       label: 'Grow Your Balance',
       sub: 'Interest + trading fees',
-      desc: 'Your money earns automated interest and trading fees around the clock.',
+      desc: 'The design earns automated interest and trading fees around the clock.',
       accent: 'text-atx-coral',
     },
     {
       key: 'tap',
       label: 'Tap to Pay',
       sub: 'No account lockup',
-      desc: 'Swipe your card anywhere. The system holds the exact amount needed without locking up your account.',
+      desc: 'The planned card holds the exact amount needed without locking up the account.',
       accent: 'text-atx-mesquite',
     },
     {
       key: 'spend',
-      label: 'Instant Real-World Spend',
+      label: 'Designed for real-world spend',
       sub: '100M+ Visa · under ½ sec',
-      desc: 'Spend your earnings at over 100M Visa merchants worldwide in under half a second.',
+      desc: 'The planned experience targets spending earnings at Visa merchants in under half a second.',
       accent: 'text-atx-blue',
     },
   ],
@@ -94,8 +94,8 @@ export const YPN_PILLARS = {
       accent: 'text-atx-blue',
       title: 'JIT liquidity isolation',
       subtitle: 'Spend without disrupting depth',
-      how: 'Your money is split: most sits safely earning interest, while a smaller portion powers active trading. When you swipe your card, payment comes directly from the interest buffer.',
-      why: 'You can spend cash in the real world without pulling money out of active trades — your yield engine never stops running.',
+      how: 'The design splits funds between a lending position and active trading. A future card payment is planned to draw from the interest buffer.',
+      why: 'The planned experience lets you spend without pulling money out of active trades — the yield engine is designed to keep running.',
     },
     {
       key: 'loop',
@@ -104,8 +104,8 @@ export const YPN_PILLARS = {
       accent: 'text-atx-coral',
       title: 'The spent-yield loop',
       subtitle: 'Principal compounds forever',
-      how: 'Card purchases automatically burn accrued yield first before touching your initial deposit.',
-      why: 'Your core balance stays untouched and compounds forever, funding perpetual daily spending.',
+      how: 'The design would use accrued yield for card purchases before touching the initial position.',
+      why: 'The plan keeps the core balance in place while it compounds, with spending from accrued yield.',
     },
     {
       key: 'identity',
@@ -114,8 +114,8 @@ export const YPN_PILLARS = {
       accent: 'text-atx-mesquite',
       title: 'Identity-layer embedded',
       subtitle: 'No custodian, no off-ramp',
-      how: 'Your passkey links your wallet, vault balance, and card permissions into one secure identity.',
-      why: 'No middleman exchanges or centralized custodians hold your money. You retain total control of your funds with zero off-ramp fees or hidden conversion costs.',
+      how: 'The planned passkey flow links a wallet, vault balance, and card permissions into one identity.',
+      why: 'The design keeps funds in user-controlled wallets or contracts, with no promised off-ramp fees or conversion costs.',
     },
   ],
 } as const
@@ -123,7 +123,7 @@ export const YPN_PILLARS = {
 // ─── Enterprise verticals (ValuePropMatrixTable) ────────────────────────────
 export const YPN_MATRIX = {
   eyebrow: 'Where it goes',
-  title: 'Three ways the account ships',
+  title: 'Three ways the account is designed to work',
   columns: ['Vertical', 'The pitch', 'The line'],
   rows: [
     {
@@ -131,7 +131,7 @@ export const YPN_MATRIX = {
       audience: 'HNW DeFi checking',
       pain: 'Earn institutional yield while buying coffee.',
       solution: '“Why keep $250k at 0.01%?”',
-      solutionDetail: 'Capture best-venue lending yield + LVR arbitrage on-chain, yet remain instantly spendable via Apple Pay.',
+      solutionDetail: 'The design combines lending yield + LVR capture on-chain, with planned spending through Apple Pay.',
       accent: 'text-atx-blue',
     },
     {
@@ -139,7 +139,7 @@ export const YPN_MATRIX = {
       audience: 'Corporate treasury OS',
       pain: 'Yield-funded team debit cards.',
       solution: 'Fund spend out of yield',
-      solutionDetail: 'DAOs and startups hold idle USDC. Issue team cards mapped to vault allowances — corporate spend funded purely from yield.',
+      solutionDetail: 'DAOs and startups hold idle USDC. The plan maps team cards to vault allowances, with spend designed to draw from yield.',
       accent: 'text-atx-coral',
     },
     {
@@ -147,7 +147,7 @@ export const YPN_MATRIX = {
       audience: 'Invisible DeFi',
       pain: 'Deposit dollars, tap your phone, watch it grow.',
       solution: 'No hooks to understand',
-      solutionDetail: 'Mass retail never sees v4 hooks, JIT, or lending adapters — just a balance that grows every day, even as they spend.',
+      solutionDetail: 'The planned retail experience hides v4 hooks, JIT, and lending adapters — a balance designed to grow as it is spent.',
       accent: 'text-atx-mesquite',
     },
   ],
@@ -157,17 +157,17 @@ export const YPN_MATRIX = {
 export const YPN_CIRCLE = {
   eyebrow: 'Settlement stack',
   title: 'Native on Arc. Settled by Circle. Spent on Visa.',
-  body: 'Built on Arc using USDC for gas, payments authorize via Privy and settle in sub-350ms through Circle for instant spending at 100M+ Visa and Apple Pay terminals — with zero off-ramp fees or extra tokens.',
+  body: 'Designed for Arc and USDC gas, with Privy authorization and Circle settlement targeted below 350ms for Visa and Apple Pay purchases.',
   stack: [
-    { name: 'Arc', role: 'Native chain using USDC for gas.' },
-    { name: 'Circle', role: 'Payment network with sub-350ms settlement.' },
-    { name: 'Privy', role: 'Passkey identity for card spending power.' },
-    { name: 'Visa', role: 'Accepted at 100M+ terminals globally.' },
+    { name: 'Arc', role: 'Planned chain using USDC for gas.' },
+    { name: 'Circle', role: 'Planned payment network; settlement speed is a target.' },
+    { name: 'Privy', role: 'Planned passkey identity for card spending.' },
+    { name: 'Visa', role: 'Planned card acceptance network.' },
   ],
   points: [
-    'Single-sided USDC deposit',
-    'Settlement paid directly from interest buffer',
-    'Sub-400ms point-of-sale approval',
+    'Designed for single-sided USDC',
+    'Settlement planned from interest buffer',
+    'Sub-400ms point-of-sale approval target',
   ],
 } as const
 
@@ -176,7 +176,7 @@ export const YPN_CIRCLE = {
 export const YPN_CALCULATOR = {
   eyebrow: 'Estimate',
   title: 'Your always-liquid yield',
-  sub: 'See what your balance could earn while staying 100% spendable — no lockup, no withdrawal window, spent from yield.',
+  sub: 'Illustrate what a balance could earn while designed to stay spendable — with no lockup or withdrawal window.',
   disclaimer: 'Illustrative estimate only. Not a quote, offer, or guarantee of yield. Actual returns vary with market conditions.',
   tvl: {
     label: 'Your balance (single-sided USDC)',
@@ -193,16 +193,16 @@ export const YPN_CALCULATOR = {
     default: 8.0,
   },
   resultLabel: 'Estimated monthly yield',
-  yearSuffix: 'a year — earned while fully spendable',
-  principalLabel: 'Locked or withdrawn',
-  principalValue: 'None — 100% spendable',
+  yearSuffix: 'a year — modeled while designed to stay spendable',
+  principalLabel: 'Planned availability',
+  principalValue: 'Designed to stay spendable',
 } as const
 
 // ─── Coming-soon conversion (AppConversionCTA) — waitlist, no app launch ────
 export const YPN_CTA = {
   eyebrow: 'Coming soon',
   title: 'Be first to the Liquid Sovereign Account',
-  body: 'The account opens soon. Leave your email for early access when yield-bearing, instantly-spendable cash goes live.',
+  body: 'The account is in development. Leave your email for early access when yield-bearing, spendable cash is ready.',
   successLabel: '✴ You’re on the list',
   secondaryCta: 'Read the docs',
   secondaryHref: '/docs',
@@ -212,7 +212,7 @@ export const YPN_CTA = {
 export const YPN_ETHOS = {
   eyebrow: 'Liquidity as a public good',
   title: 'Money That Earns 24/7, Ready When You Are',
-  body: 'Mintware turns locked capital into a spendable asset. Your deposit continuously generates institutional yield for you while strengthening market liquidity for everyone — and your earnings are instantly available to spend at point-of-sale.',
+  body: 'Mintware is designed to turn capital into a spendable asset. The planned account earns yield while strengthening market liquidity — with earnings designed for point-of-sale spending.',
   quote: 'Never idle, never locked, always yours.',
 } as const
 
@@ -220,7 +220,7 @@ export const YPN_ETHOS = {
 export const YPN_TEASER = {
   eyebrow: 'Mintware Liquid Sovereign Account',
   title: 'Earn while you spend',
-  body: 'That’s the other half: the yield your balance earns is spendable at the point of sale. Tap to pay while your capital keeps working — no unwinding, no cashing out; you spend the yield, not your position.',
+  body: 'That’s the other half: the plan makes yield spendable at the point of sale. The design lets capital keep working while you spend accrued yield.',
   cta: 'Explore the Liquid Sovereign Account',
   href: '/yield-payment-network',
 } as const
@@ -233,16 +233,16 @@ export const YPN_LIQUIDITY = {
   eyebrow: 'How it works',
   title: 'Liquidity,',
   titleAccent: 'finally accessible.',
-  body: 'A market-maker anchors the pool with a blended position — say 200 ETH + 300,000 USDC. The public makes up the difference. Every dollar then runs as active Uniswap v4 liquidity with a best-rate lending buffer underneath, so one balance earns twice — lending yield stacked with trading capture (fees + recaptured MEV/LVR) — while staying spendable at the point of sale.',
+  body: 'The matched-liquidity roadmap has a market-maker anchor the pool with a blended position — say 200 ETH + 300,000 USDC — and the public make up the difference. The planned vault combines Uniswap v4 liquidity with a lending buffer, with trading capture and spendability as future goals.',
   flow: [
     { label: 'Broker anchors', sub: 'blended liquidity — e.g. 200 ETH + 300k USDC' },
     { label: 'Public fills',    sub: 'the community makes up the difference' },
-    { label: 'One vault',       sub: 'active Uniswap v4 + a best-rate lending buffer' },
-    { label: 'Stacked yield',   sub: 'earned twice — and spendable' },
+    { label: 'Planned vault',   sub: 'Uniswap v4 + a lending buffer' },
+    { label: 'Planned yield',   sub: 'trading capture + lending' },
   ],
   doors: [
-    { kicker: 'For you', tone: 'peri', title: 'Deposit, earn, spend', body: 'Put in USDC, earn the stacked yield, and spend it straight from your card — no unwinding, bridging, or cashing out first.' },
-    { kicker: 'For market-makers', tone: 'coral', title: 'Seed liquidity, reward your community', body: 'Anchor blended liquidity for your launched token, earn the same stacked yield, and hand your community a spendable-yield account on top of it.' },
+    { kicker: 'For you', tone: 'peri', title: 'Deposit, earn, spend', body: 'The planned account accepts USDC, earns stacked yield, and supports card spending without unwinding or cashing out first.' },
+    { kicker: 'For market-makers', tone: 'coral', title: 'Seed liquidity, reward your community', body: 'The roadmap lets market-makers anchor liquidity for a token launch and offer the community a spendable-yield account.' },
   ],
 } as const
 
@@ -253,10 +253,10 @@ export const YPN_TECH = {
   titleAccent: 'done right.',
   intro: 'None of this works without the engineering. Here’s the part we’re proud of.',
   items: [
-    { k: 'Arc smart contracts', v: 'Native USDC gas and card authorization in sub-150ms.' },
-    { k: 'The ULV engine',      v: 'Just-in-time liquidity on every swap — capital is never idle.' },
-    { k: 'MEV / LVR recapture', v: 'Value that normally leaks to arbitrageurs, returned to depositors.' },
-    { k: 'Proven',              v: 'Invariant-fuzzed to 256×128k; payment core deployed and on-chain-verified on Base Sepolia.' },
+    { k: 'Arc smart contracts', v: 'Planned USDC gas and card authorization, with sub-150ms as a target.' },
+    { k: 'The ULV engine',      v: 'Designed for just-in-time liquidity on swaps, keeping capital productive.' },
+    { k: 'MEV / LVR recapture', v: 'Designed to return some value otherwise captured by arbitrageurs.' },
+    { k: 'Testnet work',        v: 'Payment core has been deployed and verified on Base Sepolia; unaudited.' },
   ],
   note: 'On testnet — deployed ≠ audited. An external audit precedes mainnet or real value.',
 } as const
@@ -270,14 +270,14 @@ export const YPN_ETH_SENIOR = {
   title: 'Cash that stays cash —',
   titleAccent: 'and stays productive.',
   body:
-    'Put in USDC and it stays spendable at par, like cash — while the capital works, earning from the pools it backs. The design splits the risk in two: the community holds the price-free senior side, and a first-loss junior tranche absorbs the market’s ups and downs. Your balance behaves like a dollar; the volatility lands on the tranche built to take it.',
+    'The roadmap explores a two-part structure: a community senior side and a first-loss junior tranche for team capital. If developed, the vault would aim to prioritize the senior claim in its payout order; this is not a current product or a promise of repayment.',
   cards: [
-    { k: 'Price-free by design', v: 'The senior claim never reads a pool price. Impermanent loss and market moves land on the junior tranche first, not on your balance.' },
-    { k: 'Covered, then fair', v: 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts that cushion, everyone shares the same transparent, pro-rata outcome — no race for the exit.' },
-    { k: 'Spend without unwinding', v: 'Pay straight from the balance while it stays deployed — a spend is a hold against the earning position, then a settle. Never idle, never locked.' },
+    { k: 'Senior / junior · roadmap', v: 'The proposed payout order places the community senior claim before the team’s junior tranche.' },
+    { k: 'First-loss design · roadmap', v: 'The proposed junior tranche would absorb losses first; it cannot guarantee full coverage.' },
+    { k: 'Spend from yield · roadmap', v: 'The card design would hold against an earning position, then settle. Spending is not currently available.' },
   ],
   note:
-    'In testing on Base Sepolia — testnet, unaudited, no real value. This is a design property of an autonomous vault, not a deposit, a guarantee, or investment advice; an external audit precedes any real value.',
+    'Senior/junior tranches and spend-from-yield are roadmap designs. MarketEngine is live on Robinhood Chain testnet; its adapters hold test assets without yield. Unaudited; no real value.',
 } as const
 
 // ─── Standing — spend-based service tiers (counsel-safe framing) ────────────
@@ -291,13 +291,13 @@ export const YPN_STANDING = {
   eyebrow: 'Built for how you actually use it',
   title: 'The more you spend,',
   titleAccent: 'the better it gets.',
-  body: 'Standing tracks real, settled spending on your card — nothing else. There’s nothing to deposit, hold, or stake to move up. Using the account for what it’s for is what moves you forward.',
+  body: 'The planned Standing tiers would track settled spending on a card — nothing else. There’s nothing to deposit, hold, or stake to move up. Card use would move you forward.',
   tiers: [
-    { name: 'Active', unlock: 'A handful of real purchases', perk: 'Priority settlement — your spend clears faster in the batch queue.' },
-    { name: 'Established', unlock: 'Sustained spend over time', perk: 'A tighter hold on your own balance, so more of what you have becomes available to spend.' },
-    { name: 'Trusted', unlock: 'A long, consistent track record', perk: 'A higher daily limit, and first access to new accounts before general availability.' },
+    { name: 'Active', unlock: 'Planned: settled purchases', perk: 'Proposed priority settlement in the batch queue.' },
+    { name: 'Established', unlock: 'Planned: sustained use', perk: 'A proposed tighter hold to make more of a balance available to spend.' },
+    { name: 'Trusted', unlock: 'Planned: consistent use', perk: 'Proposed higher daily limits and early access to new accounts.' },
   ],
-  note: 'Standing is computed from your own settlement history only — never from the Attribution score, and never a reward for holding or staking anything. It changes how the account serves you, not what it pays you.',
+  note: 'Standing is a planned service feature based on settlement history, separate from Attribution. It would affect how the account serves you, not what it pays you.',
 } as const
 
 export type YpnPillar = (typeof YPN_PILLARS.cards)[number]

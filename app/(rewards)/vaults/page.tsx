@@ -2,7 +2,7 @@
 
 // /vaults — PURELY EDUCATIONAL (marketing tier). Design v2 (Privy-esque).
 // Explains the tech: the Unified Liquidity Vault, the two ways to LP, idle-capital
-// yield, pro-rata fees. Functional V1 liquidity is available through the LP Gateway.
+// yield, pro-rata fees. Current MarketEngine activity uses test assets without yield.
 
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
@@ -19,8 +19,8 @@ const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 
 const HEAD = ['Liquidity that ', 'never sits idle.'] as const
-const SUB = 'Managed liquidity on Uniswap v4. One balance earns three ways at once — Aave lending, swap fees, and recaptured MEV — with an auto-managed range and zero rebalancing. You earn your pro-rata share of everything the pool makes.'
-const BULLETS = ['Three income streams — Aave lending + swap fees + recaptured MEV', 'Auto-managed range — no rebalancing', 'MEV-protected — bot value routed back to LPs', 'Paid pro-rata — you earn your share of all three streams, by the size of your stake']
+const SUB = 'The vault roadmap combines Uniswap v4 liquidity, lending, swap fees, and MEV recapture. Auto-managed ranges and pro-rata distributions are planned features, not currently available.'
+const BULLETS = ['Three planned streams — lending + swap fees + MEV recapture', 'Auto-managed range is a roadmap feature', 'MEV protection is a design goal', 'The design allocates fees pro-rata by position']
 const FEATURED: [string, string, string][] = [['Social Blue-Chip', 'ETH / USDC', '11.0%'], ['Degen Emerging', 'ARB / USDC', '18.4%']]
 
 // The two ways to LP.
@@ -29,20 +29,20 @@ const TYPES: { tag: string; name: string; who: string; accent: string; points: s
     tag: 'For tokens & treasuries', name: 'Growth Vaults', who: 'Single-sided or paired',
     accent: 'var(--color-peri)',
     points: [
-      'Deposit one side of the pair — or both. The vault balances it and issues you shares.',
-      'Idle capital earns lending yield in Aave; the V4 hook pulls just-in-time liquidity for each swap.',
-      'MEV-protected, auto-managed range — no rebalancing, no active management.',
-      'You earn your pro-rata share of every fee and recaptured MEV the pool makes — by the size of your position.',
+      'The planned vault accepts one side of a pair or both, then issues shares.',
+      'The design routes idle capital to lending and targets just-in-time liquidity for swaps.',
+      'An auto-managed range and MEV protections are planned.',
+      'The roadmap allocates fees and recaptured MEV pro-rata by position.',
     ],
   },
   {
     tag: 'For teams', name: 'Matched Liquidity', who: 'Two-sided, community-backed',
     accent: 'var(--color-coral2)',
     points: [
-      'The team locks its token; the community matches it in USDC — real two-sided depth, not a promise.',
-      'A hard ≥ 90-day cliff, enforced on-chain — a restriction on withdrawal, not a transfer of ownership.',
-      'During the lock, the fees the position earns go entirely to the people who backed you.',
-      'Tighter spreads and better fills from day one, because the depth is actually there.',
+      'The matched-launch roadmap pairs a team token with community USDC.',
+      'The design includes a ≥ 90-day lock, enforced on-chain if launched.',
+      'The plan directs fees during the lock to community backers.',
+      'The goal is tighter spreads and better fills when launched.',
     ],
   },
 ]
@@ -53,7 +53,7 @@ function VaultsComingSoon() {
       <div className="text-center max-w-[380px] px-6">
         <div className="font-atx-display text-[24px] font-semibold tracking-[-0.02em] text-ink mb-2">Vaults — Coming Soon</div>
         <div className="text-[14px] text-ink-mid leading-[1.6] mb-6">
-          Managed Uniswap v4 LP vaults — one balance earning lending, swap fees, and recaptured MEV at once.
+          Planned Uniswap v4 LP vaults combine lending, swap fees, and MEV recapture; these earnings are not live.
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-4 py-1.5 text-[12px] font-semibold tracking-[0.06em] uppercase">Phase 2</span>
       </div>
@@ -70,8 +70,8 @@ function VaultsPageV2() {
       {/* ── testnet note ── */}
       <div className="border-b border-hair-soft bg-ground-cool">
         <div className="max-w-[1100px] mx-auto px-6 py-2.5 max-[800px]:px-4 flex items-center gap-2.5 flex-wrap">
-          <span className="live-chip"><span className="dot" aria-hidden />In testing on Base Sepolia</span>
-          <span className="text-[11px] text-ink-soft">Figures below are illustrative — the mechanism is what’s live.</span>
+          <span className="live-chip"><span className="dot" aria-hidden />Roadmap · in development</span>
+          <span className="text-[11px] text-ink-soft">Figures below are illustrative. MarketEngine testnet adapters hold test assets without yield.</span>
         </div>
       </div>
 
@@ -132,8 +132,7 @@ function VaultsPageV2() {
             The same engine, <span className="text-gradient-accent">two different jobs.</span>
           </h2>
           <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-ink-mid max-w-[62ch] mt-4">
-            Every vault runs the same Unified Liquidity engine — idle capital in Aave, JIT liquidity per swap,
-            fees split pro-rata by your share. Only who provides the two sides changes.
+            The planned Unified Liquidity engine combines lending, just-in-time liquidity, and pro-rata fees. The roadmap varies who provides the two sides.
           </p>
 
           <div className="grid grid-cols-2 gap-4 mt-9 max-[820px]:grid-cols-1">
@@ -171,10 +170,10 @@ function VaultsPageV2() {
               <div className="font-atx-display text-[clamp(1.4rem,2.4vw,2rem)] font-semibold tracking-[-0.02em] leading-[1.1] text-ink [text-wrap:balance]">
                 Put your capital <span className="text-gradient-accent">to work.</span>
               </div>
-              <p className="text-[15px] text-ink-mid mt-2.5">Browse the live vaults, or open your own — deposits run in the app.</p>
+              <p className="text-[15px] text-ink-mid mt-2.5">Explore the vault roadmap and illustrative examples.</p>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <Link href="/v1" className="glass-pill-primary whitespace-nowrap">Browse the vaults →</Link>
+              <Link href="/v1" className="glass-pill-primary whitespace-nowrap">View MarketEngine →</Link>
               <Link href="/curate" className="glass-pill whitespace-nowrap">Create a vault</Link>
             </div>
           </GradientPanel>
@@ -186,5 +185,5 @@ function VaultsPageV2() {
 
 
 export default function VaultsPage() {
-  return useV2Mode() ? <VaultsPageV2 /> : <V1MarketingStub topic="Earn" headline="Curated pools, one deposit." blurb="Deposit USDG into a screened Robinhood Chain pool — your full deposit is deployed as liquidity and earns a share of the pool's trading fees, compounded back into your position." live={true} />
+  return useV2Mode() ? <VaultsPageV2 /> : <V1MarketingStub topic="Earn" headline="MarketEngine on testnet." blurb="MarketEngine is live on Robinhood Chain testnet with a tUSDG/tPONS pool. Adapters hold test assets without yield; no real-value returns are available." live={false} />
 }

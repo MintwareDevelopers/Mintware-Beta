@@ -1,6 +1,5 @@
-// Single source of truth for the /proof page — the most recent end-to-end testnet run of the YPN loop.
-// After each fresh live run, update THIS file (dates, hashes, deltas, test counts) and the page reflects it.
-// Everything here is testnet + unaudited; the hashes are real, the dollars are valueless test USDC.
+// Archived records for past testnet demonstrations on /proof. Hashes remain available for inspection;
+// none of these records describes a currently usable customer product or real-value yield.
 
 export type Chain = 'arc' | 'base-sepolia' | 'robinhood'
 
@@ -49,7 +48,7 @@ export type LatestRun = {
   legs: ProofLeg[]
   tests: { value: string; sub: string; label: string }[]
   contracts: { name: string; chain: Chain; short: string; address: string }[]
-  // The live vault whose current NAV the page reads on load, so the page reflects on-chain state now.
+  // The testnet vault associated with this historical run.
   liveVault: { chain: Chain; address: string; label: string }
 }
 
@@ -150,10 +149,8 @@ export const LATEST_RUN: LatestRun = {
   ],
 }
 
-// ── Second proven flow: the staged-buffer liquidity loop ────────────────────────────────────────
-// A team that holds ONE side parks it (it earns), then pairs into a pool when they bring the other
-// side. Proven live on Base Sepolia against a self-contained mock rig (open-mint token + yield
-// adapter + pair vault) — the router itself is the real product bytecode. See config/stagedRouter.ts.
+// ── Past staged-buffer testnet demonstration ───────────────────────────────────────────────────
+// Ran on Base Sepolia against a self-contained mock rig (open-mint token + yield adapter + pair vault).
 
 export type ProofFlow = {
   date: string
@@ -172,11 +169,11 @@ const S_VAULT = '0xB0144C6c033F5480619851eDF13ff1034707D2F7'
 
 export const STAGED_LIQUIDITY_RUN: ProofFlow = {
   date: '2026-08-19',
-  eyebrow: 'Staged liquidity · executed on-chain',
-  title: 'Stage one side, earn,',
+  eyebrow: 'Past staged liquidity testnet run',
+  title: 'A testnet demo staged one side,',
   titleAccent: 'pair when ready.',
   subtitle:
-    'The capital-constrained liquidity path, run live on Base Sepolia. A team parks the single side it holds; it earns while it waits; then one call forms the pool — and the yield it earned flowed into the position, not away.',
+    'A past Base Sepolia demonstration used a self-contained mock yield adapter and pair vault. It recorded staging one asset and forming a pool; this is not current MarketEngine behavior or product yield.',
   legs: [
     {
       n: 1,
@@ -228,10 +225,8 @@ export const STAGED_LIQUIDITY_RUN: ProofFlow = {
   ],
 }
 
-// ── Third proven flow: the LP Gateway on Robinhood Chain testnet ─────────────────────────────────
-// Deposit USDG; it earns as curated-pool liquidity while a spendable buffer (funded by the yield, not
-// the whole position) stays liquid. Stood up + a real deposit taken, every tx signed by a Privy server
-// wallet (no raw key). Mock USDG + hookless v4 pool; testnet, unaudited. See config/deployments.json.
+// ── Historical testnet run for the earlier LP Gateway design ───────────────────────────────────
+// Mock USDG + hookless v4 pool; testnet and unaudited. See config/deployments.json.
 
 const LPG_PM = '0x537A7fd1113066e13Ed41c337eDC085794cE24c0'
 const LPG_STAGING = '0x2e11a1019c03622404888EE9FaE443D9E14F4DF9'
@@ -240,11 +235,11 @@ const LPG_ADAPTER = '0x8AC1ab49d9C8eB8adC9EDd8D6380220598007b38'
 
 export const LP_GATEWAY_RUN: ProofFlow = {
   date: '2026-09-06',
-  eyebrow: 'LP Gateway · Robinhood Chain testnet',
-  title: 'Deploy, then a real deposit —',
+  eyebrow: 'Past testnet run · Robinhood Chain',
+  title: 'Deployment and a test position —',
   titleAccent: 'signed by a server wallet.',
   subtitle:
-    'The LP Gateway stood up on Robinhood Chain testnet and took a live deposit — every transaction signed by a Privy server wallet, with no raw key anywhere. Deposit USDG; it earns as curated-pool liquidity while a spendable buffer stays liquid.',
+    'This historical testnet run deployed the earlier pool design and used test USDG; transactions were signed by a Privy server wallet. The adapters did not generate yield or support real-value returns.',
   legs: [
     {
       n: 1,
@@ -261,15 +256,15 @@ export const LP_GATEWAY_RUN: ProofFlow = {
     },
     {
       n: 2,
-      title: 'Deposit and stage',
+      title: 'Place test assets and stage',
       where: 'Robinhood testnet · MintwareLpGatewayPositionManager 0x537A…24c0',
       status: 'proven',
       statusLabel: 'Proven on Robinhood testnet',
-      desc: '1,000 test USDG was approved and deposited. It staged into the yield adapter (earning from the first block) and minted 1:1 entry-NAV shares — the whole loop, on-chain.',
+      desc: 'A past run placed 1,000 test USDG into the staging path and minted 1:1 entry-NAV shares. Test assets did not earn yield.',
       deltas: [
         { k: 'totalNav', before: '0', after: '1,000 USDG' },
         { k: 'Shares minted', before: '0', after: '1,000' },
-        { k: 'Staged (earning)', before: '0', after: '1,000 USDG' },
+        { k: 'Staged test assets', before: '0', after: '1,000 USDG' },
       ],
       txs: [
         { label: 'Approve', chain: 'robinhood', hash: '0xe72fb8ff4a2af7a9fa02fea159bd4a57b7a979992e11c30df516c383103f4fb4' },
@@ -292,19 +287,19 @@ export const LP_GATEWAY_RUN: ProofFlow = {
 // end-to-end. So this is a truthful status board — 'service' / 'proven-by-reuse' / 'wired' — never a
 // fabricated proven leg. The one real hash cited is leg 3's settleSpend (the identical call a card
 // settle makes), not a card-originated transaction.
-export type CardRailPoint = { label: string; status: 'service' | 'proven' | 'wired'; note: string; txHash?: string; chain?: Chain }
+export type CardRailPoint = { label: string; status: 'service' | 'proven' | 'wired' | 'planned'; note: string; txHash?: string; chain?: Chain }
 export const CARD_RAIL: {
   eyebrow: string; title: string; titleAccent: string; blurb: string; points: CardRailPoint[]
 } = {
-  eyebrow: 'Human org cards · Lithic sandbox',
-  title: 'A card that spends the',
-  titleAccent: 'LP balance.',
+  eyebrow: 'Cards · Bridge + Stripe in development',
+  title: 'Card purchases are not',
+  titleAccent: 'live through Mintware.',
   blurb:
-    'A member swipes a card; it draws on the org’s LP-backed treasury through the same authorize + settle primitives above — not a separate pool. Proven end-to-end on 2026-08-20: a real $2 sandbox swipe was authorized off live NAV, then settled on-chain, burning $2 of the treasury’s senior shares. Sandbox card (synthetic PAN, no real merchant), testnet vault: no real-world money moves.',
+    'Bridge + Stripe card integrations are in development. No purchase is currently authorized or settled through Mintware, and no customer card buffer is refilled for live purchases. A past Lithic sandbox/testnet demo on 2026-08-20 recorded a test authorization and a card-originated testnet settlement; it used a synthetic PAN and no real merchant.',
   points: [
-    { label: 'Authorize', status: 'proven', note: 'A real $2 Lithic sandbox swipe → ASA webhook → edge-auth decided off live vault NAV → APPROVED, in the same NAV-hold engine as leg 2. Automatic, as card authorization always is; no tx (it’s an off-chain hold).' },
-    { label: 'Settle', status: 'proven', note: 'settleSpend burned exactly $2 of the member’s senior shares (12.0 → 10.0 USDC) → paid out — a real card-ORIGINATED settlement, not a scripted one.', txHash: '0x7ef19942af5a5e1ebd281e544ba632ca3c6d19e8d3f57e0b0e34eba3d830d8bb', chain: 'base-sepolia' },
-    { label: 'Auto-capture', status: 'wired', note: 'The above settle was the owner-triggered path. The automatic capture (Lithic SETTLED event → auto-settle small swipes ≤ $50) is wired — subscription live — but off by default and not yet fired via the webhook.' },
+    { label: 'Authorize', status: 'planned', note: 'No card purchase currently authorizes through Mintware. The archived sandbox demonstration recorded a test authorization.' },
+    { label: 'Settle', status: 'planned', note: 'No merchant purchase is currently settled through Mintware. This link is a historical testnet settlement record.', txHash: '0x7ef19942af5a5e1ebd281e544ba632ca3c6d19e8d3f57e0b0e34eba3d830d8bb', chain: 'base-sepolia' },
+    { label: 'Buffer refill', status: 'planned', note: 'No customer card buffer is refilled for live purchases. A future refill depends on configured funding and a confirmed on-chain transaction.' },
   ],
 }
 

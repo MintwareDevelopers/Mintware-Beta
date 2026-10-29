@@ -135,7 +135,7 @@ export const DECK_HTML = `<!doctype html>
 <section class="slide cool">
   <span class="num mono">04</span>
   <div class="label">How it works</div>
-  <h2>Deposit once. Earn three ways. <span class="grad">Spend from yield.</span></h2>
+  <h2>One balance. Earn three ways. <span class="grad">Spend from yield.</span></h2>
   <div class="grid3" style="margin-top:22px">
     <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">01</div><h3 style="margin-top:8px">Earn</h3><p>Best-rate lending (routed across venues) + just-in-time V4 market-making + recaptured MEV — stacked on one balance.</p></div>
     <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">02</div><h3 style="margin-top:8px">Hold</h3><p>A card swipe or payout authorizes in ~milliseconds as a hold against live vault NAV. The position keeps earning.</p></div>
@@ -143,7 +143,7 @@ export const DECK_HTML = `<!doctype html>
   </div>
   <div class="card" style="margin-top:20px; display:flex; gap:14px 18px; align-items:center; flex-wrap:wrap">
     <span class="pill"><span class="dot"></span>Proven on-chain</span>
-    <span style="font-size:14px; color:var(--ink-mid); flex:1 1 300px">A real card swipe authorized off live NAV and settled on-chain — <span class="mono" style="color:var(--ink);font-weight:700">$2.00 · balance 12→10 USDC</span> — position never unwound. That’s the whole loop, working.</span>
+    <span style="font-size:14px; color:var(--ink-mid); flex:1 1 300px">A past testnet demo recorded a $2 card-originated on-chain settle — <span class="mono" style="color:var(--ink);font-weight:700">balance 12→10 USDC</span>. This was a testnet run, not a live card purchase.</span>
     <div class="vrow" style="flex-basis:100%; margin-top:2px">
       <a class="vlink" href="https://mintware.finance/proof" target="_blank" rel="noopener">Verify the full run on-chain →</a>
       <a class="vlink" href="https://mintware.finance/the-math" target="_blank" rel="noopener">See the yield model →</a>
@@ -160,7 +160,7 @@ export const DECK_HTML = `<!doctype html>
     <div class="card"><h3>Uniswap V4 hooks</h3><p>Programmable liquidity — just-in-time provisioning, dynamic fees, MEV recapture. The vault mechanic was impossible before V4.</p></div>
     <div class="card"><h3>Stablecoins went mainstream</h3><p>USDC settlement, native-USDC chains, and card rails matured — a dollar can now be on-chain and spendable at the point of sale.</p></div>
     <div class="card"><h3>On-chain treasuries &amp; agents</h3><p>DAOs, crypto-native startups, and now AI agents hold real balances and need them liquid <i>and</i> productive.</p></div>
-    <div class="card"><h3>Proven in-market</h3><p>The same rehypothecation + JIT engine already ships in production (Bunni&nbsp;v2) at ~100× volume / TVL. We bring it to treasuries — spendable, and security-first.</p></div>
+    <div class="card"><h3>Prior market precedent</h3><p>A similar rehypothecation + JIT engine previously ran in production (Bunni&nbsp;v2) at ~100× volume / TVL. We are designing a treasury version with planned spendability.</p></div>
   </div>
 </section>
 
@@ -199,7 +199,7 @@ export const DECK_HTML = `<!doctype html>
   <h2>We’re not cold-starting — <span class="grad">Firma Labs is incubating us.</span></h2>
   <div class="grid3" style="margin-top:20px">
     <div class="card"><h3>Incubated &amp; backed</h3><p>Firma Labs is incubating Mintware and backing this round — an ecosystem partner bringing capital and distribution, not just a check.</p></div>
-    <div class="card"><div class="stat mono">1</div><div class="statlab">on-chain settle loop, proven live</div></div>
+    <div class="card"><div class="stat mono">1</div><div class="statlab">past testnet settle demo</div></div>
     <div class="card"><div class="stat mono grad">LIVE</div><div class="statlab">x402 pay-per-call surface, <a class="vlink" style="font-size:12px; border-bottom:none; color:var(--peri-deep); text-transform:none; letter-spacing:0" href="https://mintware.finance/agents" target="_blank" rel="noopener">in production →</a></div></div>
   </div>
   <div class="vrow" style="margin-top:22px; align-items:center; gap:14px 22px">
@@ -242,20 +242,20 @@ export const DECK_HTML = `<!doctype html>
 <section class="slide">
   <span class="num mono">11</span>
   <div class="label">Where we are</div>
-  <h2>Built and demonstrable — <span class="grad">the path to live is short.</span></h2>
+  <h2>Testnet work is recorded — <span class="grad">the path to live is planned.</span></h2>
   <div class="grid2" style="margin-top:20px">
     <div>
       <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--live);margin-bottom:10px">Built &amp; proven</div>
-      <div class="check"><span class="tick">✓</span><span><b>The full card loop runs</b> — issue → activate → swipe → authorize off live NAV → settle on-chain.</span></div>
+      <div class="check"><span class="tick">✓</span><span><b>Past testnet card demo</b> — a card-originated test transaction was recorded on-chain; live card authorization and merchant settlement are future work.</span></div>
       <div class="check"><span class="tick">✓</span><span><b>A pay-per-call surface is live in production</b> (agent x402).</span></div>
       <div class="check"><span class="tick">✓</span><span><b>Security-hardened &amp; audit-ready</b> — audit rounds, red-team, formal methods; scope frozen + deploy runbook done.</span></div>
       <div class="check"><span class="tick">✓</span><span><b>Converged vault + off-chain authorization + multi-tenant treasury</b> — built and tested.</span></div>
     </div>
     <div>
       <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--peri-deep);margin-bottom:10px">On the roadmap</div>
-      <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>Mainnet deploy</b> — the vault stack ships next; testnet-proven today.</span></div>
+      <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>Mainnet deploy</b> — future milestone; MarketEngine is live on Robinhood Chain testnet.</span></div>
       <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>Guarded audit + bounty</b> — competitive audit + Immunefi before real value (next slide).</span></div>
-      <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>Card issuer</b> — wire the KYB partner; sandbox loop proven today.</span></div>
+      <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>Card issuer</b> — Bridge + Stripe integration and merchant settlement remain future work; a past testnet demo was recorded.</span></div>
       <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>First real users</b> — the focus of this round.</span></div>
     </div>
   </div>

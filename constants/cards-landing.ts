@@ -21,14 +21,14 @@
 
 export const CARDS_STATUS = {
   label: 'Coming soon',
-  note: 'Card issuance is sandbox-only today. Nothing here is an offer to issue a card, a promise of a limit, or a guarantee of any perk.',
+  note: 'Bridge + Stripe card integrations are coming and in development. No purchase is authorized or settled through Mintware today.',
 } as const
 
 export const CARDS_HERO = {
   eyebrow: 'Mintware · Cards',
   title: 'A card backed by',
   titleAccent: 'a balance that never idles.',
-  body: 'Spend straight from a position that stays deployed — the vault holds what a purchase needs, settles it, and the rest keeps working. No unwinding, no cashing out, no idle float sitting around waiting to be spent.',
+  body: 'Designed to spend from a position that stays deployed — the vault would hold what a purchase needs, settle it, and keep the rest working. No unwinding, no cashing out, no idle float waiting to be spent.',
 } as const
 
 // ─── How it works — spend, hold, settle ─────────────────────────────────────
@@ -36,9 +36,9 @@ export const CARDS_FLOW = {
   eyebrow: 'How it works',
   title: 'A swipe is a hold, then a settle.',
   steps: [
-    { key: 'swipe', label: 'You swipe', desc: 'A purchase authorizes against your balance in real time — no manual transfer, no bridging, no pre-loading a separate spending account.' },
-    { key: 'hold', label: 'The vault holds', desc: 'The exact amount needed is held against your position. Nothing else is touched — the rest of your balance stays deployed and earning.' },
-    { key: 'settle', label: 'It settles', desc: 'The hold converts and pays the merchant. Your position keeps running the moment it clears.' },
+    { key: 'swipe', label: 'You swipe', desc: 'A purchase is designed to authorize against your balance in real time — no manual transfer, no bridging, no separate spending account.' },
+    { key: 'hold', label: 'The vault holds', desc: 'The exact amount needed would be held against your position. The rest of your balance would stay deployed.' },
+    { key: 'settle', label: 'It settles', desc: 'The hold is designed to convert and pay the merchant. Your position would keep running as it clears.' },
   ],
 } as const
 
@@ -47,44 +47,44 @@ export const CARDS_STANDING = {
   eyebrow: 'Built for how you actually use it',
   title: 'The more you spend,',
   titleAccent: 'the better it gets.',
-  body: 'Standing tracks real, settled spending on your card — nothing else. There’s nothing to deposit, hold, or stake to move up. Using the card for what it’s for is what moves you forward.',
+  body: 'The planned Standing tiers would track settled spending on your card — nothing else. There’s nothing to deposit, hold, or stake to move up. Using the card for what it’s for would move you forward.',
   tiers: [
     {
       name: 'Active',
       unlock: 'A handful of real purchases',
       perk: 'Priority settlement',
-      detail: 'Your spend clears faster in the settlement batch — less waiting, no extra step.',
+      detail: 'The design aims for faster settlement batches — less waiting, no extra step.',
     },
     {
       name: 'Established',
       unlock: 'Sustained spend over time',
       perk: 'More of your balance, available',
-      detail: 'A tighter hold on your own position means more of what you have becomes spendable, sooner.',
+      detail: 'A tighter hold on your own position is designed to make more of your balance spendable, sooner.',
     },
     {
       name: 'Trusted',
       unlock: 'A long, consistent track record',
       perk: 'A higher daily limit + early access',
-      detail: 'Spend more per day, and get first access to new accounts before they open to everyone else.',
+      detail: 'The plan is a higher daily limit and early access to new accounts before they open more widely.',
     },
   ],
   guardrails: [
-    'Earned only by real, settled purchases — never by depositing, holding, or staking anything.',
-    'Every perk is a service improvement — faster settlement, more headroom, earlier access. Never a payout, never a new token, never anything to trade.',
+    'Planned to be earned by settled purchases — never by depositing, holding, or staking anything.',
+    'Each planned perk is a service improvement — faster settlement, more headroom, earlier access. Never a payout or a tradeable token.',
     'Completely separate from the Attribution score, which stays informational-only and never gates access to anything.',
   ],
-  note: 'Standing is computed from your own settlement history only. It changes how the card serves you, not what it pays you.',
+  note: 'Standing is a planned card feature based on your own settlement history. It would change how the card serves you, not what it pays you.',
 } as const
 
 // ─── Why this is different from a generic crypto card ───────────────────────
 export const CARDS_WHY = {
   eyebrow: 'Why this isn’t a generic crypto card',
   title: 'Most cards make you choose.',
-  intro: 'Fund a spending account and your money sits idle. Stay fully deployed and you can’t spend without unwinding first. The Liquid Sovereign Account is built so you never have to choose.',
+    intro: 'Fund a spending account and your money sits idle. Stay fully deployed and you can’t spend without unwinding first. The Liquid Sovereign Account is designed so you won’t have to choose.',
   rows: [
     { product: 'Prepaid crypto cards', tradeoff: 'Load it, and it just sits there — no yield, and you did the manual transfer yourself.', us: false },
     { product: 'Staking-gated cards', tradeoff: 'Better rates require locking up a separate token — a second thing to hold, just to spend the first.', us: false },
-    { product: 'The Liquid Sovereign Account card', tradeoff: 'One balance. It earns, it spends, and using it is the only thing that ever improves it.', us: true },
+    { product: 'The planned Liquid Sovereign Account card', tradeoff: 'One balance designed to earn and spend, with use planned to improve service.', us: true },
   ],
 } as const
 

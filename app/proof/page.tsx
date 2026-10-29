@@ -1,9 +1,7 @@
 'use client'
 
-// /proof — a public, shareable "proof of life": the most recent end-to-end testnet run of the YPN loop,
-// rendered from lib/proof/latestRun.ts (single source of truth — update that file after each run). Every
-// tx hash links to a block explorer; a live read of the Arc vault's current NAV shows on-chain state now.
-// Testnet + unaudited throughout — real hashes, valueless test USDC.
+// /proof — a public archive of past testnet demonstrations. Hashes link to testnet explorers;
+// testnet activity does not show a currently available product or real-value yield.
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -37,20 +35,19 @@ export default function ProofPage() {
       <main className="mx-auto max-w-[900px] px-6 max-[700px]:px-4 py-[44px]">
         {/* hero */}
         <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display">
-          Yield Payment Network · executed on-chain
+          Past testnet demonstrations · executed on-chain
         </div>
         <h1 className="font-atx-display font-bold text-[clamp(2rem,5.4vw,3.1rem)] leading-[1.04] tracking-[-0.03em] mt-3.5">
-          The whole loop,<br /><span className="text-gradient-accent">run live on testnet.</span>
+          A recorded loop,<br /><span className="text-gradient-accent">from past testnet runs.</span>
         </h1>
         <p className="text-ink-mid text-[clamp(1rem,2vw,1.18rem)] leading-[1.5] max-w-[62ch] mt-5">
-          Deposit → earn → authorize → spend, plus a native USDC bridge — every leg executed on-chain, with
-          real transaction hashes you can open in a block explorer. The plumbing working end to end, not a mock-up.
+          Archived testnet flows include payment and liquidity demonstrations, with transaction hashes you can open in a block explorer. These records document past testnet runs, not a currently available product.
         </p>
 
         {/* honesty banner */}
         <div className="rounded-[16px] border border-hair p-4 mt-6 text-[13.5px] text-ink-mid leading-[1.55]"
           style={{ background: 'linear-gradient(120deg, rgba(196,122,0,0.09), var(--color-ground-deep, #EEEEF7))' }}>
-          <b className="text-ink">Testnet · unaudited · valueless test USDC.</b> Everything below ran on Circle’s
+            <b className="text-ink">Past testnet runs · unaudited · valueless test assets.</b> The archived demonstrations ran on Circle’s
           Arc testnet ({'5042002'}) and Base Sepolia ({'84532'}). Vaults are empty, nothing is an offer, and
           external audit remains the gate before real value. The hashes are real; the dollars are not.
         </div>
@@ -74,7 +71,7 @@ export default function ProofPage() {
           {run.legs.map((leg) => <LegCard key={leg.n} leg={leg} />)}
         </div>
 
-        {/* Second proven flow — staged-buffer liquidity loop */}
+        {/* Past staged-buffer testnet liquidity demonstration */}
         <div className="mt-14 pt-2 border-t border-hair">
           <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
             {STAGED_LIQUIDITY_RUN.eyebrow}
@@ -117,7 +114,7 @@ export default function ProofPage() {
           </p>
         </div>
 
-        {/* Third proven flow — LP Gateway on Robinhood Chain testnet */}
+        {/* Past MarketEngine-era liquidity demonstration on Robinhood Chain testnet */}
         <div className="mt-14 pt-2 border-t border-hair">
           <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
             {LP_GATEWAY_RUN.eyebrow}
@@ -161,7 +158,7 @@ export default function ProofPage() {
           </p>
         </div>
 
-        {/* Card rail — honest status board (NOT a proven on-chain run) */}
+        {/* Historical card testnet demonstration and current integration status */}
         <div className="mt-14 pt-2 border-t border-hair">
           <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
             {CARD_RAIL.eyebrow}
@@ -181,7 +178,7 @@ export default function ProofPage() {
                     : p.status === 'service' ? 'text-peri-deep bg-[rgba(108,108,240,0.10)]'
                     : 'text-mw-amber bg-[rgba(196,122,0,0.10)]')}>
                     <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                    {p.status === 'proven' ? 'Proven call' : p.status === 'service' ? 'Live service' : 'Wired · off by default'}
+                    {p.status === 'planned' ? 'In development' : 'Past testnet record'}
                   </span>
                 </div>
                 <div className="min-w-0">
@@ -197,9 +194,8 @@ export default function ProofPage() {
             ))}
           </div>
           <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">
-            Proven end-to-end on 2026-08-20: a real sandbox swipe authorized off live NAV, then a
-            card-originated settleSpend burned $2 of senior shares on-chain (linked above). The one
-            still-dormant piece is the AUTOMATIC capture path (off by default). This same run also
+            A past sandbox demonstration on 2026-08-20 recorded a test authorization and a
+            card-originated settleSpend that burned $2 of testnet senior shares on-chain (linked above). Bridge + Stripe card integrations are in development; no customer purchase is authorized or settled through Mintware today. This same run also
             surfaced a real bug — the settle core was marking a reverted tx as settled — now fixed.{' '}
             <Link href="/app/team/cards" className="text-peri-deep no-underline hover:underline">The card surface →</Link>
           </p>

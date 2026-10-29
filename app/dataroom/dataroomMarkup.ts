@@ -29,28 +29,28 @@ b{color:var(--ink)}
 <section id='s0'><h2 class='doctitle'>MINTWARE — One-Page Summary</h2>
 <h3>Idle crypto treasuries, put to work — without ever locking them up</h3>
 <p class='sub'>Confidential — prepared for prospective investors · December 2025</p>
-<p class=''>Mintware turns a crypto company’s idle stablecoin treasury into working capital. We deploy it as on-chain liquidity where it earns lending yield and a share of trading fees — while it stays fully spendable, any moment. We take a 10% performance fee on the yield we generate, never a fee on principal.</p>
+<p class=''>Mintware is designed to turn a crypto company’s idle stablecoin treasury into on-chain liquidity. The planned account combines lending yield and trading fees with card spendability. The plan is a 10% performance fee on yield generated, never on principal.</p>
 <h3>The problem</h3>
 <p class=''>Exchanges, funds, and web3 startups sit on billions in stablecoins that earn almost nothing. Today the choice is binary: keep it spendable and earn ~0%, or lock it up to earn and lose access. So the cash sits idle.</p>
 <h3>The solution</h3>
-<p class=''>Mintware is the money standing ready in on-chain markets — the “liquidity” every trade runs on. A treasury’s idle digital dollars become that liquidity: two income streams (lending + trading fees) on the same dollar, still spendable via card or transfer at any time. Principal is never touched to cover a spend.</p>
+<p class=''>Mintware is designed to put treasury balances to work as liquidity in on-chain markets. The roadmap combines lending and trading fees with planned card or transfer spendability; principal protection is not a current feature.</p>
 <h3>Why now</h3>
 <p class=''>Stablecoins now settle trillions of dollars a year, and the on-chain tools to put idle balances to work safely have only just matured. Crypto treasuries are piling up, and no one has made putting them to work simple, safe, and spendable.</p>
 <h3>Where we are</h3>
 <ul>
-<li>Built — the full system exists (earn, spend, settle on-chain), not a concept.</li>
-<li>Proven end-to-end — the complete loop has run live on test networks, down to a real settled transaction.</li>
+<li>In development — MarketEngine is on Robinhood Chain testnet; its adapters hold test assets without yield.</li>
+<li>Past testnet demo — an end-to-end flow was recorded on test networks; it is not a live customer product.</li>
 <li>Security-first — an independent audit is the gate before real customer funds move; we build to that bar.</li>
 </ul>
 <h3>Business model</h3>
-<p class=''>A 10% performance fee on yield generated for the customer (live in the product today). No account fees, no lock-ins. We earn only when the customer’s money does.</p>
+<p class=''>The plan is a 10% performance fee on yield generated for the customer. No account fees, no lock-ins. We earn only when the customer’s money does.</p>
 <h3>The ask</h3>
 <p class=''>Raising $250,000 for ≈10% on a SAFE ($2.5M post-money cap) — ~12 months of runway to a guarded launch with our first crypto-company treasuries, then a seed round at a higher valuation.</p>
 <p class='sub'>Mintware LLC · Delaware · team@mintware.org · mintware.finance</p></section><section id='s1'>
 <h2 class='doctitle'>V1 Revenue Model</h2>
 <p class='sub'>Editable spreadsheet — Mintware-V1-Revenue-Model.xlsx. Revenue is driven by trading volume, not depth.</p>
-<h3>What V1 is</h3><p>The LP Gateway. A user zaps their USDG into a curated third-party Uniswap V4 pool as a real liquidity position — they hold both tokens and bear 100% of the impermanent loss. Mintware supplies no capital and takes no IL. No JIT, no rehypothecation, no buffer.</p>
-<h3>How Mintware earns</h3><p>The position collects trading fees; <b>Mintware takes 10% of the harvested fees</b> (live in the product), the user keeps 90%. Mintware earns on fee flow and bears none of the IL.</p>
+<h3>What V1 is</h3><p>MarketEngine is live on Robinhood Chain testnet with a tUSDG/tPONS pool. Its adapters hold test assets without yield; historical proof records describe past testnet runs.</p>
+<h3>How Mintware earns</h3><p>The plan is to take a 10% performance fee on yield generated for the customer. This fee is planned and is not currently collected from customer positions.</p>
 <h3>The model</h3><p><b>Mintware revenue = trading volume (earning fees) × pool fee tier × 10%.</b> The driver is volume, not the size of the deposit. Breakeven ≈ $500M annual volume at a 0.30% tier (far less on higher-fee pools).</p>
 <h3>Revenue by annual volume (0.30% tier)</h3><table>
 <tr class='hdr'><th>Annual volume</th><th>Gross fees</th><th>Mintware revenue</th></tr>
@@ -86,7 +86,7 @@ b{color:var(--ink)}
 <tr><th class='k'>Contact</th><td>team@mintware.org</td></tr>
 </table>
 <h3>2 · What Mintware does</h3>
-<p class=''>Mintware puts idle crypto treasuries to work. A crypto company deposits its idle stablecoin balance; Mintware deploys it as on-chain liquidity, where it earns lending yield and a share of trading fees while staying fully spendable at any moment. Mintware earns a 10% performance fee on the yield it generates — never a fee on principal. V1 is built and proven end-to-end on test networks today; an independent security audit is the gate before real customer funds move. Revenue detail is in the accompanying V1 Revenue Model.</p>
+<p class=''>Mintware is designed to put idle crypto treasuries to work as on-chain liquidity, with a planned 10% performance fee on yield generated — never on principal. MarketEngine is live on Robinhood Chain testnet; its adapters hold test assets without yield. Past testnet demonstrations are not a live customer product. An independent security audit is the gate before real customer funds move. Revenue detail is in the accompanying V1 Revenue Model.</p>
 <h3>3 · The raise</h3>
 <table>
 <tr><th class='k'>Instrument</th><td>SAFE (Simple Agreement for Future Equity) — see the structural note in §5</td></tr>
@@ -127,9 +127,9 @@ b{color:var(--ink)}
 <div class='callout'>V1 runs on test networks today and has not yet completed an external third-party audit. An independent audit is the explicit gate before real customer funds move on mainnet. This document describes our posture and the work done to reach that gate.</div>
 <h3>Principles</h3>
 <ul>
-<li>Non-custodial by design — funds move through audited smart contracts, not a company wallet we can freely spend from.</li>
+<li>Non-custodial design goal — contracts are unaudited, and no real customer funds are supported today.</li>
 <li>Fail-closed everywhere — every money-moving control is OFF by default and refuses to act unless explicitly and correctly configured.</li>
-<li>Principal is never touched to cover a spend — a spend settles against yield/position, and withdrawals are pure pro-rata and never brick.</li>
+<li>The planned spend design uses yield/position rather than principal; this flow is not available for customer purchases today.</li>
 <li>Security is the gate, not an afterthought — external audit precedes any real-value mainnet launch.</li>
 </ul>
 <h3>What we’ve done so far</h3>
@@ -150,11 +150,11 @@ b{color:var(--ink)}
 <li>Guarded launch — a capped amount of value on mainnet first, scaled as it earns trust.</li>
 </ul>
 <p class='sub'>Full technical detail is available to serious investors under diligence.</p></section><section id='s4'><h2 class='doctitle'>MINTWARE — Roadmap</h2>
-<h3>From built-and-proven to first customers to seed</h3>
+<h3>From testnet development to first customers to seed</h3>
 <p class='sub'>Confidential — prepared for prospective investors · December 2025</p>
-<h3>Now — pre-seed (product built)</h3>
+<h3>Now — pre-seed (product in development)</h3>
 <ul>
-<li>V1 built end-to-end; full earn → spend → settle loop proven live on test networks.</li>
+<li>Past testnet demonstrations recorded an earn → spend → settle flow; the current product remains in development.</li>
 <li>Ongoing internal + independent security hardening.</li>
 </ul>
 <h3>This round — ~12 months, ~$250K</h3>
@@ -167,12 +167,12 @@ b{color:var(--ink)}
 </table>
 <h3>Next — seed round ($1.5M–$2.5M)</h3>
 <ul>
-<li>A safe, live product with real crypto-company treasuries earning on it and a metrics story strong enough to raise the seed at a higher valuation. Revenue tracks trading volume, not deposits: breakeven on the lean team is roughly $500M of annual trading volume across the book at a ~0.30% fee tier — far less on higher-fee pools (see V1 Revenue Model).</li>
+<li>Goal: launch a safe product for crypto-company treasuries and build a metrics story for the seed round. Revenue tracks trading volume; modeled breakeven on the lean team is roughly $500M annual volume at a ~0.30% fee tier — less on higher-fee pools (see V1 Revenue Model).</li>
 <li>Marquee third-party audit as TVL grows.</li>
 <li>Extend from company treasuries toward every wallet — “win the treasury, then give every balance the same superpower.”</li>
 </ul>
 <h3>What “done” looks like for this round</h3>
-<p class=''>A safe, live product with real crypto-company treasuries earning on it and a metrics story strong enough to raise the seed at a higher valuation. Revenue tracks trading volume, not deposits: breakeven on the lean team is roughly $500M of annual trading volume across the book at a ~0.30% fee tier — far less on higher-fee pools (see V1 Revenue Model).</p></section><section id='s5'><h2 class='doctitle'>MINTWARE — Team &amp; Advisors</h2>
+<p class=''>Goal: launch a safe product for crypto-company treasuries and build a metrics story for the seed round. Revenue tracks trading volume; modeled breakeven on the lean team is roughly $500M annual volume at a ~0.30% fee tier — less on higher-fee pools (see V1 Revenue Model).</p></section><section id='s5'><h2 class='doctitle'>MINTWARE — Team &amp; Advisors</h2>
 <p class='sub'>Confidential — prepared for prospective investors · December 2025</p>
 <div class='callout'>DRAFT — please confirm the bracketed items before sending. Titles/bios marked [confirm] are placeholders.</div>
 <h3>Founders</h3>
