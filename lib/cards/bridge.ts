@@ -1,13 +1,12 @@
 // Bridge (bridge.xyz / Stripe Issuing) provider leg — the non-custodial "standard" card rail.
-// Sibling to lib/cards/lithic.ts: this file is the Bridge-SPECIFIC plumbing only. Unlike the Lithic
-// rail, Bridge AUTHORIZES the swipe itself (Stripe does not hand us the issuing_authorization.request
+// Bridge AUTHORIZES the swipe itself (Stripe does not hand us the issuing_authorization.request
 // webhook), so there is deliberately NO decision logic here — lib/org/cardAuthorize.ts's ASA path is
 // Lithic-only. On Bridge our control surface is just two levers: how much USDC sits in the buffer, and
 // how large a standing allowance we grant. This file owns the allowance lever.
 //
 // How Bridge pulls (verified against apidocs.bridge.xyz + docs.stripe.com/issuing, 2026-08):
 //   • The funding wallet is a non-custodial wallet — here, the user's OWN Privy embedded wallet, which
-//     is exactly the address they self-register on-chain as `bufferOf[user]` (Gateway.setBufferAddress,
+//     is exactly the address they self-register on-chain as `bufferOf[user]` (Gateway.proposeBuffer / acceptBuffer,
 //     msg.sender-pinned). Bridge's rule is ONE WALLET = ONE CARD in standard mode, which is precisely
 //     the per-user shape the buffer table already enforces (card_spend_buffers is 1:1 per org_card).
 //   • The wallet grants a plain ERC-20 `approve(spender, allowance)` on USDC, signed by the wallet's

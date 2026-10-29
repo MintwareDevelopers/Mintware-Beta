@@ -1,13 +1,13 @@
 {
   "_doc": "THE ONE committed source of deploy truth for Mintware. A deploy is NOT done until it is recorded here. No entry = NOT deployed (do not infer deployment from prose in a rule/doc/memory). Read by scripts/context-sync.mjs to generate the AUTO:build-status block in .claude/STATE.md. Fields per contract: address (checksummed; null if the full address isn't yet recorded), chainId, status (live|testnet|deprecated), note, verified (ISO date the address was last confirmed on-chain).",
-  "_reconcile": "When you deploy (or deprecate) a contract, update this file IN THE SAME PR (CONTEXT-MAP reconcile-on-change). Prefer copying the address straight from the Foundry broadcast record. If you only have a truncated address, set address:null and put the partial in note — an explicit gap beats a fake-precise ghost.",
+  "_reconcile": "When you deploy (or deprecate) a contract, update this file IN THE SAME PR (CONTEXT-MAP reconcile-on-change). Prefer copying the address straight from the Foundry broadcast record. If you only have a truncated address, set address:null and put the partial in note \u2014 an explicit gap beats a fake-precise ghost.",
   "mainnet": {
     "base": {
       "AIAttribution": {
         "address": "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421",
         "chainId": 8453,
         "status": "live",
-        "note": "v3 — the ONLY mainnet contract. v2 (0xb9FB965...) deprecated.",
+        "note": "v3 \u2014 the ONLY mainnet contract. v2 (0xb9FB965...) deprecated.",
         "verified": "2026-08-08"
       }
     }
@@ -25,7 +25,7 @@
         "address": "0x09Cda8519737a60FD16D263f94fb56237CDb7E42",
         "chainId": 84532,
         "status": "testnet",
-        "note": "a MintwareYieldVault instance holding mock WETH — the SPEND/collateral vault, NOT a fee-earning ETH LP",
+        "note": "a MintwareYieldVault instance holding mock WETH \u2014 the SPEND/collateral vault, NOT a fee-earning ETH LP",
         "verified": "2026-08-19"
       },
       "MintwareTreasuryVaultFactory": {
@@ -70,7 +70,7 @@
         "address": "0xEa2d7a3a52304558306480B2746D5D4624219b09",
         "chainId": 84532,
         "status": "testnet",
-        "note": "USDC MintwareYieldVault — the DEFAULT park/unpark vault for the agent toolkits (agentkit MINTWARE_PARK/UNPARK, eliza PARK_USDC/UNPARK_USDC). Asset = Circle testnet USDC 0x036C…CF7e. Adapter = production MintwareIdleYieldAdapter (holds, NO yield on testnet). Owner = agent-demo deployer 0x9c64…33AD. Round trip proven 2026-10-16 (deposit 0xb9c5…22d6, redeem 0x2ddf…fab2). Replaces the wrong 0x09Cd…7E42 default (mock-WETH vault).",
+        "note": "USDC MintwareYieldVault \u2014 the DEFAULT park/unpark vault for the agent toolkits (agentkit MINTWARE_PARK/UNPARK, eliza PARK_USDC/UNPARK_USDC). Asset = Circle testnet USDC 0x036C\u2026CF7e. Adapter = production MintwareIdleYieldAdapter (holds, NO yield on testnet). Owner = agent-demo deployer 0x9c64\u202633AD. Round trip proven 2026-10-16 (deposit 0xb9c5\u202622d6, redeem 0x2ddf\u2026fab2). Replaces the wrong 0x09Cd\u20267E42 default (mock-WETH vault).",
         "deployed": "2026-10-16",
         "source": "contracts-v4/script/DeployAgentParkVault.s.sol"
       },
@@ -78,7 +78,7 @@
         "address": "0xCDA824fe74684C0632d343e96a34708c79eEdB11",
         "chainId": 84532,
         "status": "testnet",
-        "note": "MintwareIdleYieldAdapter behind AgentParkVault — onlyVault, one-time setVault (done), depositCap 100,000 USDC, owner 0x9c64…33AD.",
+        "note": "MintwareIdleYieldAdapter behind AgentParkVault \u2014 onlyVault, one-time setVault (done), depositCap 100,000 USDC, owner 0x9c64\u202633AD.",
         "deployed": "2026-10-16",
         "source": "contracts-v4/script/DeployAgentParkVault.s.sol"
       },
@@ -182,54 +182,11 @@
         "address": "0xcf2EA99639C038a475B710b2Be82b974D777C306",
         "chainId": 84532,
         "status": "testnet",
-        "note": "NEXT_PUBLIC_MW_TREASURY_ADDRESS (client display). On-chain probe 2026-08-30: ~3.6KB code present; exact role not re-confirmed — verify + label before relying on it.",
+        "note": "NEXT_PUBLIC_MW_TREASURY_ADDRESS (client display). On-chain probe 2026-08-30: ~3.6KB code present; exact role not re-confirmed \u2014 verify + label before relying on it.",
         "verified": "2026-08-30",
         "source": "on-chain probe"
       }
     },
-    "robinhood-testnet": {
-      "LpGatewayPositionManager": {
-        "address": "0xa52d4ffaefa586251cb36d1e05588daa89ab0a63",
-        "chainId": 46630,
-        "status": "testnet",
-        "note": "LP Gateway V1 — ROUND-3 rig 'g' (2026-09-08; docs/developers/audits/round3/README.md). Pure-Privy REDEPLOY, owner+harvestRecipient=gateway seat 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c, band 500 bps. Adds to rig 'e': entry-mark MEMORY (ENTRY_MEMORY_BLOCKS=300), single virtual offset on exit (fuzz F1), pool-initialised ctor check + follower anchored at creation (first deploy banded), DeployNotTwoSided, StageShortfall (50 bps), OUTAGE_HAIRCUT_BPS=2000, per-leg re-credit weights, tolerant re-stage with parked quote counted as idle, staging balance-diff, referencePrice() view. PM runtime code hash 0x89a53e8da35d43715c50cd1354bbc376624ab6bfc56fccb96097db2baefc00f4; v4 poolId 0x07340da7f228f72fd2a624571c34b0f217b5f3a8e2b2826373f4afffe0a0dfa2 (tUSDG/tPONS 0.30%/60, price 1.0; currency0 = tUSDG). Rig 'g' = final round-3 source incl. the R3-INV-3 comparator fix (quote IS currency0 here, the orientation that fix guards). Prior rigs 'f' 0xd87eaa9e4a8872d32e0a51581f6a73a46fb805cb (pre-R3-INV-3 bytecode) and 'e' 0x259a9f1cdcf8d2172964d151366b2c7c9ea6f442 (pre-round-3) SUPERSEDED. MOCK tokens + hookless V4 pool; TESTNET, UNAUDITED externally. Smoke PASSED 2026-09-08 (deposit 1000 1:1; compoundQuote(5) no mint; setPaused blocks deposit not withdraw; withdraw 50%). Deploy: scripts/deploy-lp-gateway-robinhood.mjs · smoke: scripts/smoke-lp-gateway-robinhood.mjs.",
-        "verified": "2026-09-08"
-      },
-      "LpGatewayStaging": {
-        "address": "0x0a8544c0222d3d6a729cd8aa81fbe9f64174fa14",
-        "chainId": 46630,
-        "status": "testnet",
-        "note": "Round-3 rig 'g' staging (controller = PM 0xa52d…0a63; unstage measured by balance-diff).",
-        "verified": "2026-09-08"
-      },
-      "LpGateway_ERC4626YieldAdapter": {
-        "address": "0x4e1b4e63dd41b810f64ac320bea9085ded0b7b8a",
-        "chainId": 46630,
-        "status": "testnet",
-        "note": "Round-3 rig 'g' production MintwareERC4626YieldAdapter (onlyVault=staging, one-time setVault, Ownable2Step; owner = gateway seat).",
-        "verified": "2026-09-08"
-      },
-      "LpGateway_MockERC4626YieldSource": {
-        "address": "0x44221c452c26faa74c79025d28abea53d0992afd",
-        "chainId": 46630,
-        "status": "testnet",
-        "note": "Round-3 rig 'g' MockERC4626 yield source over tUSDG (OZ ERC-4626; testnet stand-in for the curated Morpho vault).",
-        "verified": "2026-09-08"
-      },
-      "LpGateway_tUSDG": {
-        "address": "0x2a8c32e291bc90ceb8ae058b6a684be0312bb848",
-        "chainId": 46630,
-        "status": "testnet",
-        "note": "Round-3 rig 'g' mock USDG (6dp) — quote asset; set as LP_GATEWAY_USDG on the testnet env.",
-        "verified": "2026-09-08"
-      },
-      "LpGateway_tPONS": {
-        "address": "0x4494bbcb351a263097978f314057875e5ec5b9a7",
-        "chainId": 46630,
-        "status": "testnet",
-        "note": "Round-3 rig 'g' mock paired token (18dp).",
-        "verified": "2026-09-08"
-      }
-    }
+    "robinhood-testnet": {}
   }
 }

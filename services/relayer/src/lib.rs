@@ -13,7 +13,6 @@
 //! deploy-gated (need the real relayer key with RELAYER_ROLE + an on-chain hold).
 
 pub mod batch;
-pub mod cctp;
 pub mod idem;
 pub mod server;
 pub mod settle;
@@ -21,10 +20,6 @@ pub mod submit;
 
 pub use batch::{
     build_and_sign_batch, dry_run_batch, submit_batch_settlement, BatchError, BatchSettleParams, Hold,
-};
-pub use cctp::{
-    build_and_sign_receive, submit_receive, AttestedMessage, CctpError, IrisClient, ReceiveAndDeposit,
-    CCTP_DOMAIN_ARC, CCTP_DOMAIN_BASE,
 };
 pub use idem::{IdemStore, Reserved};
 pub use server::{app, AppCtx};

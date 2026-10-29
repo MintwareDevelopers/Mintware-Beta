@@ -42,7 +42,7 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
   const vaultAddr = (org?.vault as `0x${string}`) ?? undefined
   const readOn = { address: vaultAddr, chainId: org?.chainId ?? undefined, query: { enabled: !!vaultAddr && !!org?.chainId } } as const
 
-  const { data: usdcAddr }   = useReadContract({ abi: YIELD_VAULT_ABI, functionName: 'usdc',       ...readOn })
+  const { data: usdcAddr }   = useReadContract({ abi: YIELD_VAULT_ABI, functionName: 'asset',       ...readOn })
   const { data: buffer }     = useReadContract({ abi: YIELD_VAULT_ABI, functionName: 'idleBuffer',  ...readOn })
   const { data: myShares, refetch: refetchShares } = useReadContract({ abi: YIELD_VAULT_ABI, functionName: 'shares', args: address ? [address as `0x${string}`] : undefined, address: vaultAddr, chainId: org?.chainId ?? undefined, query: { enabled: !!vaultAddr && !!org?.chainId && !!address } })
   const { data: myAssets, refetch: refetchAssets }  = useReadContract({ abi: YIELD_VAULT_ABI, functionName: 'convertToAssets', args: myShares !== undefined ? [myShares as bigint] : undefined, address: vaultAddr, chainId: org?.chainId ?? undefined, query: { enabled: !!vaultAddr && !!org?.chainId && myShares !== undefined } })
@@ -93,7 +93,7 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
     try {
       await ensureChain()
       setStatus('Withdrawing (buffer-first)…')
-      await writeContractAsync({ abi: YIELD_VAULT_ABI, address: vaultAddr, functionName: 'redeem', args: [sharesToBurn], chainId: org.chainId })
+      await writeContractAsync({ abi: YIELD_VAULT_ABI, address: vaultAddr, functionName: 'redeem', args: [sharesToBurn, address as `0x${string}`, address as `0x${string}`], chainId: org.chainId })
       setStatus(max ? 'Withdrew everything ✓' : `Withdrew ${amount} USDC ✓`)
       setAmount(''); refresh()
     } catch (e) { setStatus((e as Error)?.message?.slice(0, 140) || 'transaction failed') }
@@ -109,7 +109,7 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
         {org && !org.vault ? (
           <div className="soft-card p-5 mt-6">
             <div className="text-[13.5px] font-semibold text-ink">One-time setup</div>
-            <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Treasury yield runs on an on-chain yield vault that's provisioned once — then you just supply. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
+            <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Treasury yield runs on an on-chain yield vault that&apos;s provisioned once — then you just supply. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
             <div className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft mt-3 mb-1.5">Operator — deploy once</div>
             <code className="block font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2.5 overflow-x-auto whitespace-nowrap">pnpm forge:deploy:savings:base-sepolia</code>
             {isOwner ? (

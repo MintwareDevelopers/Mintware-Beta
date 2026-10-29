@@ -183,8 +183,7 @@ export function withinStandingDailyCap(
 
 // ─── Perk #2: more headroom (Established) — widen a SOFT per-swipe ceiling within the HARD ceiling ─
 //
-// The hard per-swipe ceiling is the $250 settle-time limit (CARD_HIGH_VALUE_THRESHOLD in
-// settleSwipe.ts) — above it, settlement needs an edge-signed leg that isn't wired, so it is an
+// The hard per-swipe ceiling is the $250 settle-time limit (the retired settle-time limit) — above it, settlement needs an edge-signed leg that isn't wired, so it is an
 // absolute wall for BOTH paths. This perk lets a higher tier spend MORE of that ceiling per swipe
 // (the copy: Established = "more of your balance, available") — but only ever UP TO the hard ceiling,
 // never past it, and never around the edge-auth NAV/equity guard (which still runs regardless).
@@ -195,7 +194,7 @@ export function withinStandingDailyCap(
 // used across this repo (cf. X402_TRUST_TIERING). When engaged, `none` gets the conservative floor and
 // higher tiers widen toward the hard ceiling — never beyond it.
 
-/** MUST equal CARD_HIGH_VALUE_THRESHOLD in lib/org/settleSwipe.ts ($250, 6dp). Re-declared here to
+/** This hard ceiling is re-declared here to
  *  keep this module pure (no viem/supabase import graph); a test asserts the two stay equal. */
 export const CARD_HARD_PER_SWIPE_CEILING_USDC = 250_000_000n
 

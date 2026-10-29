@@ -3,7 +3,7 @@
 // On Bridge WE don't authorize (no ASA hold, so no reservation to release — that ledger is Lithic-
 // only). Bridge pulls USDC straight from the buffer wallet at auth. Our job on each spend event is
 // simply: reconcile the cached balance from chain, then top the buffer back up toward target by
-// redeeming a slice of the vault (Gateway.refillBuffer). A refund flows the other way (balance goes
+// redeeming a slice of the vault (Gateway.refill). A refund flows the other way (balance goes
 // UP), so it only needs a resync, never a refill.
 //
 // Pure orchestration over injected deps → unit-testable without a live Bridge/chain. The webhook route

@@ -1,6 +1,6 @@
 // End-to-end flow test for the Bridge card rail — drives the REAL orchestration (onboarding runner +
 // approve orchestrator + reconcile) with fakes for the external legs (Bridge client, Privy signer,
-// chain, DB). This is the "test the whole flow" test: issue → (member permit) → approve → prime →
+// chain, DB). This is the "test the whole flow" test: issue → (member destination) → approve → prime →
 // go_live → spend → reconcile → refill, plus the pauses and guards on the unhappy paths.
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -23,11 +23,11 @@ afterEach(() => {
 })
 
 /** In-memory onboarding harness: each dep mutates a shared state exactly like the real effects would.
- *  `memberSigns` toggles whether the member has signed their standing permit (a member action). */
-function harness(opts: { primeConfirms: boolean; memberSigns: boolean }) {
+ *  `memberRegistersDestination` toggles whether the member has signed their funding destination (a member action). */
+function harness(opts: { primeConfirms: boolean; memberRegistersDestination: boolean }) {
   const state: OnboardState = {
     cardIssued: false,
-    permitSigned: opts.memberSigns, // set out-of-band by the member, not by the orchestrator
+    destinationRegistered: opts.memberRegistersDestination, // set out-of-band by the member, not by the orchestrator
     approvalGranted: false,
     bufferPrimed: false,
     liveProvisioned: false,
@@ -52,24 +52,24 @@ function harness(opts: { primeConfirms: boolean; memberSigns: boolean }) {
 }
 
 describe('bridge card — full onboarding flow', () => {
-  it('runs issue → (permit) → approve → prime → go_live and never goes live before the buffer is primed', async () => {
+  it('runs issue → (destination) → approve → prime → go_live and never goes live before the buffer is primed', async () => {
     process.env.CARD_BRIDGE_ENABLED = 'true'
-    const h = harness({ primeConfirms: true, memberSigns: true })
+    const h = harness({ primeConfirms: true, memberRegistersDestination: true })
     const res = await runOnboarding(h.deps)
 
     expect(res.complete).toBe(true)
-    expect(res.ran).toEqual(['issue_card', 'grant_approval', 'prime_buffer', 'go_live']) // permit is the member's, not "run"
+    expect(res.ran).toEqual(['issue_card', 'grant_approval', 'prime_buffer', 'go_live']) // destination is the member's, not "run"
     expect(h.events.indexOf('go_live')).toBeGreaterThan(h.events.indexOf('prime'))
     expect(h.state.liveProvisioned).toBe(true)
   })
 
-  it('pauses for the member permit — issues the card, then waits (never primes/goes live)', async () => {
+  it('pauses for the member destination — issues the card, then waits (never primes/goes live)', async () => {
     process.env.CARD_BRIDGE_ENABLED = 'true'
-    const h = harness({ primeConfirms: true, memberSigns: false })
+    const h = harness({ primeConfirms: true, memberRegistersDestination: false })
     const res = await runOnboarding(h.deps)
 
     expect(res.complete).toBe(false)
-    expect(res.awaitingMember).toBe('sign_permit')
+    expect(res.awaitingMember).toBe('register_destination')
     expect(res.ran).toEqual(['issue_card'])
     expect(h.events).not.toContain('prime')
     expect(h.events).not.toContain('go_live')
@@ -77,7 +77,7 @@ describe('bridge card — full onboarding flow', () => {
 
   it('cold-decline guard: if the buffer never primes, the card is NEVER made live', async () => {
     process.env.CARD_BRIDGE_ENABLED = 'true'
-    const h = harness({ primeConfirms: false, memberSigns: true })
+    const h = harness({ primeConfirms: false, memberRegistersDestination: true })
     const res = await runOnboarding(h.deps)
 
     expect(res.complete).toBe(false)
@@ -86,9 +86,9 @@ describe('bridge card — full onboarding flow', () => {
     expect(h.state.liveProvisioned).toBe(false)
   })
 
-  it('resumes idempotently from a partially-onboarded card (permit already signed)', async () => {
+  it('resumes idempotently from a partially-onboarded card (destination already registered)', async () => {
     process.env.CARD_BRIDGE_ENABLED = 'true'
-    const h = harness({ primeConfirms: true, memberSigns: true })
+    const h = harness({ primeConfirms: true, memberRegistersDestination: true })
     h.state.cardIssued = true
     h.state.approvalGranted = true
     const res = await runOnboarding(h.deps)

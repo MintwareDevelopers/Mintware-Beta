@@ -2,382 +2,185 @@
 pragma solidity ^0.8.26;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
 import {IYieldVault} from "./IYieldVault.sol";
 import {MWTimelockedRiskParams} from "../lib/MWTimelockedRiskParams.sol";
 
-/// @title  MintwarePaymentGateway
-/// @notice YPN settlement gateway. A RELAYER submits `settleSpend` for a card charge the edge engine
-///         already authorized; the Gateway re-verifies the user's EIP-712 permit(s), enforces daily
-///         caps + liquidity, and burns the user's vault shares for USDC to the card rail.
-///
-/// @dev    Hybrid permit model: < $250 needs only a long-lived `DelegatedSpendPermit`; >= $250 also
-///         needs a short-lived (<= 5 min) `ShortLivedHoldAuth` signed by an EDGE_SIGNER.
-///
-/// @dev    NONCE SEMANTICS (fix vs the v2.1.1 draft): the permit nonce is **revocation-only**. The
-///         draft consumed `usedNonces[user][permit.nonce]` on every settle, which made the *long-lived*
-///         permit single-use — the 2nd spend would revert `NonceAlreadyUsed`. Here `settleSpend` only
-///         CHECKS the nonce (rejecting revoked permits) and never consumes it. Replay of a specific
-///         charge is prevented by `holds[holdId].settled`; over-spend by the daily cap. `revokeNonce`
-///         is the sole writer of `usedNonces`.
-contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausable, MWTimelockedRiskParams {
-    using SafeERC20 for IERC20;
-    using ECDSA for bytes32;
-
-    bytes32 public constant RELAYER_ROLE     = keccak256("RELAYER_ROLE");
-    bytes32 public constant EDGE_SIGNER_ROLE = keccak256("EDGE_SIGNER_ROLE");
-    bytes32 public constant PAUSER_ROLE      = keccak256("PAUSER_ROLE");
-
-    bytes32 public constant DELEGATED_SPEND_PERMIT_TYPEHASH = keccak256(
-        "DelegatedSpendPermit(address user,uint256 maxDailySpendUSDC,uint256 nonce,uint256 deadline)"
-    );
-    bytes32 public constant SHORT_LIVED_HOLD_AUTH_TYPEHASH = keccak256(
-        "ShortLivedHoldAuth(bytes32 holdId,address user,uint256 amountUSDC,uint256 nonce,uint256 expiry)"
-    );
-
-    uint256 public constant HIGH_VALUE_THRESHOLD      = 250_000_000;    // $250.00 (6dp)
-    uint256 public constant DEFAULT_GLOBAL_DAILY_CAP  = 1_000_000_000;  // $1,000.00
-    uint256 public constant DEFAULT_GLOBAL_REFILL_CAP = 1_000_000_000;      // $1,000.00/day buffer-refill default
-    uint256 public constant MAX_REFILL_CAP            = 1_000_000_000_000;  // $1,000,000 — fat-finger bound on a governed cap
-    uint256 public constant MAX_SHORT_LIVED_WINDOW    = 5 minutes;
+/// @notice Moves a member's Earn shares into that member's registered card buffer.
+/// @dev Refill IDs are global and single-use. Caps use fixed UTC-day buckets and count delivered assets.
+contract MintwarePaymentGateway is AccessControl, ReentrancyGuard, Pausable, MWTimelockedRiskParams {
+    bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    uint256 public constant WINDOW = 1 days;
+    uint256 public constant DESTINATION_DELAY = 48 hours;
+    uint256 public constant DEFAULT_REFILL_CAP = 1_000_000_000;
+    uint256 public constant MAX_REFILL_CAP = 1_000_000_000_000;
 
     IYieldVault public immutable vault;
-    IERC20 public immutable usdc;
-    address public circleCpnTreasury;
+    mapping(address => address) public bufferOf;
+    mapping(address => address) public proposedBuffer;
+    mapping(address => uint256) public bufferEta;
+    mapping(bytes32 => bool) public refillDone;
+    mapping(address => mapping(uint256 => uint256)) public userRefilled;
+    mapping(uint256 => uint256) public globalRefilled;
+    mapping(address => uint256) public userCap;
+    uint256 public globalCap;
+    mapping(bytes32 => address) private capUser;
+    mapping(bytes32 => bool) private capIsGlobal;
 
-    mapping(address => mapping(uint256 => uint256)) public dailySpendUSDC; // user => epochDay => spent
-    mapping(address => uint256) public userDailyCap;
-    mapping(address => mapping(uint256 => bool)) public usedNonces;        // user => nonce => revoked
-
-    // ── card spend buffer (docs/developers/card-spend-buffer-spec.md, Option A) ──
-    mapping(address => address) public bufferOf;                            // user => their self-registered buffer wallet
-    mapping(address => mapping(uint256 => uint256)) public dailyRefillUSDC; // user => epochDay => refilled (separate ledger)
-    mapping(address => uint256) public userDailyRefillCap;                  // 0 => DEFAULT_GLOBAL_REFILL_CAP
-    mapping(bytes32 => bool) public refillDone;                             // refillId => done (idempotency)
-    mapping(bytes32 => address) public refillCapParamUser;                  // timelock param tag => the user it caps
-    mapping(address => bool) public userRefillPaused;                       // user's own on-chain refill kill-switch
-
-    struct Hold {
-        address user;
-        uint256 amountUSDC;
-        uint256 settledAt;
-        bool settled;
-        bool cancelled;
-    }
-    mapping(bytes32 => Hold) public holds;
-
-    struct DelegatedSpendPermit {
-        address user;
-        uint256 maxDailySpendUSDC;
-        uint256 nonce;
-        uint256 deadline;
-    }
-    struct ShortLivedHoldAuth {
-        bytes32 holdId;
-        address user;
-        uint256 amountUSDC;
-        uint256 nonce;
-        uint256 expiry;
-    }
-
-    event PaymentSettled(bytes32 indexed holdId, address indexed user, address indexed receiver, uint256 assets, uint256 sharesBurned);
-    event HoldCancelled(bytes32 indexed holdId, address indexed user);
-    event NonceRevoked(address indexed user, uint256 indexed nonce);
-    event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
-    event UserDailyCapUpdated(address indexed user, uint256 newCap);
-    event BufferAddressUpdated(address indexed user, address indexed oldBuffer, address indexed newBuffer);
-    event BufferRefilled(bytes32 indexed refillId, address indexed user, address indexed buffer, uint256 assets, uint256 sharesBurned);
-    event UserDailyRefillCapUpdated(address indexed user, uint256 newCap);
-    event RefillPauseSet(address indexed user, bool paused);
-
-    error InvalidAmount();
-    error PermitExpired();
-    error InvalidPermitSignature();
-    error NonceRevokedError();
-    error EdgeSignatureRequired();
-    error InvalidEdgeSignature();
-    error EdgeAuthExpired();
-    error InsufficientIdleLiquidity();
-    error ExceedsDailySpendLimit();
-    error HoldAlreadySettled();
-    error HoldCancelledError();
     error ZeroAddress();
-    error UnknownHold();
-    error BufferNotSet();
+    error ZeroAmount();
+    error ZeroRefillId();
     error RefillAlreadyDone();
-    error ExceedsDailyRefillLimit();
-    error RefillCapTooHigh();
-    error RefillPausedError();
+    error NoBuffer();
+    error NoProposal();
+    error DestinationDelayNotElapsed();
+    error CapTooHigh();
+    error RefillLimitExceeded();
 
-    constructor(address vault_, address usdc_, address treasury_, address admin_)
-        EIP712("Mintware Payment Gateway", "2.0")
-    {
-        if (vault_ == address(0) || usdc_ == address(0) || treasury_ == address(0) || admin_ == address(0)) {
-            revert ZeroAddress();
-        }
+    event BufferProposed(address indexed member, address indexed destination, uint256 eta);
+    event BufferAccepted(address indexed member, address indexed destination);
+    event BufferProposalCancelled(address indexed member, address indexed destination);
+    event BufferRevoked(address indexed member, address indexed oldDestination);
+    event Refilled(bytes32 indexed refillId, address indexed member, address indexed destination, uint256 assets, uint256 sharesBurned);
+    event UserCapUpdated(address indexed member, uint256 cap);
+    event GlobalCapUpdated(uint256 cap);
+
+    constructor(address vault_, address admin_) {
+        if (vault_ == address(0) || admin_ == address(0)) revert ZeroAddress();
         vault = IYieldVault(vault_);
-        usdc = IERC20(usdc_);
-        circleCpnTreasury = treasury_;
-
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
         _grantRole(RELAYER_ROLE, admin_);
-        _grantRole(EDGE_SIGNER_ROLE, admin_);
         _grantRole(PAUSER_ROLE, admin_);
     }
 
-    // ── admin ──────────────────────────────────────────────────────────────
-    function setCircleCpnTreasury(address newTreasury) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newTreasury == address(0)) revert ZeroAddress();
-        emit TreasuryUpdated(circleCpnTreasury, newTreasury);
-        circleCpnTreasury = newTreasury;
+    function proposeBuffer(address destination) external {
+        if (destination == address(0)) revert ZeroAddress();
+        uint256 eta = block.timestamp + DESTINATION_DELAY;
+        proposedBuffer[msg.sender] = destination;
+        bufferEta[msg.sender] = eta;
+        emit BufferProposed(msg.sender, destination, eta);
     }
 
-    function setUserDailyCap(address user, uint256 newCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        userDailyCap[user] = newCap;
-        emit UserDailyCapUpdated(user, newCap);
+    function acceptBuffer() external {
+        uint256 eta = bufferEta[msg.sender];
+        if (eta == 0) revert NoProposal();
+        if (block.timestamp < eta) revert DestinationDelayNotElapsed();
+        address destination = proposedBuffer[msg.sender];
+        delete proposedBuffer[msg.sender];
+        delete bufferEta[msg.sender];
+        bufferOf[msg.sender] = destination;
+        vault.registerDestination(msg.sender, destination);
+        emit BufferAccepted(msg.sender, destination);
     }
 
-    /// @notice Propose (or instantly apply) a per-user daily buffer-refill cap, through the 48h risk-param
-    ///         timelock. TIGHTENING — a lower *effective* cap — applies instantly (safety never waits);
-    ///         LOOSENING — a higher effective cap — is delayed 48h and cancellable, so a compromised owner
-    ///         can't instantly widen how fast a user's vault position drains into their buffer. `newCap == 0`
-    ///         resets to the global default (`DEFAULT_GLOBAL_REFILL_CAP`); direction compares EFFECTIVE caps
-    ///         so that reset is judged against the default, not against a raw zero.
-    function setUserDailyRefillCap(address user, uint256 newCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        bytes32 param = _refillCapParam(user);
-        refillCapParamUser[param] = user;
-        _changeRiskParam(param, newCap, 0);
+    function cancelBufferProposal() external {
+        address destination = proposedBuffer[msg.sender];
+        if (bufferEta[msg.sender] == 0) revert NoProposal();
+        delete proposedBuffer[msg.sender];
+        delete bufferEta[msg.sender];
+        emit BufferProposalCancelled(msg.sender, destination);
     }
 
-    /// @notice Confirm a timelocked (loosening) refill-cap change once its 48h has elapsed.
-    function confirmUserDailyRefillCap(address user) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _confirmRiskParam(_refillCapParam(user));
+    function revokeBuffer() external {
+        address old = bufferOf[msg.sender];
+        delete bufferOf[msg.sender];
+        delete proposedBuffer[msg.sender];
+        delete bufferEta[msg.sender];
+        emit BufferRevoked(msg.sender, old);
     }
 
-    /// @notice Cancel a pending refill-cap change before it can be confirmed.
-    function cancelUserDailyRefillCap(address user) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _cancelRiskParam(_refillCapParam(user));
+    function refill(bytes32 refillId, address member, uint256 shares)
+        external onlyRole(RELAYER_ROLE) nonReentrant whenNotPaused returns (uint256 delivered)
+    {
+        if (refillId == bytes32(0)) revert ZeroRefillId();
+        if (shares == 0) revert ZeroAmount();
+        if (refillDone[refillId]) revert RefillAlreadyDone();
+        address destination = bufferOf[member];
+        if (destination == address(0)) revert NoBuffer();
+        uint256 day = block.timestamp / WINDOW;
+        uint256 userLimit = _effectiveUserCap(member);
+        uint256 globalLimit = _effectiveGlobalCap();
+        uint256 userUsed = userRefilled[member][day];
+        uint256 globalUsed = globalRefilled[day];
+        if (userUsed >= userLimit || globalUsed >= globalLimit) revert RefillLimitExceeded();
+        uint256 remaining = userLimit - userUsed;
+        if (globalLimit - globalUsed < remaining) remaining = globalLimit - globalUsed;
+        uint256 maxShares = vault.convertToShares(remaining);
+        if (shares > maxShares) shares = maxShares;
+        if (shares == 0) revert RefillLimitExceeded();
+
+        refillDone[refillId] = true;
+        uint256 burned = shares;
+        delivered = vault.gatewayRedeem(member, shares);
+        if (delivered > remaining) revert RefillLimitExceeded();
+        userRefilled[member][day] = userUsed + delivered;
+        globalRefilled[day] = globalUsed + delivered;
+        emit Refilled(refillId, member, destination, delivered, burned);
     }
 
-    // ── MWTimelockedRiskParams hooks (governs userDailyRefillCap only) ──
-    function _refillCapParam(address user) internal pure returns (bytes32) {
-        return keccak256(abi.encode("MW_REFILL_CAP", user));
+    function setUserCap(address member, uint256 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        bytes32 param = keccak256(abi.encode("MW_USER_REFILL_CAP", member));
+        capUser[param] = member;
+        _changeRiskParam(param, cap, 0);
     }
 
-    function _effectiveRefillCap(address user) internal view returns (uint256) {
-        return userDailyRefillCap[user] > 0 ? userDailyRefillCap[user] : DEFAULT_GLOBAL_REFILL_CAP;
+    function confirmUserCap(address member) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _confirmRiskParam(keccak256(abi.encode("MW_USER_REFILL_CAP", member)));
     }
 
-    function _validateRiskParam(bytes32, uint256 v, uint256 v2) internal pure override {
-        if (v > MAX_REFILL_CAP || v2 != 0) revert RefillCapTooHigh();
+    function cancelUserCap(address member) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _cancelRiskParam(keccak256(abi.encode("MW_USER_REFILL_CAP", member)));
     }
 
-    function _writeRiskParam(bytes32 param, uint256 v, uint256) internal override {
-        address user = refillCapParamUser[param];
-        userDailyRefillCap[user] = v;
-        emit UserDailyRefillCapUpdated(user, v);
+    function setGlobalCap(uint256 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        bytes32 param = keccak256("MW_GLOBAL_REFILL_CAP");
+        capIsGlobal[param] = true;
+        _changeRiskParam(param, cap, 0);
+    }
+
+    function confirmGlobalCap() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _confirmRiskParam(keccak256("MW_GLOBAL_REFILL_CAP"));
+    }
+
+    function cancelGlobalCap() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _cancelRiskParam(keccak256("MW_GLOBAL_REFILL_CAP"));
+    }
+
+    function _effectiveUserCap(address member) private view returns (uint256) {
+        return userCap[member] == 0 ? DEFAULT_REFILL_CAP : userCap[member];
+    }
+
+    function _effectiveGlobalCap() private view returns (uint256) {
+        return globalCap == 0 ? DEFAULT_REFILL_CAP : globalCap;
+    }
+
+    function _validateRiskParam(bytes32, uint256 value, uint256 value2) internal pure override {
+        if (value > MAX_REFILL_CAP || value2 != 0) revert CapTooHigh();
+    }
+
+    function _writeRiskParam(bytes32 param, uint256 value, uint256) internal override {
+        if (capIsGlobal[param]) {
+            globalCap = value;
+            emit GlobalCapUpdated(value);
+        } else {
+            address member = capUser[param];
+            userCap[member] = value;
+            emit UserCapUpdated(member, value);
+        }
     }
 
     function _readRiskParam(bytes32 param) internal view override returns (uint256) {
-        return userDailyRefillCap[refillCapParamUser[param]];
+        return capIsGlobal[param] ? globalCap : userCap[capUser[param]];
     }
 
-    function _riskParamInstant(bytes32 param, uint256 v, uint256) internal view override returns (bool) {
-        uint256 curEff = _effectiveRefillCap(refillCapParamUser[param]);
-        uint256 newEff = v > 0 ? v : DEFAULT_GLOBAL_REFILL_CAP;
-        return newEff <= curEff; // tightening (smaller/equal effective cap) is instant; loosening waits 48h
+    function _riskParamInstant(bytes32 param, uint256 value, uint256) internal view override returns (bool) {
+        uint256 current = capIsGlobal[param] ? _effectiveGlobalCap() : _effectiveUserCap(capUser[param]);
+        uint256 next = value == 0 ? DEFAULT_REFILL_CAP : value;
+        return next <= current;
     }
 
     function pause() external onlyRole(PAUSER_ROLE) { _pause(); }
     function unpause() external onlyRole(PAUSER_ROLE) { _unpause(); }
-
-    /// @notice A user permanently revokes one of their permit nonces (e.g. lost device, rotate permit).
-    function revokeNonce(uint256 nonce) external {
-        if (usedNonces[msg.sender][nonce]) revert NonceRevokedError();
-        usedNonces[msg.sender][nonce] = true;
-        emit NonceRevoked(msg.sender, nonce);
-    }
-
-    /// @notice A user registers (or rotates) their OWN card spend-buffer wallet — the address a
-    ///         `refillBuffer` redemption pays into. `msg.sender`-pinned so a relayer can never choose
-    ///         where a refill lands: the buffer-refill analogue of the AUDIT C1 `receiver` pin.
-    function setBufferAddress(address buffer) external {
-        if (buffer == address(0)) revert ZeroAddress();
-        emit BufferAddressUpdated(msg.sender, bufferOf[msg.sender], buffer);
-        bufferOf[msg.sender] = buffer;
-    }
-
-    /// @notice A user pauses/unpauses THEIR OWN buffer refills on-chain (audit fix L4). msg.sender-pinned,
-    ///         so — unlike revokeNonce, which would also stop spending — a user can granularly halt a
-    ///         (possibly compromised) relayer from refilling their buffer without touching their card spend.
-    function setRefillPaused(bool paused) external {
-        userRefillPaused[msg.sender] = paused;
-        emit RefillPauseSet(msg.sender, paused);
-    }
-
-    /// @notice Settle a card charge the edge engine authorized. RELAYER-only.
-    function settleSpend(
-        bytes32 holdId,
-        address user,
-        uint256 assets,
-        address receiver,
-        DelegatedSpendPermit calldata permit,
-        bytes calldata permitSig,
-        ShortLivedHoldAuth calldata edgeAuth,
-        bytes calldata edgeSig
-    ) external onlyRole(RELAYER_ROLE) nonReentrant whenNotPaused returns (uint256 sharesBurned) {
-        if (assets == 0) revert InvalidAmount();
-        // AUDIT C1: the settlement destination is ALWAYS the Circle treasury. `receiver` was previously
-        // relayer-chosen and bound by NEITHER signed struct, so a rogue/compromised relayer could burn a
-        // permit-signer's senior shares and redirect the USDC to an arbitrary address (up to the daily
-        // cap). Pin it. The `receiver` param is retained for ABI stability but is deliberately ignored.
-        receiver = circleCpnTreasury;
-
-        // ── long-lived delegated permit ──
-        if (block.timestamp > permit.deadline) revert PermitExpired();
-        if (permit.user != user) revert InvalidPermitSignature();
-        bytes32 permitHash = keccak256(abi.encode(
-            DELEGATED_SPEND_PERMIT_TYPEHASH, permit.user, permit.maxDailySpendUSDC, permit.nonce, permit.deadline
-        ));
-        if (_hashTypedDataV4(permitHash).recover(permitSig) != user) revert InvalidPermitSignature();
-        // Nonce is REVOCATION-ONLY — checked, never consumed (see contract NatSpec).
-        if (usedNonces[user][permit.nonce]) revert NonceRevokedError();
-
-        // ── high-value edge authorization ──
-        // AUDIT M2: the edge signature is required once CUMULATIVE daily spend crosses the threshold, not
-        // per-charge — otherwise a relayer trivially bypasses the second-signer control by splitting a
-        // large settlement into sub-$250 charges. Uses the pre-update daily tally (updated below).
-        uint256 spentTodayForGate = dailySpendUSDC[user][block.timestamp / 1 days];
-        if (spentTodayForGate + assets >= HIGH_VALUE_THRESHOLD) {
-            if (edgeSig.length == 0) revert EdgeSignatureRequired();
-            if (edgeAuth.holdId != holdId || edgeAuth.user != user || edgeAuth.amountUSDC != assets) {
-                revert InvalidEdgeSignature();
-            }
-            if (block.timestamp > edgeAuth.expiry) revert EdgeAuthExpired();
-            if (edgeAuth.expiry > block.timestamp + MAX_SHORT_LIVED_WINDOW) revert EdgeAuthExpired();
-            bytes32 edgeHash = keccak256(abi.encode(
-                SHORT_LIVED_HOLD_AUTH_TYPEHASH, edgeAuth.holdId, edgeAuth.user, edgeAuth.amountUSDC, edgeAuth.nonce, edgeAuth.expiry
-            ));
-            if (!hasRole(EDGE_SIGNER_ROLE, _hashTypedDataV4(edgeHash).recover(edgeSig))) revert InvalidEdgeSignature();
-        }
-
-        // ── liquidity + daily limit + hold idempotency (EFFECTS before the external burn — CEI) ──
-        if (vault.idleBuffer() < assets) revert InsufficientIdleLiquidity();
-
-        Hold storage h = holds[holdId];
-        if (h.settled) revert HoldAlreadySettled();
-        if (h.cancelled) revert HoldCancelledError();
-
-        _checkAndUpdateDailyLimit(user, assets, permit.maxDailySpendUSDC);
-        holds[holdId] = Hold({user: user, amountUSDC: assets, settledAt: block.timestamp, settled: true, cancelled: false});
-
-        // ── asset-denominated settlement ──
-        sharesBurned = vault.previewWithdraw(assets);                 // rounds UP → redeemed >= assets
-        uint256 redeemed = vault.burnForPayment(user, sharesBurned, receiver);
-        if (redeemed < assets) revert InsufficientIdleLiquidity();
-
-        emit PaymentSettled(holdId, user, receiver, assets, sharesBurned);
-    }
-
-    function cancelHold(bytes32 holdId) external onlyRole(RELAYER_ROLE) {
-        Hold storage h = holds[holdId];
-        // AUDIT (low): require the hold to actually exist. Cancelling a never-created holdId wrote
-        // cancelled=true onto an all-zero Hold — permanently blocking that id from ever settling and
-        // emitting a misleading HoldCancelled(_, address(0)).
-        if (h.user == address(0)) revert UnknownHold();
-        if (h.settled) revert HoldAlreadySettled();
-        h.cancelled = true;
-        emit HoldCancelled(holdId, h.user);
-    }
-
-    function _checkAndUpdateDailyLimit(address user, uint256 amount, uint256 permitMaxDaily) internal {
-        uint256 epochDay = block.timestamp / 1 days;
-        uint256 protocolCap = userDailyCap[user] > 0 ? userDailyCap[user] : DEFAULT_GLOBAL_DAILY_CAP;
-        uint256 effectiveCap = permitMaxDaily < protocolCap ? permitMaxDaily : protocolCap;
-        uint256 spent = dailySpendUSDC[user][epochDay];
-        if (spent + amount > effectiveCap) revert ExceedsDailySpendLimit();
-        dailySpendUSDC[user][epochDay] = spent + amount;
-    }
-
-    // ── card spend buffer refill (Option A — per-user, funded from the user's own senior shares) ──
-
-    /// @notice Redeem a slice of the user's OWN senior position into USDC and push it to the user's
-    ///         registered spend buffer. RELAYER-only. Spec: docs/developers/card-spend-buffer-spec.md.
-    ///
-    /// @dev    This REPOSITIONS the user's own capital (vault → their own buffer wallet) — it is not a
-    ///         merchant payout. The theft vector `settleSpend`'s edge signature guards against is closed
-    ///         here structurally: `receiver` is pinned to `bufferOf[user]`, which only the user can set
-    ///         (`setBufferAddress`), so a compromised relayer cannot redirect the USDC. No edge auth is
-    ///         therefore required. Refills carry their OWN daily-cap ledger (`dailyRefillUSDC`), separate
-    ///         from the spend ledger and each bounded by the user's signed permit cap and an admin
-    ///         protocol cap — so the worst a rogue relayer can do is move a bounded amount per day into
-    ///         the user's own wallet, and the runaway-refill rate is capped. The permit proves the user
-    ///         consented to programmatic burns of their shares. Idempotent per `refillId`. CEI order.
-    ///
-    /// @dev    TWO-LEDGER PERMIT MODEL (audit M2 — accepted by design). One long-lived `DelegatedSpendPermit`
-    ///         authorizes BOTH `settleSpend` (merchant payout) and `refillBuffer`, each metered by its OWN
-    ///         daily ledger (`dailySpendUSDC` vs `dailyRefillUSDC`). This is intentional: a refill is not a
-    ///         second spend — it repositions the user's OWN shares into the user's OWN pinned buffer, from
-    ///         which spending is still bounded by the spend ledger. So the refill leg has NO theft vector
-    ///         (the `≥$250` edge second-signer gate exists to protect *merchant* payouts and is deliberately
-    ///         not required here) and is bounded instead by its own timelock-governed cap, the off-chain
-    ///         refill-rate breaker, and the user's on-chain `setRefillPaused` kill-switch (audit L4).
-    function refillBuffer(
-        bytes32 refillId,
-        address user,
-        uint256 assets,
-        DelegatedSpendPermit calldata permit,
-        bytes calldata permitSig
-    ) external onlyRole(RELAYER_ROLE) nonReentrant whenNotPaused returns (uint256 sharesBurned) {
-        if (assets == 0) revert InvalidAmount();
-
-        // The user's own on-chain refill kill-switch (audit L4) — checked first.
-        if (userRefillPaused[user]) revert RefillPausedError();
-
-        // Destination is PINNED to the user's own registered buffer — never relayer-chosen (mirrors C1).
-        address receiver = bufferOf[user];
-        if (receiver == address(0)) revert BufferNotSet();
-
-        // ── long-lived delegated permit (the user's consent to burn their shares) ──
-        if (block.timestamp > permit.deadline) revert PermitExpired();
-        if (permit.user != user) revert InvalidPermitSignature();
-        bytes32 permitHash = keccak256(abi.encode(
-            DELEGATED_SPEND_PERMIT_TYPEHASH, permit.user, permit.maxDailySpendUSDC, permit.nonce, permit.deadline
-        ));
-        if (_hashTypedDataV4(permitHash).recover(permitSig) != user) revert InvalidPermitSignature();
-        if (usedNonces[user][permit.nonce]) revert NonceRevokedError();
-
-        // ── liquidity + refill daily cap + idempotency (EFFECTS before the external burn — CEI) ──
-        if (vault.idleBuffer() < assets) revert InsufficientIdleLiquidity();
-        if (refillDone[refillId]) revert RefillAlreadyDone();
-
-        _checkAndUpdateRefillLimit(user, assets, permit.maxDailySpendUSDC);
-        refillDone[refillId] = true;
-
-        // ── asset-denominated redemption into the user's buffer ──
-        sharesBurned = vault.previewWithdraw(assets);                 // rounds UP → redeemed >= assets
-        uint256 redeemed = vault.burnForPayment(user, sharesBurned, receiver);
-        if (redeemed < assets) revert InsufficientIdleLiquidity();
-
-        emit BufferRefilled(refillId, user, receiver, assets, sharesBurned);
-    }
-
-    function _checkAndUpdateRefillLimit(address user, uint256 amount, uint256 permitMaxDaily) internal {
-        uint256 epochDay = block.timestamp / 1 days;
-        uint256 protocolCap = userDailyRefillCap[user] > 0 ? userDailyRefillCap[user] : DEFAULT_GLOBAL_REFILL_CAP;
-        uint256 effectiveCap = permitMaxDaily < protocolCap ? permitMaxDaily : protocolCap;
-        uint256 spent = dailyRefillUSDC[user][epochDay];
-        if (spent + amount > effectiveCap) revert ExceedsDailyRefillLimit();
-        dailyRefillUSDC[user][epochDay] = spent + amount;
-    }
-
-    function domainSeparator() external view returns (bytes32) {
-        return _domainSeparatorV4();
-    }
 }

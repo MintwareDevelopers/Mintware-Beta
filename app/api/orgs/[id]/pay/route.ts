@@ -4,7 +4,7 @@
 // the recorded plan. Teams can see + report on every payment from the ledger.
 //
 // NOTE (settlement): the on-chain per-recipient settlement of these legs — burning treasury shares to
-// each vendor via settleSpend — is the NEXT milestone (money-movement, needs the treasury spend-permit
+// each vendor via on-chain settlement — is the NEXT milestone (money-movement, needs the treasury spend-permit
 // design + external audit; deploy-gated). Until then, legs are recorded with status 'recorded'
 // (initiated, settlement pending); a later settle path stamps them 'settled' on receipt.status===success
 // (see lib/treasury/spendLog.ts#markSpendSettled). The previous version POSTed these legs to the
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         totalUsdc: total.toString(),
       }
 
-      // Recorded. On-chain settlement (per-recipient settleSpend) is the next milestone — see file header.
+      // Recorded. On-chain settlement (per-recipient on-chain settlement) is the next milestone — see file header.
       return ctx.json({
         ok: true,
         status: 'recorded',

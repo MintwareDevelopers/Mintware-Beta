@@ -1,12 +1,12 @@
 // O-10 / R-6 / HO-12: bind the SIGNED `txHash` + `pool` to the body the route acts on, and refuse a
 // re-presented signature inside the 15-minute freshness window.
 //
-// createHandler already binds `action` + `issuedAt` to the signature (routeHandler.ts). The gateway
+// createHandler already binds `action` + `issuedAt` to the signature (routeHandler.ts). MarketEngine
 // deposit/withdraw messages ALSO embed `txHash` and `pool` (signedActionMessages.ts) — but the routes
 // read those from the body, so one captured signature was good for any txHash / pool of that wallet on
 // that route. Here the signed payload is the source of truth: the body must equal it (case-normalised)
 // or the request is rejected. The replay claim is an in-process set keyed by the signature itself; the
-// durable backstop is `gateway_deposit_events.tx_hash UNIQUE` (a replayed tx records once, never twice).
+// durable backstop is `market_engine_tx_events.tx_hash PRIMARY KEY` (a replayed tx records once).
 
 import { isHex, keccak256, toBytes } from 'viem'
 

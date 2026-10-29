@@ -4,7 +4,7 @@
 // a caller can tune one control at a time; only provided fields appear in the patch.
 //
 // These are the OFF-CHAIN tuning knobs (target sizing inputs, per-tx cap, refill-rate cap, enable).
-// The on-chain per-user caps (setBufferAddress / setUserDailyRefillCap on the Gateway) are signed
+// The on-chain per-user caps (timelocked user/global cap administration on the Gateway) are signed
 // separately by the member/admin; this never moves money — it only shapes future refill behavior,
 // which is itself bounded by the on-chain caps + the refill-rate breaker.
 

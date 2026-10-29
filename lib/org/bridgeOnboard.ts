@@ -1,10 +1,10 @@
 // The onboarding ORCHESTRATOR — drives the pure state machine (lib/cards/onboard.ts) through its
 // real side effects, in order, idempotently. Every effect is an injected dependency so the whole
 // sequence is testable end-to-end with fakes; the route wires the real Bridge client / Privy signer /
-// Gateway.refillBuffer / go-live.
+// Gateway.refill / go-live.
 //
 // Two things it refuses to do: (1) run `go_live` while `goLiveBlocked` reports a reason (buffer not
-// primed) — the cold-decline guard; (2) perform a MEMBER step (the standing-permit signature). When
+// primed) — the cold-decline guard; (2) perform a MEMBER step (the destination registration). When
 // the next step is a member step, it stops with `awaitingMember` set so the caller can prompt the
 // member, then resumes from the same point once they've signed. Steps are re-derived from freshly-
 // loaded state each pass, so a crash-and-retry resumes exactly where it left off.
@@ -24,7 +24,7 @@ export interface OnboardDeps {
   issueCard(): Promise<void>
   /** Privy signs the capped approve (lib/org/bridgeApprove.ts). */
   grantApproval(): Promise<void>
-  /** Redeem senior shares → the buffer wallet (Gateway.refillBuffer); MUST leave bufferPrimed=true only
+  /** Redeem senior shares → the buffer wallet (Gateway.refill); MUST leave bufferPrimed=true only
    *  once the refill is confirmed on-chain and the balance is at/above its minimum. */
   primeBuffer(): Promise<void>
   /** Mark the card live + push-provision. Only reached after the buffer is primed. */
@@ -36,13 +36,13 @@ export interface OnboardRunResult {
   finalState: OnboardState
   ran: OnboardStep[]
   complete: boolean
-  /** Set when the run paused waiting for a member action (e.g. the standing-permit signature). */
+  /** Set when the run paused waiting for a member action (e.g. the destination registration). */
   awaitingMember?: OnboardStep
   /** Set when the run stopped because go-live was blocked or a step made no progress. */
   stopped?: string
 }
 
-// Automated steps only — sign_permit is a member action and is never in this map.
+// Automated steps only — register_destination is a member action and is never in this map.
 const RUNNERS: Partial<Record<OnboardStep, (d: OnboardDeps) => Promise<void>>> = {
   issue_card: (d) => d.issueCard(),
   grant_approval: (d) => d.grantApproval(),
