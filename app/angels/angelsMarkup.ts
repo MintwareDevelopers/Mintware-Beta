@@ -66,123 +66,124 @@ export const ANGELS_HTML = `<!doctype html>
 <section class="slide" style="justify-content:center; align-items:flex-start; min-height:520px">
   <span class="num mono">01</span>
   <div class="logo"><svg width="34" height="34" viewBox="0 0 100 100" style="border-radius:10px;box-shadow:0 5px 14px -3px rgba(108,108,240,.6)"><defs><linearGradient id="mwc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A82F4"/><stop offset="1" stop-color="#6C6CF0"/></linearGradient></defs><rect width="100" height="100" rx="22" fill="url(#mwc)"/><ellipse cx="50" cy="55.5" rx="35" ry="7" fill="#fff"/><path d="M32,55.5 A18,18 0 0 1 68,55.5 Z" fill="#fff"/></svg>Mintware</div>
-  <h1 style="margin-top:28px">Crypto companies sit on<br>billions in idle cash.<br><span class="grad">We put it to work.</span></h1>
-  <p class="lede" style="margin-top:22px; font-size:1.3rem">Exchanges, funds, and web3 startups hold huge balances of <b>digital dollars</b> — stablecoins, always worth $1 — that earn almost nothing. Mintware turns that idle cash into <b>working capital that earns</b>, while staying spendable any moment.</p>
+  <h1 style="margin-top:28px">Every asset<br><span class="grad">deserves a market.</span></h1>
+  <p class="lede" style="margin-top:22px; font-size:1.3rem">Stocks, property, treasuries and digital dollars are all moving onto blockchains. Mintware makes sure there’s always a <b>fair place to buy and sell them</b> — and pays the people who make that possible.</p>
   <div class="row">
     <span class="pill"><span class="dot"></span>Seed round · confidential</span>
     <span class="pill">Plain-English overview</span>
   </div>
 </section>
 
-<!-- 2 · PROBLEM -->
+<!-- 2 · WHAT'S HAPPENING -->
 <section class="slide cool">
   <span class="num mono">02</span>
-  <div class="label">The problem</div>
-  <h2>Every crypto treasury faces the same choice: <span class="grad">stay spendable, or earn.</span></h2>
-  <p class="lede" style="margin-top:18px">A crypto company's cash sits on-chain as digital dollars. Keep it spendable for payroll and operations and it earns nothing; move it somewhere that earns and it's locked away. So <b>billions in stablecoins sit idle</b> — spendable, but dead.</p>
+  <div class="label">What’s happening</div>
+  <h2>Real-world assets are <span class="grad">moving on-chain.</span></h2>
+  <p class="lede" style="margin-top:18px">A share of Tesla, a slice of farmland, a US Treasury bill — all of these can now exist as a digital token you hold in your own wallet and trade any hour of the day. This is called <b>tokenization</b>, and it’s growing fast.</p>
   <div class="grid3" style="margin-top:26px">
-    <div class="card"><div class="stat mono">$B+</div><div class="statlab">in crypto-company treasuries, mostly idle stablecoins</div></div>
-    <div class="card"><div class="stat mono">~0%</div><div class="statlab">earned on the balance they keep on hand</div></div>
-    <div class="card"><div class="stat mono">~$9T/yr</div><div class="statlab">digital dollars now settle this much annually</div></div>
+    <div class="card"><div class="stat mono">$300B</div><div class="statlab">in digital dollars (stablecoins)</div></div>
+    <div class="card"><div class="stat mono">$38B+</div><div class="statlab">in tokenized real-world assets</div></div>
+    <div class="card"><div class="stat mono">~2,000</div><div class="statlab">stock tokens issued by Robinhood</div></div>
   </div>
-  <div class="kicker">It's an <b>idle-cash tax</b> — and every crypto company pays it.</div>
+  <div class="fine" style="margin-top:14px">Sources: rwa.xyz, Token Terminal, Robinhood (Oct 2026). Figures approximate.</div>
 </section>
 
-<!-- 3 · THE PLUMBING -->
+<!-- 3 · THE PROBLEM -->
 <section class="slide">
   <span class="num mono">03</span>
-  <div class="label">How crypto markets work</div>
-  <h2>Every market runs on <span class="grad">money standing ready.</span></h2>
-  <p class="lede" style="margin-top:18px">For anyone to trade — a token, a digital dollar, anything on-chain — someone must have money standing ready on the other side. In crypto that standing-ready money is called <b>liquidity</b>, and it's the plumbing every market runs on.</p>
+  <div class="label">The problem</div>
+  <h2>Owning it is easy. <span class="grad">Selling it fairly isn’t.</span></h2>
+  <p class="lede" style="margin-top:18px">For anyone to buy or sell, someone must have money standing ready on the other side. That standing-ready money is called <b>liquidity</b>. Most new tokens don’t have enough of it — so prices jump around, a single sale moves the market, and owners can’t get out at a fair price.</p>
   <div class="grid2" style="margin-top:26px">
     <div class="card"><h3>Liquidity = the plumbing</h3><p>Money standing ready so trades can happen. No liquidity, no market.</p></div>
-    <div class="card"><h3>Depth = the pressure</h3><p>How much is standing ready. More depth means smoother prices and bigger trades.</p></div>
+    <div class="card"><h3>Today it’s rented</h3><p>Issuers pay professional market makers, who keep the trading income and leave when the contract ends.</p></div>
   </div>
-  <div class="kicker">Whoever supplies that liquidity earns a <b>fee on every trade</b> that flows through it. In crypto, that's a job any company's idle cash could do — but almost none does.</div>
 </section>
 
 <!-- 4 · WHAT WE DO -->
 <section class="slide lav">
   <span class="num mono">04</span>
   <div class="label">What we do</div>
-  <h2>We turn idle company balances into <span class="grad">that liquidity.</span></h2>
-  <p class="lede" style="margin-top:18px">Mintware takes a crypto company's idle digital dollars and puts them to work as liquidity in on-chain markets. They earn <b>two ways at once</b> — and stay spendable the entire time.</p>
+  <h2>We let everyday holders <span class="grad">become the market.</span></h2>
+  <p class="lede" style="margin-top:18px">With Mintware, anyone can put one asset into a market and earn from every trade that flows through it — the income professional market makers have always kept for themselves.</p>
   <div class="grid3" style="margin-top:26px">
-    <div class="card"><h3>Earns lending yield</h3><p>The return digital dollars make when they're lent into on-chain credit markets.</p></div>
-    <div class="card"><h3>Earns trading fees</h3><p>A share of the fee every on-chain trade pays to the liquidity standing ready.</p></div>
-    <div class="card"><h3>Still spendable</h3><p>Never locked — spend it or withdraw it any moment.</p></div>
+    <div class="card"><h3>Earns trading fees</h3><p>A share of the fee every trade pays, while the market is busy.</p></div>
+    <div class="card"><h3>Earns while it waits</h3><p>When the money isn’t needed for trading, it’s lent out to earn interest instead of sitting still.</p></div>
+    <div class="card"><h3>Never locked</h3><p>Take it out any time. No lock-ups, no notice periods.</p></div>
   </div>
-  <div class="kicker"><b>Two income streams on the same digital dollar</b> — that you can still spend.</div>
+  <div class="kicker"><b>Two income streams on the same balance</b> — and it’s always yours.</div>
 </section>
 
-<!-- 5 · THE MAGIC -->
+<!-- 5 · WHY IT MATTERS -->
 <section class="slide coral">
   <span class="num mono">05</span>
-  <div class="label">The magic</div>
-  <h2>It earns right up to <span class="grad">the second you spend it.</span></h2>
-  <p class="lede" style="margin-top:18px">Every dollar keeps working the entire time it sits there — and it's <b>all yours to spend, any moment.</b> Tap a Mintware card and the money is there instantly; no idle cash waiting around, no penalty for pulling it out, no early exit to plan.</p>
-  <p class="lede" style="margin-top:16px">A money-market fund makes you choose between earning and access. Mintware doesn't — you get <b>both, on the same dollar.</b></p>
-  <div class="kicker">Spend it all, spend a little, or leave it working — <b>it's always yours, and always earning until the moment you use it.</b></div>
+  <div class="label">Why it matters</div>
+  <h2>Better for everyone <span class="grad">around the asset.</span></h2>
+  <div class="grid3" style="margin-top:22px">
+    <div class="card"><h3>Holders</h3><p>Earn far more than a savings account, from the asset they already believe in.</p></div>
+    <div class="card"><h3>Issuers</h3><p>A real, deep market from day one — funded by their own community, not a rented firm.</p></div>
+    <div class="card"><h3>Traders</h3><p>Fair prices at any hour, without one sale swinging the market.</p></div>
+  </div>
+  <div class="kicker">We think liquidity should be <b>a public good</b> — owned by the people who use it.</div>
 </section>
 
-<!-- 6 · NEVER LOCKED -->
+<!-- 6 · HOW IT WORKS -->
 <section class="slide">
   <span class="num mono">06</span>
-  <div class="label">Why it isn't a trade-off</div>
-  <h2>Earns like an investment. <span class="grad">Spends like a checking account.</span></h2>
-  <p class="lede" style="margin-top:18px">Normally, making money earn means locking it away. Mintware doesn't. Your balance stays <b>fully spendable — every dollar, any moment</b> — and it's earning the whole time it sits there. No lock-ups, no notice periods, nothing to break open to get to your cash.</p>
-  <div class="grid2" style="margin-top:26px">
-    <div class="card"><h3>The old way</h3><p>Lock it up to earn. Break it to spend. Pick one.</p></div>
-    <div class="card"><h3>Mintware</h3><p>Fully spendable and earning at the same time. No picking.</p></div>
+  <div class="label">How it works</div>
+  <h2>Add once. <span class="grad">It works on its own.</span></h2>
+  <div class="grid3" style="margin-top:22px">
+    <div class="card"><h3>1 · Add</h3><p>Choose a market and add one asset. You get a share of that market.</p></div>
+    <div class="card"><h3>2 · Earn</h3><p>Our engine keeps the money trading when it’s busy and earning interest when it’s quiet.</p></div>
+    <div class="card"><h3>3 · Withdraw</h3><p>Cash out your share whenever you like.</p></div>
   </div>
+  <div class="kicker">It’s like owning a small piece of the stock exchange — <b>without having to run it.</b></div>
 </section>
 
 <!-- 7 · WHY NOW -->
 <section class="slide cool">
   <span class="num mono">07</span>
   <div class="label">Why now</div>
-  <h2>Digital dollars just went <span class="grad">mainstream.</span></h2>
-  <p class="lede" style="margin-top:18px">Stablecoins now settle trillions of dollars a year — rivaling the big card networks — and the on-chain tools to put idle balances to work safely have only just matured. Crypto treasuries are piling up, and <b>no one has made putting them to work simple, safe, and spendable.</b></p>
-  <div class="grid2" style="margin-top:26px">
-    <div class="card"><h3>The money is here</h3><p>Trillions in digital dollars now move on-chain every year — the idle pile is enormous.</p></div>
-    <div class="card"><h3>The seat is open</h3><p>No one's made crypto treasury cash earn while staying spendable. That's exactly what we do.</p></div>
+  <h2>The assets just <span class="grad">arrived.</span></h2>
+  <p class="lede" style="margin-top:18px">In the last year, tokenized stocks went from under $1 billion to over $3 billion, and Robinhood launched its own blockchain full of stock tokens. The assets are here. The markets around them aren’t ready yet — that’s the gap we fill.</p>
+  <div class="grid2" style="margin-top:22px">
+    <div class="card"><h3>The money is here</h3><p>Hundreds of billions in digital dollars and tens of billions in real-world assets, already on-chain.</p></div>
+    <div class="card"><h3>The seat is open</h3><p>No one has made community-funded markets simple for everyday holders and issuers. That’s exactly what we do.</p></div>
   </div>
-  <div class="kicker">Right idea, right rails, right moment — and <b>built security-first from day one.</b></div>
 </section>
 
-<!-- 8 · THE WEDGE -->
+<!-- 8 · WHERE WE START -->
 <section class="slide lav">
   <span class="num mono">08</span>
   <div class="label">Where we start</div>
-  <h2>We start with <span class="grad">crypto company treasuries.</span></h2>
-  <p class="lede" style="margin-top:18px">Every crypto company — exchanges, funds, DAOs, web3 startups — sits on idle digital dollars it needs to keep spendable. We're the <b>smarter place to put it</b>: it earns, it stays spendable for payroll and vendors, and every movement is on-chain and on the record.</p>
-  <div class="kicker">Win the crypto treasury first — then give <b>every wallet on earth</b> the same thing. Think big, start focused.</div>
+  <h2>We start with <span class="grad">stock tokens on Robinhood Chain.</span></h2>
+  <p class="lede" style="margin-top:18px">Around three in four dollars on Robinhood’s blockchain sit in tokenized stocks — and many of them still trade in thin, unreliable markets. Mintware is built right there, ready to give each one a deep, fair market.</p>
+  <div class="kicker">Win stock tokens first — <b>then bring every real-world asset to market.</b></div>
 </section>
 
-<!-- 9 · TRACTION -->
+<!-- 9 · WHERE WE ARE -->
 <section class="slide">
   <span class="num mono">09</span>
   <div class="label">Where we are</div>
-  <h2>Testnet work and the <span class="grad">path to launch.</span></h2>
-  <div class="grid3" style="margin-top:24px">
-    <div class="card"><h3>Live on testnet</h3><p>MarketEngine is live on Robinhood Chain testnet; its adapters hold test assets without yield.</p></div>
-    <div class="card"><h3>Security-first</h3><p>Built to pass an independent audit before real money moves — the bar, not an afterthought.</p></div>
-    <div class="card"><h3>Testnet demo</h3><p>A past testnet demo recorded an earn, spend, and settlement flow down to a transaction.</p></div>
+  <h2>Built, and live <span class="grad">on testnet.</span></h2>
+  <div class="grid3" style="margin-top:22px">
+    <div class="card"><h3>Live on testnet</h3><p>Our market engine runs on Robinhood’s test network, and adding and withdrawing works end-to-end in our live app.</p></div>
+    <div class="card"><h3>Backed</h3><p>Firma Labs is incubating us and anchoring this round.</p></div>
+    <div class="card"><h3>Security-first</h3><p>An independent security audit comes before real money moves — the bar, not an afterthought.</p></div>
   </div>
-  <div class="kicker">Past demonstrations ran on test networks; an <b>independent security audit is the gate</b> before real money moves. We're building to that bar, not around it.</div>
 </section>
 
-<!-- 10 · BUSINESS MODEL -->
+<!-- 10 · HOW WE MAKE MONEY -->
 <section class="slide cool">
   <span class="num mono">10</span>
   <div class="label">How we make money</div>
-  <h2>We earn <span class="grad">only when you do.</span></h2>
-  <p class="lede" style="margin-top:18px">Mintware takes a <b>small share of the earnings</b> it generates for you — nothing more.</p>
-  <div class="grid3" style="margin-top:24px">
-    <div class="card"><h3>A cut of the earnings</h3><p>A slice of what we earn for you — never a cut of your principal.</p></div>
-    <div class="card"><h3>No account fees</h3><p>No monthly fees, no minimums, no lock-in.</p></div>
-    <div class="card"><h3>Fully aligned</h3><p>No earnings means no cut — we only win when your money does.</p></div>
+  <h2>We earn <span class="grad">when the market earns.</span></h2>
+  <div class="grid3" style="margin-top:22px">
+    <div class="card"><h3>A cut of trading fees</h3><p>10% of the fees a market earns — never a cut of anyone’s money.</p></div>
+    <div class="card"><h3>Issuer launches</h3><p>Issuers pay to launch a curated market for their asset.</p></div>
+    <div class="card"><h3>The card</h3><p>A small fee when people spend from their earning balance with a Mintware card.</p></div>
   </div>
+  <div class="kicker">More trading means more for holders — <b>and more for us.</b></div>
 </section>
 
 <!-- 11 · THE ASK -->
@@ -222,12 +223,12 @@ export const ANGELS_HTML = `<!doctype html>
 </section>
 
 <!-- 13 · VISION -->
-<section class="slide" style="background:var(--ink); border-color:transparent; min-height:460px; justify-content:center">
-  <span class="num mono" style="color:rgba(255,255,255,.4)">13</span>
-  <div class="logo" style="color:#fff"><svg width="34" height="34" viewBox="0 0 100 100" style="border-radius:10px;box-shadow:0 5px 14px -3px rgba(108,108,240,.6)"><defs><linearGradient id="mwv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A82F4"/><stop offset="1" stop-color="#6C6CF0"/></linearGradient></defs><rect width="100" height="100" rx="22" fill="url(#mwv)"/><ellipse cx="50" cy="55.5" rx="35" ry="7" fill="#fff"/><path d="M32,55.5 A18,18 0 0 1 68,55.5 Z" fill="#fff"/></svg>Mintware</div>
-  <h2 style="color:#fff; font-size:clamp(1.9rem,4vw,3rem); margin-top:26px; max-width:16ch">Win the treasury. Then give <span style="color:var(--coral)">every balance on earth</span> the same superpower.</h2>
-  <p class="lede" style="color:rgba(255,255,255,.72); margin-top:20px; max-width:52ch">Money that never sits idle, never gets locked, and always stays yours — for every company, every wallet, every account.</p>
-  <div class="kicker" style="color:rgba(255,255,255,.6); border-top:1px solid rgba(255,255,255,.14); margin-top:30px">team@mintware.org · Never idle. Never locked. Always yours.</div>
+<section class="slide lav" style="min-height:460px; justify-content:center">
+  <span class="num mono">13</span>
+  <div class="logo"><svg width="34" height="34" viewBox="0 0 100 100" style="border-radius:10px;box-shadow:0 5px 14px -3px rgba(108,108,240,.6)"><defs><linearGradient id="mwv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A82F4"/><stop offset="1" stop-color="#6C6CF0"/></linearGradient></defs><rect width="100" height="100" rx="22" fill="url(#mwv)"/><ellipse cx="50" cy="55.5" rx="35" ry="7" fill="#fff"/><path d="M32,55.5 A18,18 0 0 1 68,55.5 Z" fill="#fff"/></svg>Mintware</div>
+  <h2 style="font-size:clamp(1.9rem,4vw,3rem); margin-top:26px; max-width:18ch">Start with stock tokens. Then give <span class="grad">every asset on earth</span> a market.</h2>
+  <p class="lede" style="margin-top:20px; max-width:52ch">Every real asset, owned by anyone, traded at a fair price — with the people who hold it earning from every trade.</p>
+  <div class="kicker">team@mintware.org · Liquidity should be a public good.</div>
 </section>
 
 </div>

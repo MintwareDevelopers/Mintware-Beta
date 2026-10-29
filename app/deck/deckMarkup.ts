@@ -94,11 +94,11 @@ export const DECK_HTML = `<!doctype html>
 <section class="slide" style="justify-content:center; align-items:flex-start; min-height:520px">
   <span class="num mono">01</span>
   <div class="logo"><svg width="34" height="34" viewBox="0 0 100 100" style="border-radius:10px;box-shadow:0 5px 14px -3px rgba(108,108,240,.6)"><defs><linearGradient id="mwc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A82F4"/><stop offset="1" stop-color="#6C6CF0"/></linearGradient></defs><rect width="100" height="100" rx="22" fill="url(#mwc)"/><ellipse cx="50" cy="55.5" rx="35" ry="7" fill="#fff"/><path d="M32,55.5 A18,18 0 0 1 68,55.5 Z" fill="#fff"/></svg>Mintware</div>
-  <h1 style="margin-top:28px">Never idle.<br>Never locked.<br><span class="grad">Always yours.</span></h1>
-  <p class="lede" style="margin-top:22px; font-size:1.3rem">Idle money is everywhere — trillions of it, earning nothing. Mintware makes it <b>productive, without ever locking it up.</b> Starting with the treasury.</p>
+  <h1 style="margin-top:28px">Every asset<br><span class="grad">deserves a market.</span></h1>
+  <p class="lede" style="margin-top:22px; font-size:1.3rem">Stocks, real-world assets and stablecoins are moving on-chain by the billions. Mintware gives them <b>deep, fair markets</b> — funded by the people who hold them, who earn what market makers earn.</p>
   <div class="row">
     <span class="pill"><span class="dot"></span>Seed round · confidential</span>
-    <span class="pill">On-chain treasury OS</span>
+    <span class="pill">Liquidity for tokenized assets</span>
   </div>
 </section>
 
@@ -106,47 +106,47 @@ export const DECK_HTML = `<!doctype html>
 <section class="slide cool">
   <span class="num mono">02</span>
   <div class="label">The problem</div>
-  <h2>Every dollar is forced to choose: <span class="grad">earn, or be spendable.</span> Never both.</h2>
-  <p class="lede" style="margin-top:18px">And it isn’t just bank cash. Idle money is <b>everywhere</b> — team treasuries, personal accounts, the balances agents leave between calls, the buffers and float that keep every on-chain system running. Trillions, earning nothing — because the moment capital has to stay usable, yield gets in the way.</p>
+  <h2>Assets are going on-chain faster than <span class="grad">markets can form around them.</span></h2>
+  <p class="lede" style="margin-top:18px">Tokenizing an asset solves who owns it. It doesn’t solve how to trade it. Thin markets mean wide spreads, prices that jump on a single sale, and holders who can’t get out at a fair price. Today, depth is rented from market makers who leave when the contract ends — and the trading income goes to them, not to the people who hold the asset.</p>
   <div class="grid3" style="margin-top:26px">
-    <div class="card"><div class="stat mono">~$9T</div><div class="statlab">annual stablecoin settlement volume</div></div>
-    <div class="card"><div class="stat mono">~0%</div><div class="statlab">yield on the liquid balance funding it</div></div>
-    <div class="card"><div class="stat mono">$B+</div><div class="statlab">DAO &amp; startup treasuries, mostly idle USDC</div></div>
+    <div class="card"><div class="stat mono">$38B+</div><div class="statlab">tokenized real-world assets</div></div>
+    <div class="card"><div class="stat mono">&lt;$1B → $3B+</div><div class="statlab">tokenized stocks, in a year</div></div>
+    <div class="card"><div class="stat mono">~1 in 6</div><div class="statlab">stock-token dollars sitting in memecoin-style pools</div></div>
   </div>
-  <div class="kicker">It’s an <b>idle-cash tax</b> — and everyone from a solo wallet to a corporate treasury pays it.</div>
-  <div class="fine" style="margin-top:10px">Sources: a16z State of Crypto 2025 (settlement volume); CoinDesk Research 2025 (idle stablecoins); DeepDAO 2025 (treasury aggregate). Figures approximate.</div>
+  <div class="kicker">The assets are real. <b>The markets around them aren’t ready.</b></div>
+  <div class="fine" style="margin-top:10px">Sources: rwa.xyz, Token Terminal, Robinhood (Oct 2026). Figures approximate.</div>
 </section>
 
 <!-- 3 · SOLUTION -->
 <section class="slide">
   <span class="num mono">03</span>
   <div class="label">The solution</div>
-  <h2>Mintware makes idle money <span class="grad">productive — everywhere it sits.</span></h2>
-  <p class="lede" style="margin-top:18px">Capital sits in a Uniswap&nbsp;V4 vault earning real yield. When you spend, you spend the <b>yield</b> — a payment is a <b>hold</b> against the earning position, not a withdrawal. The position never unwinds. Nothing locks. Nothing sits idle. The same engine works on any idle balance — we start with the treasury.</p>
+  <h2>Mintware turns holders into <span class="grad">the market.</span></h2>
+  <p class="lede" style="margin-top:18px">Anyone can back a market with <b>one asset</b>. Mintware pools it into a shared position on Uniswap&nbsp;V4 that provides depth while the market trades, and earns lending yield while it waits. One share, one balance — <b>withdraw any time</b>.</p>
   <div class="grid3" style="margin-top:26px">
-    <div class="card"><h3>Never idle</h3><p>Idle capital is routed to the best-yielding venue and works as V4 liquidity — three return streams on one balance.</p></div>
-    <div class="card"><h3>Never locked</h3><p>Spendable to the cent, in real time — card, payroll, vendor payout — with no withdrawal window.</p></div>
-    <div class="card"><h3>Always yours</h3><p>Non-custodial. Your keys, your contracts. No deposit desk, no lockup, no counterparty holding your cash.</p></div>
+    <div class="card"><h3>For holders</h3><p>Earn what market makers earn — trading fees plus idle yield — without managing a position.</p></div>
+    <div class="card"><h3>For issuers</h3><p>Depth from day one, from your own community, that doesn’t leave when a contract ends.</p></div>
+    <div class="card"><h3>For traders</h3><p>Tighter spreads and fair prices on tokenized stocks, RWAs and stablecoins, around the clock.</p></div>
   </div>
-  <div class="kicker"><b>Spend the yield, not the position.</b> That one primitive is the whole company.</div>
+  <div class="kicker"><b>Liquidity as a public good</b> — owned by the people who use it.</div>
 </section>
 
 <!-- 4 · HOW IT WORKS -->
 <section class="slide cool">
   <span class="num mono">04</span>
   <div class="label">How it works</div>
-  <h2>One balance. Earn three ways. <span class="grad">Spend from yield.</span></h2>
+  <h2>One asset in. <span class="grad">Two ways to earn.</span> Out any time.</h2>
   <div class="grid3" style="margin-top:22px">
-    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">01</div><h3 style="margin-top:8px">Earn</h3><p>Best-rate lending (routed across venues) + just-in-time V4 market-making + recaptured MEV — stacked on one balance.</p></div>
-    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">02</div><h3 style="margin-top:8px">Hold</h3><p>A card swipe or payout authorizes in ~milliseconds as a hold against live vault NAV. The position keeps earning.</p></div>
-    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">03</div><h3 style="margin-top:8px">Settle</h3><p>On settlement, exactly enough shares burn to pay the merchant on-chain. The rest never moved.</p></div>
+    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">01</div><h3 style="margin-top:8px">Add</h3><p>Deposit a single asset into a curated market. You receive one share of the shared position.</p></div>
+    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">02</div><h3 style="margin-top:8px">Earn</h3><p>The MarketEngine keeps capital in the pool while it trades and parks the rest in curated lending — fees plus yield on one balance.</p></div>
+    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">03</div><h3 style="margin-top:8px">Withdraw</h3><p>Redeem your share any time for your pro-rata slice of the market. Nothing is locked.</p></div>
   </div>
   <div class="card" style="margin-top:20px; display:flex; gap:14px 18px; align-items:center; flex-wrap:wrap">
-    <span class="pill"><span class="dot"></span>Proven on-chain</span>
-    <span style="font-size:14px; color:var(--ink-mid); flex:1 1 300px">A past testnet demo recorded a $2 card-originated on-chain settle — <span class="mono" style="color:var(--ink);font-weight:700">balance 12→10 USDC</span>. This was a testnet run, not a live card purchase.</span>
+    <span class="pill"><span class="dot"></span>Live on testnet</span>
+    <span style="font-size:14px; color:var(--ink-mid); flex:1 1 300px">The MarketEngine is live on Robinhood Chain testnet, with deposit and withdraw running end-to-end through the production app.</span>
     <div class="vrow" style="flex-basis:100%; margin-top:2px">
-      <a class="vlink" href="https://mintware.finance/proof" target="_blank" rel="noopener">Verify the full run on-chain →</a>
-      <a class="vlink" href="https://mintware.finance/the-math" target="_blank" rel="noopener">See the yield model →</a>
+      <a class="vlink" href="https://mintware.finance/v1" target="_blank" rel="noopener">Open the live markets →</a>
+      <a class="vlink" href="https://mintware.finance/the-math" target="_blank" rel="noopener">See the return model →</a>
     </div>
   </div>
 </section>
@@ -155,12 +155,12 @@ export const DECK_HTML = `<!doctype html>
 <section class="slide lav">
   <span class="num mono">05</span>
   <div class="label">Why now</div>
-  <h2>The rails to do this <span class="grad">only just shipped.</span></h2>
+  <h2>Real assets just arrived on-chain — <span class="grad">at scale.</span></h2>
   <div class="grid2" style="margin-top:22px">
-    <div class="card"><h3>Uniswap V4 hooks</h3><p>Programmable liquidity — just-in-time provisioning, dynamic fees, MEV recapture. The vault mechanic was impossible before V4.</p></div>
-    <div class="card"><h3>Stablecoins went mainstream</h3><p>USDC settlement, native-USDC chains, and card rails matured — a dollar can now be on-chain and spendable at the point of sale.</p></div>
-    <div class="card"><h3>On-chain treasuries &amp; agents</h3><p>DAOs, crypto-native startups, and now AI agents hold real balances and need them liquid <i>and</i> productive.</p></div>
-    <div class="card"><h3>Prior market precedent</h3><p>A similar rehypothecation + JIT engine previously ran in production (Bunni&nbsp;v2) at ~100× volume / TVL. We are designing a treasury version with planned spendability.</p></div>
+    <div class="card"><h3>Stock tokens are here</h3><p>Robinhood has issued around 2,000 stock tokens on its own chain, and the largest issuers are listing with on-chain pools.</p></div>
+    <div class="card"><h3>RWAs are compounding</h3><p>Tokenized real-world assets passed $38B and grew roughly two-thirds this year — treasuries, credit, property, commodities.</p></div>
+    <div class="card"><h3>Stablecoins went mainstream</h3><p>Around $300B of stablecoins now settle trades, payroll and payments — the quote side of every new market.</p></div>
+    <div class="card"><h3>Programmable liquidity</h3><p>Uniswap&nbsp;V4 makes a shared, single-asset market position possible — the engine we built couldn’t exist before it.</p></div>
   </div>
 </section>
 
@@ -168,98 +168,89 @@ export const DECK_HTML = `<!doctype html>
 <section class="slide">
   <span class="num mono">06</span>
   <div class="label">Market</div>
-  <h2>Start with treasuries. <span class="grad">Expand to every balance.</span></h2>
+  <h2>Every tokenized asset <span class="grad">needs a market.</span></h2>
   <div class="grid3" style="margin-top:22px">
-    <div class="card"><div class="statlab">Beachhead — SOM</div><h3 style="margin-top:6px">Crypto-native team treasuries</h3><p>DAOs + crypto startups holding idle USDC that must stay liquid. Clear buyer, real pain, reachable today.</p></div>
-    <div class="card"><div class="statlab">Expansion — SAM</div><h3 style="margin-top:6px">On-chain businesses &amp; agents</h3><p>Any org or AI agent that holds a spendable balance — the x402 agent economy is greenfield.</p></div>
-    <div class="card"><div class="statlab">Vision — TAM</div><h3 style="margin-top:6px">Consumer liquid cash</h3><p>The Liquid Sovereign Account: everyone’s checking account that never stops earning. Trillions in idle stablecoins.</p></div>
+    <div class="card"><div class="statlab">Beachhead</div><h3 style="margin-top:6px">Stock tokens on Robinhood Chain</h3><p>Thousands of listed tokens, most with thin or misplaced liquidity. A clear chain, a clear asset class, reachable today.</p></div>
+    <div class="card"><div class="statlab">Expansion</div><h3 style="margin-top:6px">RWAs and their issuers</h3><p>Treasuries, credit, land and water — issuers who need depth for regulated assets and holders who want to earn on them.</p></div>
+    <div class="card"><div class="statlab">Vision</div><h3 style="margin-top:6px">Every on-chain balance</h3><p>Stablecoins, agents and everyday accounts — every dollar earning market-maker income, spendable through the card.</p></div>
   </div>
-  <div class="kicker">One primitive — <b>earn-while-spendable</b> — serves all three. We win the treasury, then ride the same rails outward.</div>
+  <div class="kicker">$300B in stablecoins. $38B in RWAs. Thousands of stock tokens. <b>One engine serves all of them.</b></div>
 </section>
 
 <!-- 7 · THE WEDGE -->
 <section class="slide">
   <span class="num mono">07</span>
   <div class="label">The wedge — where we win first</div>
-  <h2>Teams feel this pain <span class="grad">hardest,</span> and they’re the clearest buyer.</h2>
-  <p class="lede" style="margin-top:18px">A crypto-native team holds a treasury in USDC. It must stay liquid — payroll, vendors, cards — so it earns nothing. Mintware turns that treasury into a <b>vault that funds spend out of yield</b>, with the controls a team actually needs.</p>
+  <h2>Robinhood Chain is <span class="grad">where tokenized equities live.</span></h2>
+  <p class="lede" style="margin-top:18px">Around three in four dollars on Robinhood Chain sit in tokenized equities, yet a meaningful share of that float trades in thin, memecoin-style pools. Mintware is built on that chain, in its quote asset, on the same Uniswap&nbsp;V4 pools — ready to give each stock token a deep, community-funded market.</p>
   <div class="grid2" style="margin-top:22px">
-    <div class="card"><h3>Treasury that earns</h3><p>Idle USDC works in the vault; the team spends from yield, principal keeps compounding.</p></div>
-    <div class="card"><h3>Cards, payroll, spend reporting</h3><p>Role-capped cards, CSV payroll, vendor payouts — every spend recorded to the treasury ledger with caps and categories.</p></div>
-    <div class="card"><h3>Role-capped spend &amp; multisig</h3><p>Owner / manager / contributor / vendor caps enforced on every transaction; treasury behind a passkey multisig.</p></div>
-    <div class="card"><h3>Live, on-chain, verifiable</h3><p>Every balance reads off the on-chain vault. Cap enforcement + settlement are real, not a dashboard mock.</p></div>
+    <div class="card"><h3>Curated markets</h3><p>Every market is reviewed before it opens, then ranked live by volume and depth.</p></div>
+    <div class="card"><h3>Issuer partnerships</h3><p>Issuers bring their token; Mintware brings the market and the holders who fund it.</p></div>
   </div>
-  <div class="kicker">Land the treasury → the cards, payroll, and every teammate’s spend follow. <b>Expansion is built in.</b></div>
+  <div class="kicker">Win stock tokens on Robinhood Chain → <b>carry the same engine to every RWA.</b></div>
 </section>
 
 <!-- 8 · TRACTION -->
 <section class="slide cool">
   <span class="num mono">08</span>
   <div class="label">Traction &amp; validation</div>
-  <h2>We’re not cold-starting — <span class="grad">Firma Labs is incubating us.</span></h2>
-  <div class="grid3" style="margin-top:20px">
-    <div class="card"><h3>Incubated &amp; backed</h3><p>Firma Labs is incubating Mintware and backing this round — an ecosystem partner bringing capital and distribution, not just a check.</p></div>
-    <div class="card"><div class="stat mono">1</div><div class="statlab">past testnet settle demo</div></div>
-    <div class="card"><div class="stat mono grad">LIVE</div><div class="statlab">x402 pay-per-call surface, <a class="vlink" style="font-size:12px; border-bottom:none; color:var(--peri-deep); text-transform:none; letter-spacing:0" href="https://mintware.finance/agents" target="_blank" rel="noopener">in production →</a></div></div>
+  <h2>Built, live on testnet, and <span class="grad">backed.</span></h2>
+  <div class="grid2" style="margin-top:22px">
+    <div class="card"><h3>Incubated &amp; backed</h3><p>Firma Labs is incubating Mintware and anchoring this round — capital and distribution, not just a check.</p></div>
+    <div class="card"><h3>MarketEngine live on testnet</h3><p>Deployed on Robinhood Chain testnet, fork-tested on Base, with deposit and withdraw verified end-to-end through the production app.</p></div>
+    <div class="card"><h3>Agent payments in production</h3><p>An x402 pay-per-call surface is live at mintware.finance today.</p></div>
+    <div class="card"><h3>Security-first</h3><p>Multiple rounds of internal audits, exploit replays and fuzzing before any real value moves.</p></div>
   </div>
-  <div class="vrow" style="margin-top:22px; align-items:center; gap:14px 22px">
-    <div class="receipt"><span class="rv mono">502</span><span class="rl">Forge tests green · 0 fail</span></div>
-    <div class="receipt"><span class="rv mono">7 / 7</span><span class="rl">solvency + MEV invariants</span></div>
-    <div class="receipt"><span class="rv mono">109</span><span class="rl">Rust service tests</span></div>
-    <div class="receipt"><span class="rv mono">~10 ms</span><span class="rl">edge decision off live NAV</span></div>
-    <a class="vlink" href="https://mintware.finance/proof" target="_blank" rel="noopener">Every receipt →</a>
-  </div>
-  <div class="kicker">A founding design-partner cohort is forming — the working demo turns discovery calls into commitments from crypto-native treasuries.</div>
+  <div class="vrow"><a class="vlink" href="https://mintware.finance/v1" target="_blank" rel="noopener">See the live markets →</a></div>
 </section>
 
 <!-- 9 · BUSINESS MODEL -->
-<section class="slide lav">
+<section class="slide">
   <span class="num mono">09</span>
   <div class="label">Business model</div>
-  <h2>We make money when your money <span class="grad">works.</span></h2>
+  <h2>We earn when <span class="grad">the market earns.</span></h2>
   <div class="grid3" style="margin-top:22px">
-    <div class="card"><h3>Yield spread</h3><p>A thin skim on the routed/earned yield — aligned: we only earn when the treasury earns.</p></div>
-    <div class="card"><h3>Settlement / card fees</h3><p>Interchange + per-settlement fee on card and vendor spend flowing through the rails.</p></div>
-    <div class="card"><h3>Treasury SaaS</h3><p>Per-seat / per-org for the treasury OS — cards, payroll, policy, multisig, reporting.</p></div>
+    <div class="card"><h3>Performance fee</h3><p>10% of the trading fees a market earns — never a cut of principal. Revenue scales with volume.</p></div>
+    <div class="card"><h3>Issuer curation</h3><p>Issuers pay to launch and list a curated, community-funded market for their asset.</p></div>
+    <div class="card"><h3>Card</h3><p>Interchange on card spend from an earning balance, refilled automatically.</p></div>
   </div>
-  <div class="kicker"><b>Aligned by design</b> — we only make money when your treasury does.</div>
+  <div class="kicker">Aligned by design — <b>no trading, no fee.</b></div>
 </section>
 
 <!-- 10 · MOAT -->
-<section class="slide">
+<section class="slide lav">
   <span class="num mono">10</span>
   <div class="label">Why us — the moat</div>
-  <h2>Hard to copy, <span class="grad">and getting harder.</span></h2>
-  <div class="grid2" style="margin-top:20px">
-    <div class="card"><h3>The converged stack</h3><p>Vault + JIT hook + payment gateway + off-chain sub-150ms authorization, all in one lineage. Not a weekend fork.</p></div>
-    <div class="card"><h3>Security is the wedge</h3><p>Audit rounds + red-team + formal methods before a dollar moves. Incumbents got exploited (Bunni: <b>$8.3M</b>) — that class of bug is our #1 audit item.</p></div>
-    <div class="card"><h3>Treasury Mesh — a network effect</h3><p>Idle team capital JIT-provisions other teams’ pools. Every dollar earns; more teams → a deeper mesh. The moat compounds with each tenant.</p></div>
-    <div class="card"><h3>Honesty &amp; legal posture</h3><p>Non-custodial framing and disciplined disclosures — de-risks the regulatory path competitors hand-wave.</p></div>
+  <h2>Hard to copy, and <span class="grad">getting harder.</span></h2>
+  <div class="grid2" style="margin-top:22px">
+    <div class="card"><h3>A single-asset market engine</h3><p>One asset in, a shared V4 position plus idle yield, one share out — a primitive most LP products still make users assemble themselves.</p></div>
+    <div class="card"><h3>Curation as a product</h3><p>Every market reviewed and ranked — the trust layer issuers and holders need for real assets.</p></div>
+    <div class="card"><h3>Liquidity that compounds</h3><p>Each new holder deepens the market, tighter spreads draw more volume, and more volume pays holders more.</p></div>
+    <div class="card"><h3>Security as the wedge</h3><p>Shared-liquidity protocols have been exploited through their accounting. We treat that failure class as audit item one.</p></div>
   </div>
 </section>
 
-<!-- 11 · WHAT'S REAL -->
+<!-- 11 · WHERE WE ARE -->
 <section class="slide">
   <span class="num mono">11</span>
   <div class="label">Where we are</div>
-  <h2>Testnet work is recorded — <span class="grad">the path to live is planned.</span></h2>
-  <div class="grid2" style="margin-top:20px">
+  <h2>Live on testnet — <span class="grad">the path to mainnet is planned.</span></h2>
+  <div class="grid2" style="margin-top:22px">
     <div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--live);margin-bottom:10px">Built &amp; proven</div>
-      <div class="check"><span class="tick">✓</span><span><b>Past testnet card demo</b> — a card-originated test transaction was recorded on-chain; live card authorization and merchant settlement are future work.</span></div>
-      <div class="check"><span class="tick">✓</span><span><b>A pay-per-call surface is live in production</b> (agent x402).</span></div>
-      <div class="check"><span class="tick">✓</span><span><b>Security-hardened &amp; audit-ready</b> — audit rounds, red-team, formal methods; scope frozen + deploy runbook done.</span></div>
-      <div class="check"><span class="tick">✓</span><span><b>Converged vault + off-chain authorization + multi-tenant treasury</b> — built and tested.</span></div>
+      <div class="statlab" style="margin-bottom:8px">Built</div>
+      <div class="check"><span class="tick">✓</span><span>MarketEngine live on Robinhood Chain testnet, with deposit and withdraw verified in the production app.</span></div>
+      <div class="check"><span class="tick">✓</span><span>Curated, ranked market discovery live at mintware.finance.</span></div>
+      <div class="check"><span class="tick">✓</span><span>Agent x402 payments live in production.</span></div>
+      <div class="check"><span class="tick">✓</span><span>Card earning balance and automatic refill contracts built.</span></div>
     </div>
     <div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--peri-deep);margin-bottom:10px">On the roadmap</div>
-      <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>Mainnet deploy</b> — future milestone; MarketEngine is live on Robinhood Chain testnet.</span></div>
-      <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>Guarded audit + bounty</b> — competitive audit + Immunefi before real value (next slide).</span></div>
-      <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>Card issuer</b> — Bridge + Stripe integration and merchant settlement remain future work; a past testnet demo was recorded.</span></div>
-      <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>First real users</b> — the focus of this round.</span></div>
+      <div class="statlab" style="margin-bottom:8px">Next</div>
+      <div class="check"><span class="warn">→</span><span>Competitive audit and public bug bounty.</span></div>
+      <div class="check"><span class="warn">→</span><span>Capped mainnet launch on Robinhood Chain.</span></div>
+      <div class="check"><span class="warn">→</span><span>First issuer partners and stock-token markets.</span></div>
+      <div class="check"><span class="warn">→</span><span>Card issuing with Bridge and Stripe.</span></div>
     </div>
   </div>
-  <div class="kicker">Non-custodial and openly staged — capped launch first, the marquee audit as value grows. <b>Every claim has an <a class="vlink" style="font-size:15px" href="https://mintware.finance/proof" target="_blank" rel="noopener">on-chain receipt →</a></b></div>
 </section>
 
 <!-- 12 · TEAM & ADVISORS -->
@@ -330,8 +321,8 @@ export const DECK_HTML = `<!doctype html>
 <section class="slide" style="min-height:420px; justify-content:center">
   <span class="num mono">15</span>
   <div class="logo" style="margin-bottom:24px"><svg width="34" height="34" viewBox="0 0 100 100" style="border-radius:10px;box-shadow:0 5px 14px -3px rgba(108,108,240,.6)"><defs><linearGradient id="mwv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A82F4"/><stop offset="1" stop-color="#6C6CF0"/></linearGradient></defs><rect width="100" height="100" rx="22" fill="url(#mwv)"/><ellipse cx="50" cy="55.5" rx="35" ry="7" fill="#fff"/><path d="M32,55.5 A18,18 0 0 1 68,55.5 Z" fill="#fff"/></svg>Mintware</div>
-  <h2 style="font-size:clamp(1.9rem,4vw,3rem)">Win the treasury. Then give <span class="grad">every balance on earth</span> the same superpower.</h2>
-  <p class="lede" style="margin-top:18px">A world where no dollar ever sits idle and no dollar is ever locked — for teams, for people, for agents. <b>Never idle. Never locked. Always yours.</b></p>
+  <h2 style="font-size:clamp(1.9rem,4vw,3rem)">Start with stock tokens. Then give <span class="grad">every asset on earth</span> a market.</h2>
+  <p class="lede" style="margin-top:18px">A world where every real asset can be owned, traded and earned on — with liquidity owned by the people who use it. <b>Liquidity should be a public good.</b></p>
   <div class="row"><span class="pill"><span class="dot"></span>team@mintware.org</span><span class="pill">mintware.finance</span></div>
 </section>
 
