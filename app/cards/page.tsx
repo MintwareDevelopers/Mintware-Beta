@@ -10,21 +10,19 @@ import {
 } from '@/constants/cards-landing'
 
 // =============================================================================
-// /cards — PUBLIC marketing surface for the Liquid Sovereign Account's card/spend
-// side. Top-of-funnel only; NOT the authenticated app. Companion to
+// /cards — PUBLIC marketing surface for card refills. Top-of-funnel only; NOT the authenticated app. Companion to
 // /yield-payment-network (the fuller yield thesis) — this page goes deep on the
-// spend experience specifically, including the Standing service-tier mechanic.
+// refill experience specifically.
 //
 // v2 Privy-esque design system (same as /yield-payment-network) — periwinkle
 // pastel + translucent glass, V2Nav, GradientPanel. All copy lives in
-// constants/cards-landing.ts. Honesty framing: COMING SOON / sandbox-only card
-// issuance (see /legal). No "Launch app" CTA, no guarantee-of-limit language.
+// constants/cards-landing.ts. Bridge + Stripe are pre-enable; the on-chain path is refill-only.
 // =============================================================================
 
 export const metadata: Metadata = {
   title: 'Cards — Mintware',
   description:
-    'A card backed by a balance that never idles. Spend straight from a position that stays deployed, and get faster settlement, more headroom, and earlier access the more you actually use it. Coming soon.',
+    'Bridge + Stripe card rails are pre-enable. The Mintware refill gateway redeems Earn shares to a member-registered buffer wallet.',
 }
 
 export default function CardsPage() {

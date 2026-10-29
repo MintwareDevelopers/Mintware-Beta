@@ -1,4 +1,3 @@
-/* eslint-disable */
 // Auto-embedded investor-deck HTML. Rendered ONLY inside the sandboxed iframe on /deck,
 // and ONLY after the password gate passes. Regenerate from scratchpad/mintware-seed-deck.html.
 export const DECK_HTML = `<!doctype html>
@@ -122,22 +121,22 @@ export const DECK_HTML = `<!doctype html>
   <span class="num mono">03</span>
   <div class="label">The solution</div>
   <h2>Mintware makes idle money <span class="grad">productive — everywhere it sits.</span></h2>
-  <p class="lede" style="margin-top:18px">Capital sits in a Uniswap&nbsp;V4 vault earning real yield. When you spend, you spend the <b>yield</b> — a payment is a <b>hold</b> against the earning position, not a withdrawal. The position never unwinds. Nothing locks. Nothing sits idle. The same engine works on any idle balance — we start with the treasury.</p>
+  <p class="lede" style="margin-top:18px">Current liquidity uses one MarketEngine per curated Uniswap&nbsp;V4 pool. It issues a quote-valued share and supports pro-rata in-kind withdrawals. The former spend-from-NAV design is retired.</p>
   <div class="grid3" style="margin-top:26px">
-    <div class="card"><h3>Never idle</h3><p>Idle capital is routed to the best-yielding venue and works as V4 liquidity — three return streams on one balance.</p></div>
+    <div class="card"><h3>MarketEngine</h3><p>Capital sits in a resting v4 band plus per-token ERC-4626 adapters. Robinhood testnet adapters are idle custody and do not earn.</p></div>
     <div class="card"><h3>Never locked</h3><p>Spendable to the cent, in real time — card, payroll, vendor payout — with no withdrawal window.</p></div>
     <div class="card"><h3>Always yours</h3><p>Non-custodial. Your keys, your contracts. No deposit desk, no lockup, no counterparty holding your cash.</p></div>
   </div>
-  <div class="kicker"><b>Spend the yield, not the position.</b> That one primitive is the whole company.</div>
+  <div class="kicker"><b>Quote-valued shares. In-kind exits.</b> Live on Robinhood Chain testnet · unaudited.</div>
 </section>
 
 <!-- 4 · HOW IT WORKS -->
 <section class="slide cool">
   <span class="num mono">04</span>
   <div class="label">How it works</div>
-  <h2>Deposit once. Earn three ways. <span class="grad">Spend from yield.</span></h2>
+  <h2>Curated liquidity. <span class="grad">Quote-valued shares.</span></h2>
   <div class="grid3" style="margin-top:22px">
-    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">01</div><h3 style="margin-top:8px">Earn</h3><p>Best-rate lending (routed across venues) + just-in-time V4 market-making + recaptured MEV — stacked on one balance.</p></div>
+    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">01</div><h3 style="margin-top:8px">MarketEngine</h3><p>One engine per curated Uniswap v4 pool. Capital sits in a resting band plus per-token adapters; Robinhood testnet adapters are idle custody, not earning.</p></div>
     <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">02</div><h3 style="margin-top:8px">Hold</h3><p>A card swipe or payout authorizes in ~milliseconds as a hold against live vault NAV. The position keeps earning.</p></div>
     <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">03</div><h3 style="margin-top:8px">Settle</h3><p>On settlement, exactly enough shares burn to pay the merchant on-chain. The rest never moved.</p></div>
   </div>
@@ -146,7 +145,7 @@ export const DECK_HTML = `<!doctype html>
     <span style="font-size:14px; color:var(--ink-mid); flex:1 1 300px">A real card swipe authorized off live NAV and settled on-chain — <span class="mono" style="color:var(--ink);font-weight:700">$2.00 · balance 12→10 USDC</span> — position never unwound. That’s the whole loop, working.</span>
     <div class="vrow" style="flex-basis:100%; margin-top:2px">
       <a class="vlink" href="https://mintware.finance/proof" target="_blank" rel="noopener">Verify the full run on-chain →</a>
-      <a class="vlink" href="https://mintware.finance/the-math" target="_blank" rel="noopener">See the yield model →</a>
+      <a class="vlink" href="https://mintware.finance/vaults" target="_blank" rel="noopener">See current mechanics →</a>
     </div>
   </div>
 </section>
@@ -157,10 +156,10 @@ export const DECK_HTML = `<!doctype html>
   <div class="label">Why now</div>
   <h2>The rails to do this <span class="grad">only just shipped.</span></h2>
   <div class="grid2" style="margin-top:22px">
-    <div class="card"><h3>Uniswap V4 hooks</h3><p>Programmable liquidity — just-in-time provisioning, dynamic fees, MEV recapture. The vault mechanic was impossible before V4.</p></div>
+    <div class="card"><h3>Uniswap V4</h3><p>MarketEngine provides a resting liquidity band with guarded recentering and pro-rata in-kind withdrawals.</p></div>
     <div class="card"><h3>Stablecoins went mainstream</h3><p>USDC settlement, native-USDC chains, and card rails matured — a dollar can now be on-chain and spendable at the point of sale.</p></div>
     <div class="card"><h3>On-chain treasuries &amp; agents</h3><p>DAOs, crypto-native startups, and now AI agents hold real balances and need them liquid <i>and</i> productive.</p></div>
-    <div class="card"><h3>Proven in-market</h3><p>The same rehypothecation + JIT engine already ships in production (Bunni&nbsp;v2) at ~100× volume / TVL. We bring it to treasuries — spendable, and security-first.</p></div>
+    <div class="card"><h3>Current product</h3><p>One MarketEngine per curated pool, with guarded deposits and pro-rata in-kind withdrawals. External audit gates real value.</p></div>
   </div>
 </section>
 
@@ -182,9 +181,9 @@ export const DECK_HTML = `<!doctype html>
   <span class="num mono">07</span>
   <div class="label">The wedge — where we win first</div>
   <h2>Teams feel this pain <span class="grad">hardest,</span> and they’re the clearest buyer.</h2>
-  <p class="lede" style="margin-top:18px">A crypto-native team holds a treasury in USDC. It must stay liquid — payroll, vendors, cards — so it earns nothing. Mintware turns that treasury into a <b>vault that funds spend out of yield</b>, with the controls a team actually needs.</p>
+  <p class="lede" style="margin-top:18px">MarketEngine offers quote-valued shares in curated Uniswap&nbsp;V4 pools. Card rails are Bridge + Stripe, pre-enable; the on-chain payment gateway only supports Earn-share refills to registered member buffers.</p>
   <div class="grid2" style="margin-top:22px">
-    <div class="card"><h3>Treasury that earns</h3><p>Idle USDC works in the vault; the team spends from yield, principal keeps compounding.</p></div>
+    <div class="card"><h3>Card refill</h3><p>Bridge + Stripe are pre-enable. The on-chain gateway redeems Earn shares to a member’s registered buffer wallet; card purchases do not settle from vault NAV.</p></div>
     <div class="card"><h3>Cards, payroll, spend reporting</h3><p>Role-capped cards, CSV payroll, vendor payouts — every spend recorded to the treasury ledger with caps and categories.</p></div>
     <div class="card"><h3>Role-capped spend &amp; multisig</h3><p>Owner / manager / contributor / vendor caps enforced on every transaction; treasury behind a passkey multisig.</p></div>
     <div class="card"><h3>Live, on-chain, verifiable</h3><p>Every balance reads off the on-chain vault. Cap enforcement + settlement are real, not a dashboard mock.</p></div>
@@ -199,12 +198,12 @@ export const DECK_HTML = `<!doctype html>
   <h2>We’re not cold-starting — <span class="grad">Firma Labs is incubating us.</span></h2>
   <div class="grid3" style="margin-top:20px">
     <div class="card"><h3>Incubated &amp; backed</h3><p>Firma Labs is incubating Mintware and backing this round — an ecosystem partner bringing capital and distribution, not just a check.</p></div>
-    <div class="card"><div class="stat mono">1</div><div class="statlab">on-chain settle loop, proven live</div></div>
-    <div class="card"><div class="stat mono grad">LIVE</div><div class="statlab">x402 pay-per-call surface, <a class="vlink" style="font-size:12px; border-bottom:none; color:var(--peri-deep); text-transform:none; letter-spacing:0" href="https://mintware.finance/agents" target="_blank" rel="noopener">in production →</a></div></div>
+    <div class="card"><div class="stat mono">1</div><div class="statlab">quote-valued share token per curated pool</div></div>
+    <div class="card"><div class="stat mono grad">TESTNET</div><div class="statlab">Robinhood Chain · unaudited</div></div>
   </div>
   <div class="vrow" style="margin-top:22px; align-items:center; gap:14px 22px">
     <div class="receipt"><span class="rv mono">502</span><span class="rl">Forge tests green · 0 fail</span></div>
-    <div class="receipt"><span class="rv mono">7 / 7</span><span class="rl">solvency + MEV invariants</span></div>
+    <div class="receipt"><span class="rv mono">2</span><span class="rl">pool tokens returned pro-rata in kind</span></div>
     <div class="receipt"><span class="rv mono">109</span><span class="rl">Rust service tests</span></div>
     <div class="receipt"><span class="rv mono">~10 ms</span><span class="rl">edge decision off live NAV</span></div>
     <a class="vlink" href="https://mintware.finance/proof" target="_blank" rel="noopener">Every receipt →</a>
@@ -218,7 +217,7 @@ export const DECK_HTML = `<!doctype html>
   <div class="label">Business model</div>
   <h2>We make money when your money <span class="grad">works.</span></h2>
   <div class="grid3" style="margin-top:22px">
-    <div class="card"><h3>Yield spread</h3><p>A thin skim on the routed/earned yield — aligned: we only earn when the treasury earns.</p></div>
+    <div class="card"><h3>Refill only</h3><p>The payment gateway redeems Earn shares to a member’s registered buffer. It does not settle merchant purchases from vault NAV.</p></div>
     <div class="card"><h3>Settlement / card fees</h3><p>Interchange + per-settlement fee on card and vendor spend flowing through the rails.</p></div>
     <div class="card"><h3>Treasury SaaS</h3><p>Per-seat / per-org for the treasury OS — cards, payroll, policy, multisig, reporting.</p></div>
   </div>
@@ -231,9 +230,9 @@ export const DECK_HTML = `<!doctype html>
   <div class="label">Why us — the moat</div>
   <h2>Hard to copy, <span class="grad">and getting harder.</span></h2>
   <div class="grid2" style="margin-top:20px">
-    <div class="card"><h3>The converged stack</h3><p>Vault + JIT hook + payment gateway + off-chain sub-150ms authorization, all in one lineage. Not a weekend fork.</p></div>
+    <div class="card"><h3>The current stack</h3><p>MarketEngine shares, a resting v4 band, per-token adapters, and guarded recentering.</p></div>
     <div class="card"><h3>Security is the wedge</h3><p>Audit rounds + red-team + formal methods before a dollar moves. Incumbents got exploited (Bunni: <b>$8.3M</b>) — that class of bug is our #1 audit item.</p></div>
-    <div class="card"><h3>Treasury Mesh — a network effect</h3><p>Idle team capital JIT-provisions other teams’ pools. Every dollar earns; more teams → a deeper mesh. The moat compounds with each tenant.</p></div>
+    <div class="card"><h3>Curated pool registry</h3><p>Discover ranks candidates; curation registers the selected pool and its MarketEngine.</p></div>
     <div class="card"><h3>Honesty &amp; legal posture</h3><p>Non-custodial framing and disciplined disclosures — de-risks the regulatory path competitors hand-wave.</p></div>
   </div>
 </section>
@@ -259,7 +258,7 @@ export const DECK_HTML = `<!doctype html>
       <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>First real users</b> — the focus of this round.</span></div>
     </div>
   </div>
-  <div class="kicker">Non-custodial and openly staged — capped launch first, the marquee audit as value grows. <b>Every claim has an <a class="vlink" style="font-size:15px" href="https://mintware.finance/proof" target="_blank" rel="noopener">on-chain receipt →</a></b></div>
+  <div class="kicker">Testnet only · unaudited. External audit gates real value. <b>Historical receipts are not current-product status evidence.</b></div>
 </section>
 
 <!-- 12 · TEAM & ADVISORS -->

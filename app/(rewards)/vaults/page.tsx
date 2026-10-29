@@ -19,30 +19,30 @@ const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 
 const HEAD = ['Liquidity that ', 'never sits idle.'] as const
-const SUB = 'Managed liquidity on Uniswap v4. One balance earns three ways at once — Aave lending, swap fees, and recaptured MEV — with an auto-managed range and zero rebalancing. You earn your pro-rata share of everything the pool makes.'
-const BULLETS = ['Three income streams — Aave lending + swap fees + recaptured MEV', 'Auto-managed range — no rebalancing', 'MEV-protected — bot value routed back to LPs', 'Paid pro-rata — you earn your share of all three streams, by the size of your stake']
-const FEATURED: [string, string, string][] = [['Social Blue-Chip', 'ETH / USDC', '11.0%'], ['Degen Emerging', 'ARB / USDC', '18.4%']]
+const SUB = 'Curated Uniswap v4 liquidity through one MarketEngine per pool. Shares are valued in the quote asset; pool liquidity rests in a managed band, with per-token ERC-4626 adapters for capital outside that band.'
+const BULLETS = ['Deposit either pool token or both, with a minimum-share floor', 'Deposits require a fresh mark and spot near that mark', 'Withdraw pro-rata in kind, with minimum outputs', 'On Robinhood testnet, adapters hold assets ready and do not earn yield']
+const FEATURED: [string, string, string][] = [['Robinhood Chain', 'tUSDG / tPONS', 'Testnet'], ['Base Sepolia', 'MarketEngine', 'Testnet']]
 
-// The two ways to LP.
+// Current and retired liquidity paths.
 const TYPES: { tag: string; name: string; who: string; accent: string; points: string[] }[] = [
   {
-    tag: 'For tokens & treasuries', name: 'Growth Vaults', who: 'Single-sided or paired',
+    tag: 'Current · testnet', name: 'MarketEngine', who: 'Single- or two-token deposit',
     accent: 'var(--color-peri)',
     points: [
-      'Deposit one side of the pair — or both. The vault balances it and issues you shares.',
-      'Idle capital earns lending yield in Aave; the V4 hook pulls just-in-time liquidity for each swap.',
-      'MEV-protected, auto-managed range — no rebalancing, no active management.',
-      'You earn your pro-rata share of every fee and recaptured MEV the pool makes — by the size of your position.',
+      'Deposit either pool token or both; receive quote-valued MarketEngine shares.',
+      'Capital sits in a resting v4 band plus per-token ERC-4626 adapters.',
+      'Robinhood testnet adapters are idle-custody adapters: assets are held ready, not earning.',
+      'Withdraw pro-rata in kind from both pool tokens, subject to minimum outputs.',
     ],
   },
   {
-    tag: 'For teams', name: 'Matched Liquidity', who: 'Two-sided, community-backed',
+    tag: 'Retired', name: 'Matched Liquidity', who: 'Not a current product',
     accent: 'var(--color-coral2)',
     points: [
-      'The team locks its token; the community matches it in USDC — real two-sided depth, not a promise.',
-      'A hard ≥ 90-day cliff, enforced on-chain — a restriction on withdrawal, not a transfer of ownership.',
-      'During the lock, the fees the position earns go entirely to the people who backed you.',
-      'Tighter spreads and better fills from day one, because the depth is actually there.',
+      'Community-matched launch issuance is retired.',
+      'The current MarketEngine does not offer lock tiers or matched issuance.',
+      'Pool curation and registry records remain available.',
+      'External audit gates any use with real value.',
     ],
   },
 ]
@@ -53,7 +53,7 @@ function VaultsComingSoon() {
       <div className="text-center max-w-[380px] px-6">
         <div className="font-atx-display text-[24px] font-semibold tracking-[-0.02em] text-ink mb-2">Vaults — Coming Soon</div>
         <div className="text-[14px] text-ink-mid leading-[1.6] mb-6">
-          Managed Uniswap v4 LP vaults — one balance earning lending, swap fees, and recaptured MEV at once.
+          MarketEngine pool shares are live on Robinhood Chain testnet · unaudited. Withdraw both pool tokens pro-rata.
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-4 py-1.5 text-[12px] font-semibold tracking-[0.06em] uppercase">Phase 2</span>
       </div>
@@ -70,8 +70,8 @@ function VaultsPageV2() {
       {/* ── testnet note ── */}
       <div className="border-b border-hair-soft bg-ground-cool">
         <div className="max-w-[1100px] mx-auto px-6 py-2.5 max-[800px]:px-4 flex items-center gap-2.5 flex-wrap">
-          <span className="live-chip"><span className="dot" aria-hidden />In testing on Base Sepolia</span>
-          <span className="text-[11px] text-ink-soft">Figures below are illustrative — the mechanism is what’s live.</span>
+          <span className="live-chip"><span className="dot" aria-hidden />Live on Robinhood Chain testnet · unaudited</span>
+          <span className="text-[11px] text-ink-soft">Base Sepolia deployment is also available; external audit gates real value.</span>
         </div>
       </div>
 
@@ -92,7 +92,7 @@ function VaultsPageV2() {
             ))}
           </div>
 
-          <div className={`${ey} mt-9 mb-2.5`}>Example vaults · illustrative</div>
+          <div className={`${ey} mt-9 mb-2.5`}>Testnet deployments</div>
           <div className="grid grid-cols-2 gap-3 max-w-[760px] max-[560px]:grid-cols-1">
             {FEATURED.map(([name, pair, apy]) => (
               <div key={name} className="soft-card p-[18px]" style={{ borderTop: '4px solid var(--color-peri)' }}>
@@ -101,7 +101,7 @@ function VaultsPageV2() {
                 <div className="flex items-center justify-between mt-3.5 border-t border-hair-soft pt-3">
                   <span className="flex items-baseline gap-1.5">
                     <span className="font-atx-display text-[20px] font-medium text-peri-deep tabular-nums">{apy}</span>
-                    <span className="text-[9px] uppercase tracking-[0.1em] text-ink-soft">example APY</span>
+                    <span className="text-[9px] uppercase tracking-[0.1em] text-ink-soft">status</span>
                   </span>
                   <span className="text-[11px] uppercase tracking-[0.08em] font-semibold rounded-full border border-hair text-ink-soft px-3 py-1.5">Example</span>
                 </div>
@@ -118,7 +118,7 @@ function VaultsPageV2() {
 
       <LiveTodayStrip />
 
-      {/* ── the mechanism (tech · ULV · idle-capital yield) ── */}
+      {/* ── the current MarketEngine mechanics ── */}
       <div id="how" className="scroll-mt-[62px]"><ULVMechanics /></div>
 
       {/* ── worked example — one swap in numbers ── */}
@@ -132,8 +132,7 @@ function VaultsPageV2() {
             The same engine, <span className="text-gradient-accent">two different jobs.</span>
           </h2>
           <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-ink-mid max-w-[62ch] mt-4">
-            Every vault runs the same Unified Liquidity engine — idle capital in Aave, JIT liquidity per swap,
-            fees split pro-rata by your share. Only who provides the two sides changes.
+            Each curated pool has one MarketEngine. Deposits require a fresh oracle mark; withdrawals remain available when the mark is stale.
           </p>
 
           <div className="grid grid-cols-2 gap-4 mt-9 max-[820px]:grid-cols-1">
@@ -171,11 +170,11 @@ function VaultsPageV2() {
               <div className="font-atx-display text-[clamp(1.4rem,2.4vw,2rem)] font-semibold tracking-[-0.02em] leading-[1.1] text-ink [text-wrap:balance]">
                 Put your capital <span className="text-gradient-accent">to work.</span>
               </div>
-              <p className="text-[15px] text-ink-mid mt-2.5">Browse the live vaults, or open your own — deposits run in the app.</p>
+              <p className="text-[15px] text-ink-mid mt-2.5">Explore curated pools and their MarketEngine status. The contracts are unaudited testnet deployments.</p>
             </div>
             <div className="flex gap-3 flex-wrap">
               <Link href="/v1" className="glass-pill-primary whitespace-nowrap">Browse the vaults →</Link>
-              <Link href="/curate" className="glass-pill whitespace-nowrap">Create a vault</Link>
+              <Link href="/curate" className="glass-pill whitespace-nowrap">Curate a pool</Link>
             </div>
           </GradientPanel>
         </div>
@@ -186,5 +185,5 @@ function VaultsPageV2() {
 
 
 export default function VaultsPage() {
-  return useV2Mode() ? <VaultsPageV2 /> : <V1MarketingStub topic="Earn" headline="Curated pools, one deposit." blurb="Deposit USDG into a screened Robinhood Chain pool — your full deposit is deployed as liquidity and earns a share of the pool's trading fees, compounded back into your position." live={true} />
+  return useV2Mode() ? <VaultsPageV2 /> : <V1MarketingStub topic="Earn" headline="Curated pools, one deposit." blurb="Use a single- or two-token deposit in a curated Robinhood Chain pool. MarketEngine shares track quote-asset value; exits return both pool tokens pro-rata." live={true} />
 }

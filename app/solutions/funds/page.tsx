@@ -23,17 +23,17 @@ import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
 export const metadata: Metadata = {
   title: 'For Funds — Dry powder that isn’t dead weight | Mintware',
   description:
-    'Infrastructure for crypto funds, VCs, and asset managers: uncalled capital that stays fully callable while it earns, agent strategies funded per-call over x402, and curated allocation — non-custodial, native-USDC settlement. In testing on testnet, unaudited; not an offer or investment advice.',
+    'MarketEngine liquidity and Earn-share card refill on Robinhood Chain testnet. Unaudited; external audit gates real value.',
 }
 
 // ─── Copy + data (all figures dated + sourced; see SOURCES) ──────────────────
 const C = {
   hero: {
     eyebrow: 'Mintware for Funds',
-    status: 'Vision · in testing on testnet',
+    status: 'Testnet · unaudited',
     title: 'Dry powder that isn’t',
     titleAccent: 'dead weight.',
-    lede: 'Funds sit on capital between calls — reserves, uncalled commitments, stablecoin dry powder — and most of it earns nothing while it waits. Mintware is the infrastructure to keep that balance fully callable and productive at the same time: earning protocol-native yield, spendable per-call by your agents, and allocated by on-chain reputation. Non-custodial, native-USDC, operated by you.',
+    lede: 'Current curated liquidity uses one MarketEngine per Uniswap v4 pool. It issues quote-valued shares with pro-rata in-kind exits. Former spend-from-NAV and Arc/CCTP settlement designs are retired.',
     stats: [
       { v: '~$315B', s: 'stablecoins', label: 'Total stablecoin supply mid-2026 — up from ~$124B at end-2023.' },
       { v: '~$4.6B', s: 'earning', label: 'Of that supply, the portion classified as yield-bearing. The rest is idle.' },
@@ -84,14 +84,14 @@ const C = {
       {
         i: '01',
         title: 'Dry powder that stays callable — YPN',
-        how: 'The Yield Payment Network holds USDC that stays spendable at par, like cash, while the capital works — earning protocol-native yield from the pools it backs. A spend is a hold against the earning position, then a settle. Capital never has to un-park to be used.',
-        why: 'Reserves and uncalled commitments keep earning right up to the moment you deploy them. No withdrawal window, no unwinding a position to answer a capital call.',
+        how: 'MarketEngine issues one quote-valued share token for a curated pool. Robinhood testnet adapters are idle custody and do not earn.',
+        why: 'Withdrawals return both pool tokens pro-rata and remain available when the external mark is stale.',
       },
       {
         i: '02',
         title: 'Agent strategies, funded per call — x402',
-        how: 'An agent treasury where idle USDC earns while staying spendable in place, paid per call over x402 (the HTTP-native machine-payment standard). Mintware is both the funding rail and the facilitator: verify sizes a hold off live NAV, settle burns shares to the payee.',
-        why: 'Fund an autonomous or quant strategy by the call — data feeds, inference, execution — from a balance that never stops earning between calls. Metered spend, not a parked ops float.',
+        how: 'The former Arc/CCTP x402 spend-in-place settlement flow is retired.',
+        why: 'Current card refills are separate: an authorized relayer redeems Earn shares to the member’s registered buffer wallet.',
       },
       {
         i: '03',
@@ -102,77 +102,77 @@ const C = {
       {
         i: '04',
         title: 'Non-custodial, native-USDC settlement',
-        how: 'Keys stay with the fund (self-custody + external wallets); capital lives in the fund’s wallet or in autonomous, audited contracts — never with Mintware. Settlement is USDC-native over Circle / Arc rails with CCTP bridging; Mintware never touches fiat.',
-        why: 'No custodian in the middle of your treasury, no off-ramp tax, no counterparty holding the balance. The infrastructure is yours to operate; the licensed pieces stay with licensed partners.',
+        how: 'Arc/CCTP settlement is retired. Current deployments are testnet-only and unaudited.',
+        why: 'External audit gates any use with real value.',
       },
     ],
   },
 
   math: {
-    eyebrow: 'The math',
-    title: 'What idle dry powder actually costs.',
-    intro: 'A simple, honest opportunity-cost model. Take $100M of stablecoin reserve a fund holds fully liquid between deployments. The point is not a promised return — it is that staying callable no longer has to mean earning nothing.',
+    eyebrow: 'Current product',
+    title: 'MarketEngine share value.',
+    intro: 'MarketEngine shares represent quote-asset value in a single curated pool portfolio.',
     rows: [
-      { label: 'Idle cash (today)', rate: '~0%', yr: '$0', note: 'Fully callable, earning nothing — the status quo.' },
-      { label: 'Best-venue lending (Aave + Morpho)', rate: '~7%', yr: '~$7.0M / yr', note: 'Illustrative: the adapter shops Aave (~3.3–3.5%, 2026) + Morpho USDC vaults (~4–8%, some ~7–8%) for the best supply rate.' },
-      { label: 'Stacked: best-venue lending + LP fee + MEV recapture', rate: '~12%', yr: '~$12.0M / yr', note: 'Illustrative target: the lending floor plus just-in-time V4 liquidity capturing fees + recaptured MEV/LVR on the same capital.' },
+      { label: 'Share denomination', rate: 'Quote asset', yr: 'Pool portfolio', note: 'One share token per engine.' },
+      { label: 'Robinhood adapters', rate: 'Idle custody', yr: 'No yield', note: 'Assets are held ready and do not earn on this testnet.' },
+      { label: 'Status', rate: 'Testnet', yr: 'Unaudited', note: 'External audit gates real value.' },
     ],
-    highlight: 'Same $100M. Same day-one callability. The difference between the top row and the bottom is roughly $12M a year of foregone return — the quiet tax of holding productive dollars as dead cash.',
-    note: 'Illustrative model on testnet — not a quote, offer, promise of yield, or investment advice. The stacked ~11–14% target is a best-venue lending floor (~6–8%, shopping Aave + Morpho; Aave USDC ~3.3–3.5%, Morpho USDC vaults ~4–8%, 2026; eco.com) plus a ~4–5% LP-fee + MEV-recapture layer on the same capital. Actual returns vary with market conditions and can be zero. LP/rehypothecation strategies carry additional risk.',
+    highlight: 'Withdrawals return both pool tokens pro-rata and remain available when the external mark is stale.',
+    note: 'This page does not provide a yield projection. Robinhood testnet adapters are idle custody and do not earn. External audit gates real value.',
   },
 
   mechanics: {
     eyebrow: 'The mechanics, honestly',
-    title: 'How the “callable and productive” part actually works.',
-    body: 'The balance behaves like a dollar because the design puts the market risk somewhere else, and because redemption is solvency-aware rather than first-come-first-served.',
+    title: 'How current pool liquidity works.',
+    body: 'The former senior/junior and spend-from-NAV models are retired.',
     items: [
-      { k: 'Structured tranches', v: 'Senior capital is price-free — it never reads a pool price, so it stays spendable at par. A junior first-loss tranche absorbs impermanent loss and market moves. The senior balance behaves like cash; the volatility lands on the tranche built to take it.' },
-      { k: 'Solvency-aware redemption', v: 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts the cushion, everyone shares the same transparent pro-rata outcome — no race for the exit, no first-redeemer advantage.' },
-      { k: 'The ULV engine', v: 'Idle capital earns via rehypothecation into best-venue lending — the adapter shops Aave and Morpho for the top USDC rate; just-in-time V4 liquidity plus MEV/LVR recapture stack a second layer of return that normally leaks to arbitrageurs. Capital is never idle inside the vault.' },
-      { k: 'Native-USDC rails', v: 'Settlement is USDC-native on Circle / Arc with CCTP bridging; card spend runs through a regulated card partner. Mintware never custodies funds and never touches fiat.' },
+      { k: 'Retired issuance', v: 'Treasury senior/junior issuance is not current.' },
+      { k: 'Deposit guard', v: 'Deposits require a fresh mark and pool spot near that mark.' },
+      { k: 'MarketEngine', v: 'A resting v4 band plus per-token ERC-4626 adapters; Robinhood testnet adapters do not earn.' },
+      { k: 'Card refill', v: 'Bridge + Stripe are pre-enable. The on-chain gateway only supports Earn-share refills.' },
     ],
   },
 
   trust: {
-    eyebrow: 'Why trust the infrastructure',
-    title: 'Built to be checked, not taken on faith.',
-    body: 'Funds are sophisticated and regulated — so the point is verifiability, not promises. Everything below is real and open to inspection.',
+    eyebrow: 'Status',
+    title: 'Testnet only · unaudited.',
+    body: 'External audit gates real value.',
     stats: [
-      { v: '0', s: 'critical', label: 'Open critical findings in the self-review; every High remediated.' },
-      { v: '463', s: 'Forge tests', label: 'Solidity suite green, including money-loss invariants fuzzed 256×128k.' },
-      { v: '100%', s: 'non-custodial', label: 'Keys with the fund. Mintware never holds the balance.' },
-      { v: 'Live', s: 'on testnet', label: 'The full loop — deposit → earn → authorize → spend — run on-chain with real hashes.' },
+      { v: 'RH', s: 'testnet', label: 'MarketEngine deployment.' },
+      { v: 'Base', s: 'Sepolia', label: 'MarketEngine deployment.' },
+      { v: 'No', s: 'external audit', label: 'External audit remains a gate.' },
+      { v: 'Refill', s: 'only', label: 'The payment gateway does not settle merchant spend.' },
     ],
     points: [
-      { k: 'Non-custodial by construction', v: 'Self-custody (Privy + external wallets) or autonomous contracts hold the capital — never Mintware.' },
-      { k: 'Formal verification, not just tests', v: 'Machine-checked (Coq) and symbolic (Halmos) proofs on the properties where money can be lost.' },
-      { k: 'Proven end-to-end on-chain', v: 'The whole YPN loop, plus a native-USDC Base→Arc bridge, executed on testnet with transaction hashes you can open in a block explorer.' },
-      { k: 'Circle / Arc rails', v: 'USDC-native settlement built on Circle’s Arc and CCTP; licensed partners carry the regulated legs.' },
+      { k: 'MarketEngine', v: 'One engine and one quote-valued share token per curated pool.' },
+      { k: 'Idle adapters', v: 'Robinhood testnet adapters hold assets ready and do not earn.' },
+      { k: 'Card refill', v: 'Bridge + Stripe are pre-enable; the gateway only refills registered buffers from Earn shares.' },
+      { k: 'Retired flows', v: 'Arc/CCTP, spend-from-NAV, ULV/JIT, and MEV recapture are not current.' },
     ],
-    cta: { label: 'See the whole loop run on-chain', href: '/proof' },
+    cta: { label: 'See current mechanics', href: '/vaults' },
   },
 
   close: {
     eyebrow: 'Where to start',
-    title: 'Put your dry powder to work without giving up liquidity.',
-    body: 'No custody to hand over, no lockup to accept, no fiat rail to trust — infrastructure you operate on your own balance. Explore the vision, read the on-chain proof, or talk to us about how a fund would run it.',
-    primary: { label: 'Read the vision (YPN)', href: '/yield-payment-network' },
+    title: 'Explore curated pool liquidity.',
+    body: 'Current MarketEngine deployments are on testnet and unaudited. External audit gates real value.',
+    primary: { label: 'Read current mechanics', href: '/vaults' },
     secondary: [
       { label: 'See it proven on-chain', href: '/proof' },
-      { label: 'The yield-engine math', href: '/the-math' },
+      { label: 'View deployments', href: '/docs' },
       { label: 'Talk to us', href: 'https://x.com/Mintware_Fi' },
     ],
   },
 
   honesty:
-    'In testing on Base Sepolia and Circle’s Arc testnet — testnet, unaudited, valueless test USDC. Nothing here is an offer, a solicitation, investment / legal / tax advice, or a claim that Mintware manages, advises, or holds a fund’s capital: it is non-custodial software a fund operates itself. The senior balance is a claim on an autonomous vault, not a deposit, and is not guaranteed, insured, or a fixed rate. Yield figures are illustrative and historical, never a promise. An external audit precedes any real value.',
+    'Current MarketEngine contracts are live on Robinhood Chain testnet · unaudited. Former ULV/JIT, Arc/CCTP settlement, spend-from-NAV, and Treasury senior/junior issuance are retired. External audit gates real value.',
 
   sources: [
     'Stablecoin supply ~$315–321B, ~$4.6B yield-bearing — Crypto-Economy, CoinDesk, KuCoin (2026)',
     'VC dry powder ~$600.9B — Eqvista (2026); crypto fund deployment — Insights4VC / The Block (2026)',
     'Stablecoin tx +72% YoY — KuCoin (2026); x402 ~165M tx / ~69k agents — Chainalysis, CoinDesk (2026)',
     'Tokenized MMF/RWA AUM ($5B+ / BUIDL ~$2.9B / RWA ~$31.4B) — CoinDesk, Bitcoin.com (2026)',
-    'Best-venue lending floor ~6–8% (Aave USDC ~3.3–3.5%, Morpho USDC vaults ~4–8%, some ~7–8%, 2026) — Aave / Morpho / eco.com; stacked ~11–14% adds a ~4–5% LP-fee + MEV layer (illustrative); on-chain credit scoring — cryptocreditscores.org, Spectral (2026)',
+    'Market and fund figures are historical context and do not describe current product mechanics.',
   ],
 } as const
 
@@ -185,6 +185,7 @@ export default function SolutionsFundsPage() {
   return (
     <div className="min-h-screen bg-white text-ink overflow-x-clip">
       <V2Nav />
+      <div className="border-b border-hair-soft bg-ground-cool px-6 py-2 text-center text-[11px] text-ink-soft">Current liquidity: Robinhood Chain testnet · unaudited · external audit gates real value. Former ULV/JIT, Arc/CCTP, and spend-from-NAV mechanics are retired.</div>
 
       {/* ── Hero ───────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">

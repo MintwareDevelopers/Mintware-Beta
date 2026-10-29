@@ -1,6 +1,6 @@
 'use client'
 
-// V1 app shell — the dark "app mode" chrome for the live LP Gateway, sharply separate from the light
+// V1 app shell — the dark "app mode" chrome for MarketEngine liquidity, sharply separate from the light
 // marketing site (you KNOW you're inside the product). Meteora-style: product nav (Discover · Portfolio),
 // Connect Wallet as the top-right primary, a testnet chip — NO marketing links, NO "Launch app" button.
 // Every V1 surface wraps its content in this shell.
@@ -63,7 +63,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
             style={{ color: '#8A82F4', background: 'rgba(138,130,244,0.10)', border: '1px solid rgba(138,130,244,0.20)' }}
           >
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#8A82F4' }} />
-            Robinhood Testnet
+            Robinhood Testnet · Unaudited
           </span>
 
           {isConnected && address ? (

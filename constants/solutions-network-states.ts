@@ -21,21 +21,9 @@
 //    Movement figures are directional; macro figures are the quantified spine.
 // =============================================================================
 
-export const NS_META = {
-  title: 'For Network States & Settlements — Mintware',
-  description:
-    'The financial rail for a network state: a shared treasury that earns DeFi yield while staying spendable at par by members, non-custodial, with reputation-weighted membership, settled in native USDC on Circle / Arc. Vision, proven on testnet.',
-} as const
+export const NS_META = { title: 'For Network States & Settlements — Mintware', description: 'Current curated liquidity uses MarketEngine on Robinhood Chain testnet. Unaudited; external audit gates real value.' } as const
 
-export const NS_HERO = {
-  eyebrow: 'For network states · charter cities · online settlements',
-  title: 'A treasury that earns like a fund —',
-  titleAccent: 'and spends like cash.',
-  lead:
-    'Network states run on a shared treasury and a member roll. Today that treasury either sits idle in stablecoins earning nothing, or gets locked in yield venues your members can’t spend from. Mintware makes it one balance: capital that stays productive while every member can spend it at par — non-custodial, reputation-aware, settled in native USDC.',
-  ctaPrimary: { label: 'How it works ↓', href: '#how' },
-  ctaSecondary: { label: 'See it run on-chain →', href: '/proof' },
-} as const
+export const NS_HERO = { eyebrow: 'For network states · charter cities · online settlements', title: 'A treasury that earns like a fund —', titleAccent: 'and spends like cash.', lead: 'Current Mintware liquidity is a quote-valued share in a curated Uniswap v4 pool. The former spend-from-NAV account and Arc/CCTP settlement designs are retired. Card rails are Bridge + Stripe, pre-enable.', ctaPrimary: { label: 'How it works ↓', href: '#how' }, ctaSecondary: { label: 'See current liquidity →', href: '/vaults' } } as const
 
 export const NS_PROBLEM = {
   title: 'A digital nation with an',
@@ -82,98 +70,22 @@ export const NS_MOVEMENT = {
 } as const
 
 // ─── The math — idle vs productive-but-spendable. Illustrative + testnet. ────
-export const NS_MATH = {
-  eyebrow: '02 · The cost of idle',
-  title: 'What a still treasury',
-  titleAccent: 'gives up every year.',
-  lead:
-    'A worked example, not a promise — one slice of that $300B+ idle pile. Take a $10M community treasury. Left idle in stablecoins it earns ~0%. On Mintware it stays fully spendable at par while the capital works — earning from the pools it backs. The opportunity cost is the whole point.',
-  rows: [
-    { k: 'Treasury size (illustrative)', v: '$10,000,000' },
-    { k: 'Idle in a multisig at ~0%', v: '$0 / yr' },
-    { k: 'Productive-but-spendable at an illustrative ~11–14%*', v: '≈ $1.1M – $1.4M / yr' },
-    { k: 'Liquidity given up to earn it', v: 'None — spendable at par, on demand' },
-  ],
-  footnote:
-    '*Illustrative only, not a quote, offer, or guarantee of yield. The stacked model targets ~11–14% — a best-venue lending floor (~6–8%, shopping Aave + Morpho, where some USDC markets have reached ~7–8%) plus a ~4–5% LP-fee + MEV/LVR-recapture layer on the same capital. Protocol-native yield varies with market conditions and can be lower. Testnet — no real value.',
-} as const
+export const NS_MATH = { eyebrow: '02 · Current product', title: 'What the engine', titleAccent: 'actually does.', lead: 'MarketEngine is a testnet liquidity product, not a shared treasury or spendable-at-par account.', rows: [{ k: 'Pool', v: 'One curated Uniswap v4 pool per engine' }, { k: 'Share', v: 'One quote-valued share token' }, { k: 'Exit', v: 'Pro-rata in-kind withdrawal of both tokens' }, { k: 'Status', v: 'Robinhood Chain testnet · unaudited' }], footnote: 'Robinhood testnet adapters hold capital ready and do not earn. External audit gates real value.' } as const
 
 // ─── How Mintware solves it — value props mapped to a network state. ─────────
-export const NS_SOLUTION = {
-  eyebrow: '03 · How Mintware fits',
-  title: 'One rail for the money',
-  titleAccent: 'of a network state.',
-  lead:
-    'The same primitive that makes personal cash productive scales to a community treasury — earning while it stays spendable, owned by its members, and aware of who they are.',
-  cards: [
-    {
-      k: 'A treasury that stays spendable',
-      tone: 'peri',
-      v: 'Shared USDC stays productive and spendable at par at the same time. A member payment — dues, a grant, a stipend, a vendor — is a hold against the earning position, then a settle. Capital never un-parks to be spent. Never idle, never locked.',
-    },
-    {
-      k: 'Non-custodial by construction',
-      tone: 'coral',
-      v: 'Members hold their own keys — self-custody via Privy plus any external wallet. Mintware never takes custody; funds live in members’ wallets or in autonomous, audited-to-be contracts. The community stays sovereign over its own money.',
-    },
-    {
-      k: 'Reputation-weighted membership',
-      tone: 'peri',
-      v: 'Attribution scores real on-chain behaviour into a portable reputation. Use it to weight citizenship, allocation, and access — a spine for who gets what, that a wallet balance alone can’t give you.',
-    },
-    {
-      k: 'Native USDC settlement',
-      tone: 'coral',
-      v: 'Payments settle in USDC on Circle / Arc rails, bridged across chains via CCTP, with real-world card spend through a regulated card partner. Mintware never touches fiat — licensed partners carry that leg.',
-    },
-  ],
-} as const
+export const NS_SOLUTION = { eyebrow: '03 · How Mintware fits', title: 'One engine for', titleAccent: 'each curated pool.', lead: 'Current Mintware liquidity and card refill are separate products with distinct mechanics.', cards: [{ k: 'MarketEngine', tone: 'peri', v: 'One engine per curated Uniswap v4 pool. It issues one share token valued in the quote asset.' }, { k: 'Deposits', tone: 'coral', v: 'Deposit either or both pool tokens with a minimum-shares floor. A fresh mark and spot-near-mark check are required.' }, { k: 'In-kind exits', tone: 'peri', v: 'Withdraw pro-rata in both pool tokens with minimum-output checks. Withdrawals remain available when the mark is stale.' }, { k: 'Card refill', tone: 'coral', v: 'The relayer redeems Earn shares to a member’s registered buffer. Bridge + Stripe are pre-enable; cards do not settle from vault NAV.' }] } as const
 
 // ─── The mechanics, honestly — dark-pop band. ────────────────────────────────
-export const NS_MECHANICS = {
-  eyebrow: '04 · The mechanics, honestly',
-  title: 'How a par-spendable treasury',
-  titleAccent: 'actually holds together.',
-  intro:
-    'No magic — structure. The community holds the price-free senior side; a junior first-loss tranche absorbs the market’s moves. Redemption is solvency-aware: par while covered, fair pro-rata in the tail, with no race for the exit.',
-  items: [
-    ['Senior stays par', 'The community’s balance never reads a pool price. Impermanent loss and market swings land on the junior first-loss tranche, not on member funds.'],
-    ['Covered, then fair', 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts the cushion, everyone shares one transparent pro-rata outcome — no first-redeemer run.'],
-    ['The ULV engine', 'Idle capital earns at the best lending venue — the adapter shops Aave and Morpho for the top USDC rate; just-in-time Uniswap v4 liquidity plus MEV/LVR recapture stack a second layer of return on the same capital. Nothing sits still.'],
-    ['Spend without unwinding', 'A card swipe or payout is a hold against the earning position, then a settle — the underlying stays deployed the entire time.'],
-  ],
-  note:
-    'In testing on Base Sepolia and Circle’s Arc testnet — testnet, unaudited, no real value. These are design properties of autonomous contracts, not a deposit, a guarantee, or investment advice; an external audit is the gate before real value.',
-} as const
+export const NS_MECHANICS = { eyebrow: '04 · The mechanics, honestly', title: 'How the current', titleAccent: 'engine works.', intro: 'MarketEngine provides share-based liquidity for a curated pool. The former treasury and spend-in-place designs are retired.', items: [['Quote-valued share', 'One share token represents quote-asset value across the engine portfolio.'], ['Deposit guard', 'Deposits require a fresh mark and spot within the configured deviation.'], ['Resting capital', 'Capital sits in a resting v4 band plus per-token ERC-4626 adapters; Robinhood testnet adapters are idle custody.'], ['In-kind exit', 'Withdrawals return both pool tokens pro-rata and remain available when the mark is stale.']], note: 'Live on Robinhood Chain testnet · unaudited. External audit gates real value.' } as const
 
 // ─── Why us / trust. ─────────────────────────────────────────────────────────
-export const NS_TRUST = {
-  eyebrow: '05 · Why trust it',
-  title: 'Non-custodial, self-reviewed,',
-  titleAccent: 'and proven on-chain.',
-  lead:
-    'We don’t ask a community to take our word for it. The loop already runs end-to-end on testnet with real transaction hashes, the contract stack was put through a firm-grade security checklist, and the properties where money can be lost are backed by machine-checked proofs.',
-  stats: [
-    { value: '0', sub: 'Critical', label: 'critical findings across a 38-contract self-review' },
-    { value: '6 / 6', sub: 'High', label: 'high-severity findings remediated + re-reviewed' },
-    { value: '7', sub: 'proofs', label: 'safety properties backed by Coq / Halmos machine checks' },
-    { value: '502 / 0', sub: 'Forge', label: 'contract tests pass / fail across the stack' },
-  ],
-  points: [
-    ['Non-custodial', 'Members hold their keys. Funds live in the user’s wallet or in autonomous contracts — never on a Mintware balance sheet.'],
-    ['Proven end-to-end', 'Deposit → earn → authorize → spend, plus a native USDC bridge, all executed on testnet with real hashes you can open in a block explorer.'],
-    ['Built on Circle / Arc rails', 'USDC-native settlement plus CCTP bridging ($126B+ moved across 17 chains) on Circle’s infrastructure; Circle’s USDC-native Arc L1 was announced in 2025. Card spend runs via a regulated partner (sandbox today). We build on their rails — we don’t claim their licences.'],
-  ],
-  proofCta: { label: 'See the on-chain proof →', href: '/proof' },
-  mathCta: { label: 'Read the math →', href: '/the-math' },
-} as const
+export const NS_TRUST = { eyebrow: '05 · Why trust it', title: 'Testnet, unaudited,', titleAccent: 'open about status.', lead: 'Current deployments are testnet-only. External audit gates real value.', stats: [{ value: 'RH', sub: 'testnet', label: 'Robinhood Chain MarketEngine', src: 'deployment record' }, { value: 'Base', sub: 'Sepolia', label: 'MarketEngine deployment', src: 'deployment record' }, { value: 'No', sub: 'external audit', label: 'External audit remains a gate', src: 'status' }], points: [['Market ranking', 'Discover ranks candidate pools using GeckoTerminal data and a risk score; it does not certify pools.'], ['Card refill', 'A relayer redeems Earn shares only to the member’s registered buffer wallet under daily caps.'], ['Retired designs', 'Arc/CCTP settlement, spend-from-NAV, ULV/JIT/MEV, and matched Treasury issuance are not current features.']], proofCta: { label: 'See current product →', href: '/vaults' }, mathCta: { label: 'Read the docs →', href: '/docs' } } as const
 
 export const NS_CTA = {
-  title: 'Building a network state? Give its treasury a rail that earns while it spends.',
+  title: 'Building a network state? Explore current curated liquidity.',
   primary: { label: 'Talk to us →', href: 'https://x.com/Mintware_org' },
   secondary: { label: 'Explore the app →', href: '/yield-payment-network' },
 } as const
 
 // Small, dated Sources line at the foot — credibility, not decoration.
-export const NS_SOURCES =
-  'Sources: stablecoin supply & settlement volume ($46T total / ~$9T adjusted) — a16z State of Crypto 2025; idle-stablecoin figure — CoinDesk Research (2025, all stablecoins, not DAO-treasuries alone); DAO treasury aggregate & stablecoin share — DeepDAO (2025); Praxis $525M raise — The Block (Oct 2024); pop-up-city count — Gitcoin case study (2024); Estonia e-Residency statistics — e-resident.gov.ee (2024–25); USDC circulation & CCTP volume — Circle (2025). Movement framing: Balaji Srinivasan, “The Network State” (2022); Vitalik Buterin’s Zuzalu (2023). Figures are approximate, dated, and cited for context — not offers; several movement figures are project-reported. Yield: the stacked model targets ~11–14% — a best-venue lending floor (~6–8%, shopping Aave + Morpho; Aave USDC ~3.3–3.5% and Morpho USDC vaults ~4–8%, some ~7–8%, per Aave / Morpho / eco.com, 2026) plus a ~4–5% LP-fee + MEV-recapture layer on the same capital. Illustrative vision target, testnet, not a promised rate; protocol-native yield varies with market conditions.'
+export const NS_SOURCES = 'Market and movement figures are historical context; they do not describe current product mechanics.'

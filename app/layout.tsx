@@ -40,7 +40,7 @@ const BASE_URL = 'https://mintware.finance'
 
 export const metadata: Metadata = {
   title:       'Mintware — Never idle. Never locked. Always yours.',
-  description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
+  description: 'Mintware MarketEngine offers quote-valued shares in curated Uniswap v4 pools. Testnet only · unaudited.',
   metadataBase: new URL(BASE_URL),
   icons: {
     icon: [
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
     url:         BASE_URL,
     siteName:    'Mintware',
     title:       'Mintware — Never idle. Never locked. Always yours.',
-    description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
+    description: 'Mintware MarketEngine offers quote-valued shares in curated Uniswap v4 pools. Testnet only · unaudited.',
     images: [{ url: '/opengraph-image', width: 1200, height: 630 }],
   },
   twitter: {
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     site:        '@Mintware_Fi',
     creator:     '@Mintware_Fi',
     title:       'Mintware — Never idle. Never locked. Always yours.',
-    description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
+    description: 'Mintware MarketEngine offers quote-valued shares in curated Uniswap v4 pools. Testnet only · unaudited.',
     images:      ['/opengraph-image'],
   },
 }

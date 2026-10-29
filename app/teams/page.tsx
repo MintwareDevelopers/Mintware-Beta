@@ -8,24 +8,12 @@ import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
 import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 // =============================================================================
-// /teams — marketing landing for the Matched Liquidity vault (team-facing).
-// Design v2 (Privy-esque). Grounded strictly in the deployed contract:
-// contracts-v4/src/vaults/MintwareMatchedLiquidityVault.sol
-//   · team commits T; community matches quote up to a value cap
-//   · threshold within window → activate; 50/50 team(LOCKED)/community(FREE)
-//   · MIN_LOCK_DURATION 90d hard cliff (90–730d); NO team early-unlock path
-//   · guardian pause can FREEZE but never RELEASE team funds early
-//   · during lock, fees accrue PER COMMUNITY LIQUIDITY UNIT — team earns 0%
-//     (deposit-pro-rata, NOT reputation-weighted — do not claim AWY here)
-//   · MIN_COMMUNITY_DEPOSITORS = 3 (anti self-dealing)
-// Trust claim uses the contract's words: "a restriction on withdrawal, not a
-// transfer of ownership." Never "community-owned." Undeployed → testnet-honest.
+// /teams — landing page for the retired matched-liquidity design.
 // =============================================================================
 
 export const metadata: Metadata = {
   title: 'For Teams — Prove it, don’t say it | Mintware',
-  description:
-    'Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock your fee share flows to the people who backed you. Trust us becomes check the contract.',
+  description: 'Community-matched launch issuance is retired. Current curated liquidity uses MarketEngine on testnet.',
 }
 
 const TWITTER = 'https://x.com/Mintware_Fi'
@@ -46,33 +34,33 @@ function Head({ n, label }: { n: string; label: string }) {
 
 // ── data ─────────────────────────────────────────────────────────────────────
 const FLOW: [string, string][] = [
-  ['You commit your token', 'Deposit your project token into the vault and pick a lock term — 90 days to 2 years.'],
-  ['Your community matches it', 'Backers deposit the quote asset (USDC, WETH…) up to a value cap, first-come, until the match is filled.'],
-  ['Threshold met → it activates', 'If the community fills the minimum within the funding window, the matched liquidity deploys as one Uniswap V4 position.'],
-  ['Two halves, one locked', 'The position splits 50/50 by liquidity — your half is locked for the full term, the community half stays free to redeem.'],
-  ['You can’t pull it — by design', 'There is no team early-unlock path in the contract. A guardian can freeze the vault, but can never release your locked liquidity early.'],
+  ['Matched launch', 'Community-matched liquidity issuance is retired.'],
+  ['No lock tiers', 'The current MarketEngine does not impose a lock period.'],
+  ['Curated pool', 'Pool curation remains available through the current registry.'],
+  ['MarketEngine', 'One engine manages liquidity for each curated Uniswap v4 pool.'],
+  ['Testnet only', 'Current deployments are unaudited; external audit gates real value.'],
 ]
 
 const LOCK_STATS: [string, string][] = [
-  ['≥ 90 days', 'Hard cliff — selectable up to 2 years'],
-  ['0', 'Team early-exit paths in the contract'],
-  ['50 / 50', 'Team (locked) / community (free) split'],
-  ['≥ 3', 'Independent backers required to activate'],
+  ['Retired', 'Community-matched launch issuance'],
+  ['No lock tiers', 'The current MarketEngine has no lock schedule'],
+  ['One pool', 'A MarketEngine is registered for each curated pool'],
+  ['Testnet', 'Unaudited; external audit gates real value'],
 ]
 
 const TRUST: [string, string][] = [
-  ['Locked, not signed over', 'Your liquidity never changes owner. What’s restricted is your ability to withdraw it before the cliff — a restriction on withdrawal, not a transfer of ownership.'],
-  ['No early-unlock path', 'There is no function anywhere in the contract that lets a team pull locked liquidity early. It isn’t gated — it’s absent.'],
-  ['Guardian kill-switch', 'A guardian can pause the vault if something looks wrong. It can freeze funds — but it can never release team liquidity ahead of the cliff.'],
-  ['Anti-self-dealing floor', 'Activation requires a minimum of three independent community backers, so a team can’t quietly match its own launch.'],
-  ['Fee redirection on-chain', 'The community’s share accrues inside the contract, per unit of community liquidity — no off-chain merkle, no discretion, no rounding drift.'],
+  ['Matched launch retired', 'Community-matched issuance is not part of the current product.'],
+  ['Current liquidity path', 'Curated pools use a MarketEngine with one share token valued in the quote asset.'],
+  ['Deposit guard', 'Deposits require a fresh mark and spot near that mark.'],
+  ['In-kind exits', 'Withdrawals return both pool tokens pro-rata with minimum-output checks.'],
+  ['Testnet status', 'Live on Robinhood Chain testnet · unaudited. External audit gates real value.'],
 ]
 
 const TREASURY: [string, string][] = [
-  ['Spendable while earning', 'Member balances redeem at par while the treasury covers them, and stay instantly spendable — cards, x402, cross-chain. The treasury earns the spread while the money sits ready. Never idle, never locked.'],
-  ['Your team, by role', 'Invite by email and pick a preset — owner, manager, contributor, vendor. Each is a daily spend cap. On accept, every member gets a soulbound on-chain membership.'],
-  ['Pay vendors & run payroll', 'One payment or a CSV batch, straight from the treasury and authorized against live solvency. Route to any chain via Circle CCTP.'],
-  ['Proof of reserves, public', 'A live treasury page — NAV, coverage, members, backed on-chain — plus an embeddable badge. Your community verifies solvency without asking.'],
+  ['Card refill only', 'Bridge + Stripe card rails are pre-enable. The on-chain gateway refills a registered member buffer wallet from Earn shares.'],
+  ['No spend from NAV', 'Card purchases do not settle against the MarketEngine or Earn vault.'],
+  ['No CCTP route', 'Cross-chain Arc/CCTP settlement is retired.'],
+  ['Treasury issuance retired', 'Senior/junior new issuance is not a current product.'],
 ]
 
 function TeamsLandingPageV2() {
@@ -83,12 +71,12 @@ function TeamsLandingPageV2() {
       {/* ── HERO ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
-          <div className={ey}>For teams · matched liquidity</div>
+          <div className={ey}>For teams · MarketEngine liquidity</div>
           <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[16ch] [text-wrap:balance]">
             Prove it. <span className="text-gradient-accent">Don’t say it.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock, your fee share flows to the people who backed you. “Trust us” becomes “check the contract.”
+            Community-matched launch issuance is retired. Current curated liquidity uses MarketEngine on testnet; these contracts are unaudited, and external audit gates real value.
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
             <a href="#how" className="glass-pill">How it works ↓</a>
@@ -102,12 +90,10 @@ function TeamsLandingPageV2() {
       {/* ── 01 · The problem ── */}
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="01" label="The problem" />
-          <h2 className={h2}>Every launch asks the same thing: <span className="text-gradient-accent">trust us.</span></h2>
+          <Head n="01" label="Current liquidity path" />
+          <h2 className={h2}>Current pool liquidity uses <span className="text-gradient-accent">MarketEngine.</span></h2>
           <p className={lead}>
-            Most tokens launch with liquidity concentrated in a few insider wallets, rented mercenary capital that
-            leaves within a week, and a team that can pull the floor at any moment. The community is asked to believe it
-            won’t happen. Belief isn’t a mechanism — and it’s exactly what gets retail hurt.
+            MarketEngine provides a share-based liquidity path for curated Uniswap v4 pools. Community-matched launch issuance is retired.
           </p>
         </div>
       </section>
@@ -115,11 +101,10 @@ function TeamsLandingPageV2() {
       {/* ── 02 · Two models ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="02" label="Two ways to bring liquidity" />
-          <h2 className={h2}>Matched, or a <span className="text-gradient-accent">traditional LP.</span></h2>
+          <Head n="02" label="Current liquidity path" />
+          <h2 className={h2}>One pool, <span className="text-gradient-accent">one engine.</span></h2>
           <p className={lead}>
-            Not every team wants a locked, community-matched launch. Mintware runs the same reputation engine
-            under two vault models — pick the one that fits.
+            The former matched-liquidity model is retired. Current pool liquidity uses one MarketEngine per curated Uniswap v4 pool.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
             <div className="rounded-2xl bg-white border border-hair p-6" style={{ borderTop: '4px solid var(--color-coral2)' }}>
@@ -128,19 +113,16 @@ function TeamsLandingPageV2() {
                 <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-coral2-deep rounded-full border border-[rgba(232,138,103,0.4)] px-2 py-0.5">You’re reading this ↓</span>
               </div>
               <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-3">
-                Your team locks its token; the community matches it in USDC. A hard ≥ 90-day cliff, no early exit,
-                and during the lock the fees flow to your backers. Built for launches where <b className="text-ink">trust is the bottleneck</b>.
+                Community-matched issuance is retired and is not available as a current product.
               </p>
             </div>
             <div className="rounded-2xl bg-white border border-hair p-6" style={{ borderTop: '4px solid var(--color-peri)' }}>
               <div className="flex items-center justify-between gap-3">
-                <span className="font-atx-display text-[19px] font-medium text-ink">Growth Vault</span>
+                <span className="font-atx-display text-[19px] font-medium text-ink">MarketEngine</span>
                 <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Traditional LP</span>
               </div>
               <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-3">
-                A standard LP position — provide one or both sides yourself, no locking, no matching. MEV-protected,
-                auto-managed range, fees paid pro-rata to your share. Built for
-                <b className="text-ink"> ongoing or treasury liquidity</b>.
+                Deposit one or both pool tokens with a minimum-share floor. Shares are quote-valued; withdrawals return both tokens pro-rata.
               </p>
               <Link href="/vaults" className="inline-block mt-4 text-[12px] uppercase tracking-[0.06em] font-semibold text-peri-deep no-underline hover:underline">See the LP side →</Link>
             </div>
@@ -157,12 +139,12 @@ function TeamsLandingPageV2() {
             <div className="relative px-10 max-[800px]:px-6 py-[64px] max-[800px]:py-[48px]">
           <div className="flex items-baseline gap-3">
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">03</span>
-            <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">How matched liquidity works</span>
+            <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">Current pool liquidity</span>
           </div>
           <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
-            You lock. Your community matches. <span className="text-gradient-accent">The contract holds both.</span>
+            One curated pool. <span className="text-gradient-accent">One MarketEngine.</span>
           </h2>
-          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[60ch] mt-4">A dual-sided pair vault — your token on one side, the community’s stable or ETH on the other. Both go in once; the contract does the rest.</p>
+          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[60ch] mt-4">Deposits require a fresh mark and spot near that mark. Withdrawals remain available when the mark is stale and return both tokens pro-rata.</p>
           <div className="grid grid-cols-5 gap-3 mt-8 max-[900px]:grid-cols-1">
             {FLOW.map(([k, d], i) => (
               <div key={k} className="rounded-2xl bg-white/[0.06] border border-white/15 p-5 flex flex-col gap-2.5">
@@ -181,12 +163,9 @@ function TeamsLandingPageV2() {
       {/* ── 04 · The lock ── */}
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="04" label="The lock · the proof" />
-          <h2 className={h2}>A restriction on withdrawal, <span className="text-gradient-accent">not a transfer of ownership.</span></h2>
-          <p className={lead}>
-            Your liquidity stays yours. What changes is that you provably can’t withdraw it before the cliff. The term is
-            yours to pick — from 90 days up to two years — and once set, there is deliberately no path to unwind it early.
-          </p>
+          <Head n="04" label="Retired · matched launch lock" />
+          <h2 className={h2}>No lock tiers in the <span className="text-gradient-accent">current product.</span></h2>
+          <p className={lead}>Community-matched issuance and its lock schedule are retired. Current MarketEngine withdrawals remain pro-rata and in kind.</p>
           <div className="grid grid-cols-4 gap-3 mt-8 max-[720px]:grid-cols-2">
             {LOCK_STATS.map(([n, d]) => (
               <div key={d} className="rounded-2xl bg-ground-cool border border-hair p-5" style={{ borderTop: '3px solid var(--color-peri)' }}>
@@ -201,33 +180,23 @@ function TeamsLandingPageV2() {
       {/* ── 05 · What backers earn ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="05" label="What backers earn" />
-          <h2 className={h2}>During the lock, <span className="text-gradient-accent">your fees are theirs.</span></h2>
-          <p className={lead}>
-            While your side is locked, every swap fee it would have earned — net of the Mintware protocol cut — flows to
-            the community instead, accrued on-chain per unit of community liquidity. You give up short-term fees to buy
-            long-term trust. That’s the trade, and the contract enforces it exactly: during the lock, the team earns 0%.
-          </p>
-          <p className="text-[12px] text-ink-soft mt-4">
-            <b className="text-peri-deep">↳</b> Community fees today are shared pro-rata to liquidity provided. Reputation-weighting for backers is on the roadmap — we’ll say so here when it ships, not before.
-          </p>
+          <Head n="05" label="Retired · matched launch fees" />
+          <h2 className={h2}>Pool shares track <span className="text-gradient-accent">quote-asset value.</span></h2>
+          <p className={lead}>The current MarketEngine does not route fees through the former community lock and allocation model. Withdrawals return both pool tokens pro-rata.</p>
         </div>
       </section>
 
       {/* ── 06 · Referrals ── */}
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="06" label="Referrals · grow the pool" />
-          <h2 className={h2}>Let your backers <span className="text-gradient-accent">bring their backers.</span></h2>
-          <p className={lead}>
-            Matched liquidity is only as deep as the community you can rally — and your community has a community.
-            Referrals turn every backer into a channel for more.
-          </p>
+          <Head n="06" label="Pool discovery" />
+          <h2 className={h2}>Curation helps teams <span className="text-gradient-accent">find a pool.</span></h2>
+          <p className={lead}>Discover ranks candidate pools using market data and a risk score; ranking is not certification. Curated pools are registered for MarketEngine.</p>
           <div className="grid grid-cols-3 gap-3 mt-8 max-[760px]:grid-cols-1">
             {[
-              ['Every backer gets a link', 'A referral link is deterministic from any wallet — no signup. Share it, and the liquidity it brings is attributed to you.'],
-              ['Your launch reaches further', 'Every backer who shares their link widens the pool of people who can fill your match — a real network is the hardest thing to fake.'],
-              ['Tracked on-chain, paid fairly', 'Referred liquidity is recorded per wallet. Pool fees stay pro-rata to each position — no reputation multiplier.'],
+              ['Market data', 'Discover uses GeckoTerminal market data to surface candidate pools.'],
+              ['Risk score', 'The score ranks candidates and does not certify a pool as safe.'],
+              ['Curation', 'Selected pools are registered with their MarketEngine.'],
             ].map(([k, d]) => (
               <div key={k} className="soft-card p-6">
                 <div className="font-atx-display text-[15px] font-medium leading-tight text-ink">{k}</div>
@@ -236,7 +205,7 @@ function TeamsLandingPageV2() {
             ))}
           </div>
           <p className="text-[12px] text-ink-soft mt-4">
-            <b className="text-peri-deep">↳</b> Teams can reward backers through referrals — every wallet brought in pays a referral reward, so widening the pool pays twice. A 24-hour anti-abuse gate keeps referrals real, not farmed.
+            <b className="text-peri-deep">↳</b> MarketEngine contracts are live on testnet and unaudited. External audit gates real value.
           </p>
         </div>
       </section>
@@ -257,10 +226,7 @@ function TeamsLandingPageV2() {
               </div>
             ))}
           </div>
-          <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">
-            Built for MEME / EMERGING launches and gated as such at deploy. The matched-liquidity vault is invariant-tested
-            and ships on Base Sepolia testnet first; live mainnet launches land at Phase 2. Independent audit pending.
-          </p>
+          <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">Live on Robinhood Chain testnet · unaudited. External audit gates real value.</p>
         </div>
       </section>
 
@@ -268,13 +234,9 @@ function TeamsLandingPageV2() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="08" label="Beyond the launch · your treasury" />
-          <h2 className={h2}>The capital doesn’t have to sit idle. <span className="text-gradient-accent">Or lock you out.</span></h2>
+          <h2 className={h2}>Current treasury paths <span className="text-gradient-accent">have clear limits.</span></h2>
           <p className={lead}>
-            The money your team runs on lives in a Mintware treasury that keeps earning while it stays spendable —
-            cards, payroll, vendors, cross-chain — with a public page anyone can verify. Community capital is senior —
-            redeemable at par while the treasury covers it; your team’s capital is the junior tranche that absorbs
-            losses first and earns the spread. The order is fixed in the contract: the code pays the community first,
-            automatically — no admin override.
+            The former senior/junior treasury issuance and spend-from-NAV design are retired. Card rails are Bridge + Stripe, pre-enable; the on-chain payment gateway only refills a registered member buffer wallet from Earn shares.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
             {TREASURY.map(([k, d], i) => (

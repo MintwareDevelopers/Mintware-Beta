@@ -23,20 +23,20 @@ import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 const ey = 'text-[12px] uppercase tracking-[0.13em] font-semibold text-peri-deep'
 
-// V1 (default) shows the live LP Gateway front; V2 (unlocked) shows the full vision below.
+// V1 (default) shows the live MarketEngine front; V2 (unlocked) shows the broader product story below.
 export default function HomePage() {
   return useV2Mode() ? <HomeV2 /> : <HomeV1 />
 }
 
 const ENGINES = [
-  { n: '01', t: 'Best-rate lending', d: 'Idle capital is routed to the venue paying the most — and re-routed as rates move. Never parked in one place, earning less than it could.' },
-  { n: '02', t: 'Market-making', d: 'Your liquidity provides just-in-time depth on Uniswap V4 exactly when trades need it, and earns the swap fees for it.' },
-  { n: '03', t: 'Recaptured MEV', d: 'The value bots usually skim off your trades gets caught and handed back — to you and the pool, not the searchers.' },
+  { n: '01', t: 'One pool, one engine', d: 'Each MarketEngine serves a single curated Uniswap v4 pool and issues one quote-valued share token.' },
+  { n: '02', t: 'Resting liquidity', d: 'Capital is held in a configured v4 band and per-token ERC-4626 adapters. Robinhood testnet adapters are idle custody.' },
+  { n: '03', t: 'In-kind exits', d: 'Withdrawals return both pool tokens pro-rata, with caller-supplied minimum outputs.' },
 ]
 
 const DOORS = [
-  { glyph: '🧍', t: 'You', d: 'The Liquid Sovereign Account. Cash that earns while it stays spendable — on your card, anywhere. Earn, spend, stay sovereign.', tag: 'Your account', tagLive: false, go: 'Open your account →', href: '/yield-payment-network' },
-  { glyph: '👥', t: 'Teams', d: 'A treasury that works: matched liquidity, cards, payroll, and role-capped spend — every balance reading live off the on-chain vault.', tag: 'For treasuries', tagLive: false, go: 'See the treasury →', href: '/teams' },
+  { glyph: '🧍', t: 'You', d: 'Earn shares in a single-source ERC-4626 vault. Card rails are Bridge + Stripe and remain pre-enable.', tag: 'Earn', tagLive: false, go: 'Explore Earn →', href: '/yield-payment-network' },
+  { glyph: '👥', t: 'Teams', d: 'Team treasury and card-spend experiences are not enabled as a live MarketEngine or card product.', tag: 'For treasuries', tagLive: false, go: 'See the treasury →', href: '/teams' },
   { glyph: '🤖', t: 'Agents', d: 'An x402 parking account: idle USDC earns while it pays per call. Your agent’s balance is never dead weight between requests.', tag: '◆ x402 loop live', tagLive: true, go: 'Wire up an agent →', href: '/agents' },
 ]
 
@@ -53,12 +53,12 @@ function HomeV2() {
       <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">
         <AirbrushSplash tone="mix" />
         <div className="relative mx-auto max-w-[1120px] px-7 max-[640px]:px-[18px] pt-[96px] pb-[88px] max-[640px]:pt-[60px] max-[640px]:pb-[56px] flex flex-col items-center text-center">
-          <span className="live-chip mb-6"><span className="dot" aria-hidden />One balance · earning &amp; spendable</span>
+          <span className="live-chip mb-6"><span className="dot" aria-hidden />MarketEngine V1 · Robinhood testnet · unaudited</span>
           <h1 className="font-atx-display font-semibold text-ink tracking-[-0.045em] leading-[1.02] text-[clamp(2.7rem,7vw,5.1rem)] [text-wrap:balance]">
             Never idle.<br />Never locked.<br /><span className="text-gradient-accent">Always yours.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1.02rem,1.6vw,1.28rem)] leading-[1.55] mt-6 max-w-[56ch]">
-            Money shouldn’t have to choose between earning and being spendable. Yours does both — it earns the moment it lands, and spends the second you need it. No unwinding. No lockups.
+            Current V1 provides quote-valued shares in curated Uniswap v4 pools. Card refills use a separate path and do not spend from the MarketEngine.
           </p>
           <div className="mt-9 flex flex-wrap gap-3.5 items-center justify-center">
             <button onClick={() => launchApp()} className="glass-pill-primary">{launchLabel}</button>
@@ -80,7 +80,7 @@ function HomeV2() {
                 The market-making engine the pros use, <span className="text-gradient-accent">opened to everyone.</span>
               </h2>
               <p className="text-ink-mid text-[clamp(1.02rem,1.6vw,1.2rem)] leading-[1.55] mt-[18px] max-w-[46ch]">
-                Mintware puts your dollars in a Uniswap&nbsp;V4 vault that runs the same automated, MEV-protected strategy the pros deploy — earning lending, swap fees, and recaptured MEV, all at once.
+                Mintware MarketEngine issues one quote-valued share for each curated pool. The Robinhood testnet engine holds capital in a resting v4 band and idle-custody token adapters.
               </p>
               <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> Three engines, one balance — always working.</div>
             </div>
@@ -164,7 +164,7 @@ function HomeV2() {
                 A card that spends your <span className="text-gradient-accent">yield</span>, not your savings.
               </h2>
               <p className="text-ink-mid text-[clamp(1.02rem,1.6vw,1.2rem)] leading-[1.55] mt-[18px] max-w-[44ch]">
-                Tap to pay — and your balance never stops earning. A swipe is a <b className="text-ink">hold</b> against your working capital, not a withdrawal. Authorized in milliseconds, settled to the exact cent.
+                Cards are pre-enable. The current on-chain gateway can refill a member-registered buffer by redeeming their Earn shares; it does not authorize purchases or settle merchants.
               </p>
               <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> You spent $42.10. Your position didn’t move — only the yield did.</div>
             </div>
@@ -180,7 +180,7 @@ function HomeV2() {
         <div className="mx-auto max-w-[1120px] px-7 max-[640px]:px-[18px] py-[92px] max-[640px]:py-[60px]">
           <div className={ey}>How it works</div>
           <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.8rem,3.6vw,2.9rem)] mt-3.5 [text-wrap:balance]">
-            How a dollar earns while you spend it.
+            How the current pool engine works.
           </h2>
           <div className="grid grid-cols-3 gap-[18px] mt-[38px] max-[820px]:grid-cols-1">
             {ENGINES.map((e) => (
@@ -192,7 +192,7 @@ function HomeV2() {
             ))}
           </div>
           <div className="mt-[26px] text-[14.5px] text-ink-mid rounded-[14px] px-5 py-4 bg-[rgba(108,108,240,0.06)] border border-[rgba(108,108,240,0.14)]">
-            <b className="text-ink">You spend the yield, not the position.</b> A payment is a hold against your earning balance, settled in just enough dollars to cover it. Everything else keeps working.
+            <b className="text-ink">Card refills are separate from liquidity.</b> The refill gateway redeems Earn shares to a registered buffer; it has no merchant-settlement path.
           </div>
         </div>
       </section>
@@ -239,7 +239,7 @@ function HomeV2() {
               <WaitlistForm />
             </div>
             <div className="text-[12px] text-ink-soft mt-4 leading-[1.5] max-w-[52ch]">
-              Non-custodial · in testing on Base Sepolia · not a deposit or guaranteed return. <Link href="/legal" className="text-peri-deep font-semibold no-underline hover:underline">Legal →</Link>
+              Testnet · unaudited · external audit gates real value. <Link href="/legal" className="text-peri-deep font-semibold no-underline hover:underline">Legal →</Link>
             </div>
           </GradientPanel>
         </div>

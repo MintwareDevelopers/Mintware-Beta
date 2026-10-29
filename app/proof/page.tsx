@@ -1,9 +1,6 @@
 'use client'
 
-// /proof — a public, shareable "proof of life": the most recent end-to-end testnet run of the YPN loop,
-// rendered from lib/proof/latestRun.ts (single source of truth — update that file after each run). Every
-// tx hash links to a block explorer; a live read of the Arc vault's current NAV shows on-chain state now.
-// Testnet + unaudited throughout — real hashes, valueless test USDC.
+// Historical proof receipts for retired workflows. They are not current-product status evidence.
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -37,14 +34,13 @@ export default function ProofPage() {
       <main className="mx-auto max-w-[900px] px-6 max-[700px]:px-4 py-[44px]">
         {/* hero */}
         <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display">
-          Yield Payment Network · executed on-chain
+          Historical testnet receipts · retired workflows
         </div>
         <h1 className="font-atx-display font-bold text-[clamp(2rem,5.4vw,3.1rem)] leading-[1.04] tracking-[-0.03em] mt-3.5">
-          The whole loop,<br /><span className="text-gradient-accent">run live on testnet.</span>
+          Past testnet runs,<br /><span className="text-gradient-accent">not current product paths.</span>
         </h1>
         <p className="text-ink-mid text-[clamp(1rem,2vw,1.18rem)] leading-[1.5] max-w-[62ch] mt-5">
-          Deposit → earn → authorize → spend, plus a native USDC bridge — every leg executed on-chain, with
-          real transaction hashes you can open in a block explorer. The plumbing working end to end, not a mock-up.
+          The receipts below document earlier YPN and LP Gateway testnet experiments. Those settlement and staged-liquidity mechanics are retired. Current MarketEngine is live on Robinhood Chain testnet · unaudited.
         </p>
 
         {/* honesty banner */}

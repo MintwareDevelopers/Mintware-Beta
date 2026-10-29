@@ -5,20 +5,15 @@
 // Account" marketing surface (route: /yield-payment-network + the embeddable
 // YieldPaymentNetworkSection). TOP-OF-FUNNEL marketing only — no app state.
 //
-// THESIS: the Liquid Sovereign Account (LSA) — a zero-opportunity-cost cash
-// primitive. USDC in a Uniswap v4 Unified Liquidity Vault earns institutional
-// yield (Aave v3 buffer + v4 MEV/LVR recapture) AND stays 100% spendable at
-// Visa terminals in sub-400ms. Principal is never touched — only yield moves.
+// Current code no longer implements the former spend-in-place YPN design.
 //
-// HONESTY: this is COMING SOON / in development. The ULV is in testing on
-// testnet; card settlement over Circle CPN + Privy on Arc, sub-350ms, Visa —
-// all DESIGNED, not shipped. No "Launch app" CTA. Verbs stay "designed to" /
-// "built to"; numbers (4–8% APY, sub-400ms) are targets, not guarantees.
+// Status: former YPN spend-in-place mechanics are retired. Cards use Bridge + Stripe and are pre-enable;
+// the on-chain MintwarePaymentGateway supports refill-only transfers to a registered buffer.
 // =============================================================================
 
 export const YPN_STATUS = {
-  label: 'Coming soon',
-  note: 'The Liquid Sovereign Account is in active development. The Unified Liquidity Vault is in testing on testnet; card settlement over Circle + Privy on Arc is designed, not yet live. Nothing here is live or an offer to deposit.',
+  label: 'Design concept · retired mechanics',
+  note: 'The former YPN spend-in-place design is retired. Current card rails are Bridge + Stripe, pre-enable; the on-chain gateway only refills a registered buffer from Earn shares.',
 } as const
 
 export const YPN_HERO = {
@@ -26,10 +21,10 @@ export const YPN_HERO = {
   title: 'Spend while you',
   titleAccent: 'earn.',
   bullets: [
-    { title: 'Institutional Yield', body: 'Combines Uniswap v4 market-making with best-rate lending, routed across venues, to continuously compound your principal.' },
-    { title: 'Instant Real-World Spending', body: 'Pays out instant card purchases.' },
-    { title: 'Yield-Only Spending', body: 'Card swipes draw on accrued yield while leaving your underlying position in place.' },
-    { title: 'Native USDC Gas', body: 'Frictionless transactions powered by USDC.' },
+    { title: 'MarketEngine', body: 'A quote-valued share represents a curated Uniswap v4 pool portfolio across a resting band and token adapters.' },
+    { title: 'In-kind exits', body: 'Withdrawals return both pool tokens pro-rata, subject to minimum-output limits.' },
+    { title: 'Card refills', body: 'A relayer can redeem Earn shares to the member’s registered buffer wallet.' },
+    { title: 'Testnet status', body: 'Current contract deployments are testnet-only and unaudited.' },
   ],
 } as const
 
@@ -42,41 +37,41 @@ export const YPN_THESIS = {
     { product: 'Traditional checking', liquidity: '100% liquid', yield: '~0% yield', verdict: 'Purchasing power rots to inflation.', us: false },
     { product: 'Savings & CDs', liquidity: 'Locked', yield: 'Yield-bearing', verdict: 'Capital trapped behind withdrawal windows.', us: false },
     { product: 'Traditional DeFi LPs', liquidity: 'Friction-heavy', yield: 'High yield', verdict: 'Manual unwinding, DEX swaps, gas, tax events.', us: false },
-    { product: 'Liquid Sovereign Account', liquidity: '100% liquid', yield: 'Institutional yield', verdict: 'Best-venue lending + v4 MEV recapture — earnings instantly spendable in the real world.', us: true },
+    { product: 'Current Mintware products', liquidity: 'Testnet', yield: 'Unaudited', verdict: 'MarketEngine liquidity and a separate Earn-share card refill path.', us: true },
   ],
 } as const
 
 // ─── The engine flow (PillarArchitectureDiagram) ────────────────────────────
 export const YPN_FLOW = {
   eyebrow: 'The flow',
-  title: 'One balance. Two engines. Real-world spend.',
+  title: 'One pool share. A guarded lifecycle.',
   steps: [
     {
       key: 'deposit',
-      label: 'Deposit USDC',
-      sub: 'Zero extra tokens',
-      desc: 'Put USDC into the vault with zero extra tokens or complicated setups.',
+      label: 'Add pool tokens',
+      sub: 'One or both tokens',
+      desc: 'MarketEngine deposits accept either or both pool tokens with a minimum-shares floor.',
       accent: 'text-atx-blue',
     },
     {
       key: 'grow',
-      label: 'Grow Your Balance',
-      sub: 'Interest + trading fees',
-      desc: 'Your money earns automated interest and trading fees around the clock.',
+      label: 'Hold a pool share',
+      sub: 'Quote-valued claim',
+      desc: 'One share token represents a quote-valued claim on the engine portfolio.',
       accent: 'text-atx-coral',
     },
     {
       key: 'tap',
-      label: 'Tap to Pay',
-      sub: 'No account lockup',
-      desc: 'Swipe your card anywhere. The system holds the exact amount needed without locking up your account.',
+      label: 'Withdraw in kind',
+      sub: 'Both pool tokens',
+      desc: 'Withdraw pro-rata in both pool tokens, with minimum-output limits.',
       accent: 'text-atx-mesquite',
     },
     {
       key: 'spend',
-      label: 'Instant Real-World Spend',
-      sub: '100M+ Visa · under ½ sec',
-      desc: 'Spend your earnings at over 100M Visa merchants worldwide in under half a second.',
+      label: 'Refill a buffer',
+      sub: 'Member-registered destination',
+      desc: 'The refill gateway redeems a member’s Earn shares to their registered buffer after a 48-hour destination delay.',
       accent: 'text-atx-blue',
     },
   ],
@@ -85,37 +80,37 @@ export const YPN_FLOW = {
 // ─── The 3 structural moats (PillarCardGrid) ────────────────────────────────
 export const YPN_PILLARS = {
   eyebrow: 'The moat',
-  title: 'Why generic crypto cards can’t do this',
+  title: 'How current liquidity and refills work',
   cards: [
     {
       key: 'isolation',
       index: '01',
       icon: '⬡',
       accent: 'text-atx-blue',
-      title: 'JIT liquidity isolation',
-      subtitle: 'Spend without disrupting depth',
-      how: 'Your money is split: most sits safely earning interest, while a smaller portion powers active trading. When you swipe your card, payment comes directly from the interest buffer.',
-      why: 'You can spend cash in the real world without pulling money out of active trades — your yield engine never stops running.',
+      title: 'Resting liquidity band',
+      subtitle: 'A position in one curated pool',
+      how: 'The engine keeps liquidity in a configured Uniswap v4 band, alongside per-token adapters.',
+      why: 'Guarded lifecycle actions can add, remove, or recenter the position.',
     },
     {
       key: 'loop',
       index: '02',
       icon: '◎',
       accent: 'text-atx-coral',
-      title: 'The spent-yield loop',
-      subtitle: 'Principal compounds forever',
-      how: 'Card purchases automatically burn accrued yield first before touching your initial deposit.',
-      why: 'Your core balance stays untouched and compounds forever, funding perpetual daily spending.',
+      title: 'Pro-rata in-kind exits',
+      subtitle: 'Both pool tokens',
+      how: 'Withdrawals return each pool token pro-rata and apply caller-supplied minimum outputs.',
+      why: 'Withdrawals remain available when the external mark is stale.',
     },
     {
       key: 'identity',
       index: '03',
       icon: '◈',
       accent: 'text-atx-mesquite',
-      title: 'Identity-layer embedded',
-      subtitle: 'No custodian, no off-ramp',
-      how: 'Your passkey links your wallet, vault balance, and card permissions into one secure identity.',
-      why: 'No middleman exchanges or centralized custodians hold your money. You retain total control of your funds with zero off-ramp fees or hidden conversion costs.',
+      title: 'Refill controls',
+      subtitle: 'Member-selected destination',
+      how: 'A member proposes a buffer wallet, waits 48 hours, then accepts it; the member can revoke it at any time.',
+      why: 'Refills are bounded by per-user and global UTC-day caps, with cap increases timelocked.',
     },
   ],
 } as const
@@ -123,31 +118,31 @@ export const YPN_PILLARS = {
 // ─── Enterprise verticals (ValuePropMatrixTable) ────────────────────────────
 export const YPN_MATRIX = {
   eyebrow: 'Where it goes',
-  title: 'Three ways the account ships',
+  title: 'Current product paths',
   columns: ['Vertical', 'The pitch', 'The line'],
   rows: [
     {
       key: 'hnw',
-      audience: 'HNW DeFi checking',
-      pain: 'Earn institutional yield while buying coffee.',
-      solution: '“Why keep $250k at 0.01%?”',
-      solutionDetail: 'Capture best-venue lending yield + LVR arbitrage on-chain, yet remain instantly spendable via Apple Pay.',
+      audience: 'Curated liquidity',
+      pain: 'A single pool engine with quote-valued shares.',
+      solution: 'MarketEngine V1',
+      solutionDetail: 'Each engine serves one curated Uniswap v4 pool with a resting band, token adapters, and in-kind exits.',
       accent: 'text-atx-blue',
     },
     {
       key: 'corp',
-      audience: 'Corporate treasury OS',
-      pain: 'Yield-funded team debit cards.',
-      solution: 'Fund spend out of yield',
-      solutionDetail: 'DAOs and startups hold idle USDC. Issue team cards mapped to vault allowances — corporate spend funded purely from yield.',
+      audience: 'Earn',
+      pain: 'Single-source ERC-4626 shares.',
+      solution: 'MintwareYieldVault',
+      solutionDetail: 'One yield adapter backs the mwEARN vault; exits pay available liquidity when the source is illiquid.',
       accent: 'text-atx-coral',
     },
     {
       key: 'invisible',
-      audience: 'Invisible DeFi',
-      pain: 'Deposit dollars, tap your phone, watch it grow.',
-      solution: 'No hooks to understand',
-      solutionDetail: 'Mass retail never sees v4 hooks, JIT, or lending adapters — just a balance that grows every day, even as they spend.',
+      audience: 'Card refill',
+      pain: 'A member-controlled buffer destination.',
+      solution: 'Refill only',
+      solutionDetail: 'An authorized relayer redeems Earn shares to the member’s registered buffer wallet under daily caps.',
       accent: 'text-atx-mesquite',
     },
   ],
@@ -155,19 +150,19 @@ export const YPN_MATRIX = {
 
 // ─── Settlement stack (CircleTechBadge) — Arc · Circle · Privy · Visa ───────
 export const YPN_CIRCLE = {
-  eyebrow: 'Settlement stack',
-  title: 'Native on Arc. Settled by Circle. Spent on Visa.',
-  body: 'Built on Arc using USDC for gas, payments authorize via Privy and settle in sub-350ms through Circle for instant spending at 100M+ Visa and Apple Pay terminals — with zero off-ramp fees or extra tokens.',
+  eyebrow: 'Card rails',
+  title: 'Bridge + Stripe · pre-enable',
+  body: 'Cards are not enabled. The current on-chain payment gateway supports Earn-share refills to member-registered buffers; it does not authorize purchases or settle merchants.',
   stack: [
-    { name: 'Arc', role: 'Native chain using USDC for gas.' },
-    { name: 'Circle', role: 'Payment network with sub-350ms settlement.' },
-    { name: 'Privy', role: 'Passkey identity for card spending power.' },
-    { name: 'Visa', role: 'Accepted at 100M+ terminals globally.' },
+    { name: 'Bridge', role: 'Card rail; pre-enable.' },
+    { name: 'Stripe', role: 'Card rail; pre-enable.' },
+    { name: 'MintwarePaymentGateway', role: 'Earn-share buffer refill only.' },
+    { name: 'Earn', role: 'ERC-4626 shares redeemed by the refill gateway.' },
   ],
   points: [
-    'Single-sided USDC deposit',
-    'Settlement paid directly from interest buffer',
-    'Sub-400ms point-of-sale approval',
+    'Member proposes a buffer wallet',
+    '48-hour delay before acceptance',
+    'Per-user and global UTC-day refill caps',
   ],
 } as const
 
@@ -175,34 +170,34 @@ export const YPN_CIRCLE = {
 // Illustrative estimate only. Monthly Yield = (Balance * APY) / 12.
 export const YPN_CALCULATOR = {
   eyebrow: 'Estimate',
-  title: 'Your always-liquid yield',
-  sub: 'See what your balance could earn while staying 100% spendable — no lockup, no withdrawal window, spent from yield.',
-  disclaimer: 'Illustrative estimate only. Not a quote, offer, or guarantee of yield. Actual returns vary with market conditions.',
+  title: 'A hypothetical yield scenario',
+  sub: 'Set an assumed annual rate to model a balance. This calculator does not use a current Mintware yield source or model card spending.',
+  disclaimer: 'Scenario math only; this is not a Mintware yield estimate, quote, offer, or guarantee.',
   tvl: {
-    label: 'Your balance (single-sided USDC)',
+    label: 'Example balance',
     min: 10_000,
     max: 10_000_000,
     step: 10_000,
     default: 250_000,
   },
   apy: {
-    label: 'Estimated blended APY (best-venue lending + v4 MEV)',
+    label: 'Assumed annual rate (scenario input)',
     min: 1,
     max: 20,
     step: 0.5,
     default: 8.0,
   },
   resultLabel: 'Estimated monthly yield',
-  yearSuffix: 'a year — earned while fully spendable',
-  principalLabel: 'Locked or withdrawn',
-  principalValue: 'None — 100% spendable',
+  yearSuffix: 'per year at the assumed rate',
+  principalLabel: 'Scenario rate',
+  principalValue: 'User selected',
 } as const
 
 // ─── Coming-soon conversion (AppConversionCTA) — waitlist, no app launch ────
 export const YPN_CTA = {
   eyebrow: 'Coming soon',
-  title: 'Be first to the Liquid Sovereign Account',
-  body: 'The account opens soon. Leave your email for early access when yield-bearing, instantly-spendable cash goes live.',
+  title: 'Get updates on current Mintware products',
+  body: 'The former spend-in-place account design is retired. Leave your email for updates on current Mintware products.',
   successLabel: '✴ You’re on the list',
   secondaryCta: 'Read the docs',
   secondaryHref: '/docs',
@@ -212,7 +207,7 @@ export const YPN_CTA = {
 export const YPN_ETHOS = {
   eyebrow: 'Liquidity as a public good',
   title: 'Money That Earns 24/7, Ready When You Are',
-  body: 'Mintware turns locked capital into a spendable asset. Your deposit continuously generates institutional yield for you while strengthening market liquidity for everyone — and your earnings are instantly available to spend at point-of-sale.',
+  body: 'Mintware’s current liquidity engine issues quote-valued shares in curated Uniswap v4 pools. Card refills are a separate, pre-enable path to a member-registered buffer.',
   quote: 'Never idle, never locked, always yours.',
 } as const
 
@@ -220,29 +215,27 @@ export const YPN_ETHOS = {
 export const YPN_TEASER = {
   eyebrow: 'Mintware Liquid Sovereign Account',
   title: 'Earn while you spend',
-  body: 'That’s the other half: the yield your balance earns is spendable at the point of sale. Tap to pay while your capital keeps working — no unwinding, no cashing out; you spend the yield, not your position.',
+  body: 'The former spend-in-place YPN design is retired. The current on-chain gateway only refills a member-registered buffer from Earn shares.',
   cta: 'Explore the Liquid Sovereign Account',
   href: '/yield-payment-network',
 } as const
 
 // ─── The blended liquidity model + dual doors (in-page section) ─────────────
-// Accurate model: a market-maker anchors a BLENDED position; the public makes up
-// the difference; the vault runs it as active v4 liquidity + an Aave buffer, so
-// one balance earns twice and stays spendable. Two audiences (depositor + MM).
+// Historical YPN model; not current product functionality.
 export const YPN_LIQUIDITY = {
   eyebrow: 'How it works',
-  title: 'Liquidity,',
+  title: 'Former YPN model,',
   titleAccent: 'finally accessible.',
-  body: 'A market-maker anchors the pool with a blended position — say 200 ETH + 300,000 USDC. The public makes up the difference. Every dollar then runs as active Uniswap v4 liquidity with a best-rate lending buffer underneath, so one balance earns twice — lending yield stacked with trading capture (fees + recaptured MEV/LVR) — while staying spendable at the point of sale.',
+  body: 'The former blended-liquidity, lending-buffer, and spend-in-place design is retired. Current liquidity uses a single MarketEngine per curated pool; current cards are pre-enable and do not spend from the engine.',
   flow: [
-    { label: 'Broker anchors', sub: 'blended liquidity — e.g. 200 ETH + 300k USDC' },
-    { label: 'Public fills',    sub: 'the community makes up the difference' },
-    { label: 'One vault',       sub: 'active Uniswap v4 + a best-rate lending buffer' },
-    { label: 'Stacked yield',   sub: 'earned twice — and spendable' },
+    { label: 'Curate pool', sub: 'one MarketEngine for each selected v4 pool' },
+    { label: 'Add tokens', sub: 'one or both pool tokens, with a minimum-shares floor' },
+    { label: 'Hold shares', sub: 'one quote-valued share token' },
+    { label: 'Withdraw', sub: 'pro-rata in kind, with minimum outputs' },
   ],
   doors: [
-    { kicker: 'For you', tone: 'peri', title: 'Deposit, earn, spend', body: 'Put in USDC, earn the stacked yield, and spend it straight from your card — no unwinding, bridging, or cashing out first.' },
-    { kicker: 'For market-makers', tone: 'coral', title: 'Seed liquidity, reward your community', body: 'Anchor blended liquidity for your launched token, earn the same stacked yield, and hand your community a spendable-yield account on top of it.' },
+    { kicker: 'For you', tone: 'peri', title: 'Pool shares', body: 'Add one or both pool tokens to a curated MarketEngine and withdraw pro-rata in kind.' },
+    { kicker: 'For market-makers', tone: 'coral', title: 'Curated pool liquidity', body: 'Each MarketEngine serves one selected Uniswap v4 pool with a resting band and token adapters.' },
   ],
 } as const
 
@@ -253,12 +246,12 @@ export const YPN_TECH = {
   titleAccent: 'done right.',
   intro: 'None of this works without the engineering. Here’s the part we’re proud of.',
   items: [
-    { k: 'Arc smart contracts', v: 'Native USDC gas and card authorization in sub-150ms.' },
-    { k: 'The ULV engine',      v: 'Just-in-time liquidity on every swap — capital is never idle.' },
-    { k: 'MEV / LVR recapture', v: 'Value that normally leaks to arbitrageurs, returned to depositors.' },
-    { k: 'Proven',              v: 'Invariant-fuzzed to 256×128k; payment core deployed and on-chain-verified on Base Sepolia.' },
+    { k: 'MarketEngine', v: 'One quote-valued share for each curated Uniswap v4 pool.' },
+    { k: 'Adapters', v: 'Per-token ERC-4626 adapters; Robinhood testnet adapters are idle custody.' },
+    { k: 'Guarded lifecycle', v: 'Deposits require a fresh mark and spot within the configured deviation.' },
+    { k: 'Status', v: 'Robinhood Chain testnet · unaudited · external audit gates real value.' },
   ],
-  note: 'On testnet — deployed ≠ audited. An external audit precedes mainnet or real value.',
+  note: 'Testnet only · unaudited. An external audit gates real value.',
 } as const
 
 // ─── The senior tranche — the headline value prop (counsel-safe framing) ─────
@@ -266,18 +259,18 @@ export const YPN_TECH = {
 // guaranteed / fixed APY" language. Frame as "cash that stays productive," yield "from the pools it
 // backs" (protocol-native, not a Mintware promise), and always the testnet/not-a-guarantee note.
 export const YPN_ETH_SENIOR = {
-  eyebrow: 'The senior tranche',
-  title: 'Cash that stays cash —',
-  titleAccent: 'and stays productive.',
+  eyebrow: 'Retired Treasury design',
+  title: 'Senior / junior issuance',
+  titleAccent: 'is not current.',
   body:
-    'Put in USDC and it stays spendable at par, like cash — while the capital works, earning from the pools it backs. The design splits the risk in two: the community holds the price-free senior side, and a first-loss junior tranche absorbs the market’s ups and downs. Your balance behaves like a dollar; the volatility lands on the tranche built to take it.',
+    'Treasury senior/junior new issuance is retired. The current Earn vault issues ERC-4626 shares over one yield adapter; it does not offer a par-valued senior claim.',
   cards: [
-    { k: 'Price-free by design', v: 'The senior claim never reads a pool price. Impermanent loss and market moves land on the junior tranche first, not on your balance.' },
-    { k: 'Covered, then fair', v: 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts that cushion, everyone shares the same transparent, pro-rata outcome — no race for the exit.' },
-    { k: 'Spend without unwinding', v: 'Pay straight from the balance while it stays deployed — a spend is a hold against the earning position, then a settle. Never idle, never locked.' },
+    { k: 'Earn shares', v: 'MintwareYieldVault is an ERC-4626 share vault over one yield adapter.' },
+    { k: 'Pause behavior', v: 'Pausing blocks deposits and mints; it does not block exits.' },
+    { k: 'Illiquid exits', v: 'Redemptions pay what is obtainable; unpaid shares remain with the holder.' },
   ],
   note:
-    'In testing on Base Sepolia — testnet, unaudited, no real value. This is a design property of an autonomous vault, not a deposit, a guarantee, or investment advice; an external audit precedes any real value.',
+    'Testnet only · unaudited. External audit gates real value.',
 } as const
 
 // ─── Standing — spend-based service tiers (counsel-safe framing) ────────────
@@ -288,16 +281,15 @@ export const YPN_ETH_SENIOR = {
 // "earn / appreciate / trade" language. Fully independent of the Attribution score, which stays
 // informational-only (docs/legal/attribution-informational.md) and never gates anything here.
 export const YPN_STANDING = {
-  eyebrow: 'Built for how you actually use it',
-  title: 'The more you spend,',
-  titleAccent: 'the better it gets.',
-  body: 'Standing tracks real, settled spending on your card — nothing else. There’s nothing to deposit, hold, or stake to move up. Using the account for what it’s for is what moves you forward.',
+  eyebrow: 'Retired feature',
+  title: 'Card spending tiers',
+  titleAccent: 'are not current.',
+  body: 'Spend-based standing and service tiers are retired and are not part of the current card refill product.',
   tiers: [
-    { name: 'Active', unlock: 'A handful of real purchases', perk: 'Priority settlement — your spend clears faster in the batch queue.' },
-    { name: 'Established', unlock: 'Sustained spend over time', perk: 'A tighter hold on your own balance, so more of what you have becomes available to spend.' },
-    { name: 'Trusted', unlock: 'A long, consistent track record', perk: 'A higher daily limit, and first access to new accounts before general availability.' },
+    { name: 'Retired', unlock: 'Not available', perk: 'No spend-based settlement tiers are currently offered.' },
+    { name: 'Retired', unlock: 'Not available', perk: 'No spend-based settlement tiers are currently offered.' },
   ],
-  note: 'Standing is computed from your own settlement history only — never from the Attribution score, and never a reward for holding or staking anything. It changes how the account serves you, not what it pays you.',
+  note: 'Spend-based standing and service tiers are retired.',
 } as const
 
 export type YpnPillar = (typeof YPN_PILLARS.cards)[number]

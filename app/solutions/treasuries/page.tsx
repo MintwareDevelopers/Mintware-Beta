@@ -35,6 +35,7 @@ export default function TreasuriesSolutionPage() {
   return (
     <div className="min-h-screen bg-white text-ink overflow-x-clip">
       <V2Nav />
+      <div className="border-b border-hair-soft bg-ground-cool px-6 py-2 text-center text-[11px] text-ink-soft">Current liquidity: Robinhood Chain testnet · unaudited · external audit gates real value. Former Treasury senior/junior issuance and spend-from-NAV mechanics are retired.</div>
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section className="bg-white border-b border-hair-soft">

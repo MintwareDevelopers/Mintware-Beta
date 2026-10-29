@@ -12,17 +12,14 @@ import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 // =============================================================================
 // /defi — marketing landing for the DeFi vault surface. Design v2 (Privy-esque).
 // Footer-linked. Grounded in .claude/rules/vaults.md + the homepage story:
-// the Unified Liquidity Vault (one balance earns three ways — best-rate lending,
-// swap fees, recaptured MEV), a five-stage V4 hook engine, dual-sided / matched
-// liquidity, a pro-rata 60/30/10 split, and a balance that stays spendable while
-// it earns. Rewards are PRO-RATA by your share — never reputation- or
-// lock-multiplier-weighted. Narrative only — calculators live on /vaults.
+// Current V1 uses MarketEngine. The former ULV/JIT/MEV, matched-launch, and
+// spend-in-place designs below have been retired; this surface keeps its V2 layout.
 // =============================================================================
 
 export const metadata: Metadata = {
   title: 'DeFi — One balance, three income streams | Mintware',
   description:
-    'MEV-protected, auto-managed Uniswap v4 vaults where one balance earns three ways at once — best-rate lending, swap fees, and recaptured MEV — while it stays spendable. No idle capital, no rebalancing.',
+    'MarketEngine V1 issues quote-valued shares in curated Uniswap v4 pools, with resting liquidity bands, token adapters, and pro-rata in-kind exits. Testnet only · unaudited.',
 }
 
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
@@ -40,50 +37,50 @@ function Head({ n, label }: { n: string; label: string }) {
 }
 
 // ── data ─────────────────────────────────────────────────────────────────────
-// The three income streams — one balance earns all of them at once.
+// Current MarketEngine characteristics.
 const STREAMS: [string, string][] = [
-  ['Best-rate lending', 'Idle capital is routed to the venue paying the most — and re-routed as rates move. Never parked, earning less than it could.'],
-  ['Swap fees', 'Your liquidity is JIT-provisioned into each Uniswap v4 swap exactly when it’s needed, and earns the fee for it.'],
-  ['Recaptured MEV', 'The value bots usually skim off trades is caught and handed back to the pool — to LPs, not searchers.'],
+  ['Quote-valued shares', 'Each engine issues one share token representing a quote-asset-valued claim on a single curated pool portfolio.'],
+  ['Resting liquidity band', 'Pool capital sits in a configured Uniswap v4 band alongside per-token ERC-4626 adapters.'],
+  ['In-kind exits', 'Withdrawals return both pool tokens pro-rata, with caller-supplied minimum outputs.'],
 ]
 
 const HOOK = [
-  ['Idle → yield', 'Un-ranged capital is routed to the best-paying lending venue instead of sitting in the pool.'],
-  ['JIT on swap', 'The V4 hook sees each trade, sizes just-enough liquidity, executes, and returns the rest — atomically.'],
-  ['MEV recaptured', 'A truncated-oracle guard + dynamic fee neutralize sandwiches; the arb value goes back to the pool.'],
-  ['Fees + MEV split', 'Every swap’s fees and recaptured MEV are captured and split on-chain — pro-rata by your share.'],
-  ['Auto-compound', 'Earnings accrue to your position automatically — no manual claiming, no rebalancing.'],
+  ['Fresh mark', 'Deposits require an available fresh mark for the non-quote asset.'],
+  ['Spot check', 'Pool spot must remain within the configured deviation from the mark.'],
+  ['Minimum shares', 'Each deposit supplies a nonzero minimum-shares floor.'],
+  ['Guarded recenter', 'Lifecycle operations can recenter the range within configured movement and cooldown limits.'],
+  ['In-kind exit', 'Withdrawals are pro-rata in both tokens and remain available when the mark is stale.'],
 ]
 
-// How a matched vault forms — team + community make the market together.
+// Current MarketEngine facts.
 const MATCHED: [string, string, string][] = [
-  ['01', 'Team locks its token', 'One side of the pair is the team’s own token, cliff-locked on-chain for ≥90 days.'],
-  ['02', 'Community matches USDC', 'The other side is funded by the community in USDC — real, two-sided depth, not a promise.'],
-  ['03', 'Senior / junior tranches', 'Community capital sits senior at par; team capital is junior and absorbs the swings first.'],
-  ['04', 'Depth from day one', 'Tighter spreads and better fills the moment it’s live, because the liquidity is actually there.'],
+  ['01', 'Curate one pool', 'Each MarketEngine is bound to one selected Uniswap v4 pool.'],
+  ['02', 'Use pool tokens', 'Deposits can contain either or both pool tokens.'],
+  ['03', 'Adapters hold assets', 'Per-token adapters hold allocated assets; Robinhood testnet adapters do not earn yield.'],
+  ['04', 'Withdraw both tokens', 'Exits are pro-rata and in-kind, with caller-supplied minimum outputs.'],
 ]
 
 const SPLIT: [string, string, string][] = [
-  ['60%', 'to LPs', 'Split pro-rata — your share of the pool, and nothing else, sets what you earn.'],
-  ['30%', 'to treasury', 'Funds the protocol and its operations.'],
-  ['10%', 'to buybacks', 'Recycled back into the ecosystem via on-chain buybacks.'],
+  ['One', 'share token', 'Each engine issues a single quote-valued share.'],
+  ['Both', 'pool tokens', 'Deposits can include either or both pool assets.'],
+  ['Pro-rata', 'in-kind exit', 'Withdrawals return both pool assets according to the share fraction.'],
 ]
 
 const SPEND = [
-  'Your capital sits in the vault, earning all three streams',
-  'It stays spendable as USDC — nothing is locked away',
-  'Spend on the card or over the wire',
-  'A payment is a hold against the earning balance, not a withdrawal',
-  'Settled to the cent — your position keeps working',
+  'Propose a buffer wallet',
+  'Wait 48 hours, then accept it',
+  'An authorized relayer redeems Earn shares',
+  'Assets go to the member’s registered wallet',
+  'Per-user and global UTC-day caps apply',
 ]
 
 const TRUST = [
-  ['Non-custodial', 'You hold ERC-4626 shares. No one — not the team — can move your principal.'],
-  ['Guardian kill-switch', 'A guardian can pause deposits and swaps in one call if anything looks wrong — a circuit breaker, not a promise.'],
-  ['MEV-resistant hook', 'A truncated-oracle price guard and deviation-priced dynamic fee neutralize sandwich attacks — with no reliance on trader identity.'],
-  ['Fee split on-chain', 'The 60/30/10 split is enforced by the vault contract; any change emits a public event, never a silent tweak.'],
-  ['Withdrawal queue', 'A 7-day on-chain notice — visible, enforced by the contract, no discretion.'],
-  ['Invariant-tested', 'Core accounting invariants are fuzz-tested across stateful runs — verified, not asserted. Independent audit pending before mainnet.'],
+  ['ERC-20 share', 'The engine issues one quote-valued share token for its pool portfolio.'],
+  ['Deposit guard', 'A fresh mark and spot-deviation check are required before deposits.'],
+  ['Minimum outputs', 'Deposits have a minimum-shares floor; withdrawals have minimum token outputs.'],
+  ['Mark-independent exit', 'Withdrawals remain available when the external mark is stale.'],
+  ['Idle adapter', 'The Robinhood testnet adapters hold assets ready and do not earn yield.'],
+  ['Testnet status', 'Current contracts are unaudited; external audit gates real value.'],
 ]
 
 function DefiLandingPageV2() {
@@ -99,7 +96,7 @@ function DefiLandingPageV2() {
             One deposit. <span className="text-gradient-accent">Three income streams.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: best-rate lending routed across venues, swap fees, and recaptured MEV, with no rebalancing. And it never locks away — the balance stays spendable as USDC while it earns.
+            The current MarketEngine issues quote-valued shares for curated Uniswap v4 pools. Capital sits in a resting band and token adapters; withdrawals return both pool tokens pro-rata.
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
             <Link href="/vaults" className="glass-pill-primary">Open the vaults →</Link>
@@ -114,8 +111,8 @@ function DefiLandingPageV2() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="01" label="The wedge · never idle" />
-          <h2 className={h2}>Everyone else leaves capital half-used. <span className="text-gradient-accent">Here every dollar earns three ways at once.</span></h2>
-          <p className={lead}>One balance runs the Unified Liquidity Vault: best-rate lending, swap fees, and recaptured MEV — all stacked on the same capital, so nothing sits idle between trades.</p>
+          <h2 className={h2}>One engine per curated pool. <span className="text-gradient-accent">One quote-valued share.</span></h2>
+          <p className={lead}>MarketEngine keeps capital in a resting Uniswap v4 band and per-token adapters. Robinhood testnet adapters hold assets ready; they do not earn yield.</p>
           <div className="grid grid-cols-3 gap-3 mt-8 max-[560px]:grid-cols-1">
             {STREAMS.map(([name, desc], i) => {
               const hot = i === 2
@@ -135,9 +132,9 @@ function DefiLandingPageV2() {
       {/* ── 02 · The hook engine ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="02" label="Deposit once · the vault does the rest" />
-          <h2 className={h2}>One deposit. <span className="text-gradient-accent">A five-stage V4 hook engine.</span></h2>
-          <p className={lead}>You provide liquidity once. Every swap that touches the pool runs your capital through a hook stack that keeps it earning, protects it, and pays you — automatically.</p>
+          <Head n="02" label="Deposit checks · guarded lifecycle" />
+          <h2 className={h2}>A quote-valued share. <span className="text-gradient-accent">A guarded V4 lifecycle.</span></h2>
+          <p className={lead}>Deposits require a fresh mark, spot near that mark, and a minimum-shares floor. Guarded lifecycle actions can recenter the range.</p>
           <FlowDiagram className="mt-8" steps={HOOK.map(([k, d]) => ({ label: k, sub: d }))} />
         </div>
       </section>
@@ -145,9 +142,9 @@ function DefiLandingPageV2() {
       {/* ── 03 · Dual-sided / matched liquidity ── */}
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="03" label="Dual-sided · matched liquidity" />
-          <h2 className={h2}>Liquidity isn’t a solo act. <span className="text-gradient-accent">Teams and their community make the market together.</span></h2>
-          <p className={lead}>A matched vault pairs a team’s own token with community USDC — cliff-locked, senior/junior tranched, and deep from the first swap. Two economic sides, one pool.</p>
+          <Head n="03" label="One pool · two tokens" />
+          <h2 className={h2}>A single pool portfolio. <span className="text-gradient-accent">Both tokens on exit.</span></h2>
+          <p className={lead}>Deposits can contain either or both pool tokens. Withdrawals are pro-rata in-kind and include caller-supplied minimum outputs.</p>
           <div className="grid grid-cols-4 gap-3 mt-8 max-[720px]:grid-cols-2">
             {MATCHED.map(([step, name, desc]) => (
               <div key={step} className="rounded-2xl bg-ground-cool border border-hair p-5 flex flex-col gap-3" style={{ borderTop: '3px solid var(--color-peri)' }}>
@@ -157,16 +154,16 @@ function DefiLandingPageV2() {
               </div>
             ))}
           </div>
-          <p className="text-[12px] text-ink-soft mt-4"><b className="text-peri-deep">↳</b> Every backer earns their <b className="text-ink">pro-rata</b> share of all three income streams — by the size of their stake, and nothing else.</p>
+          <p className="text-[12px] text-ink-soft mt-4"><b className="text-peri-deep">↳</b> Pool balances are represented by one quote-valued share token.</p>
         </div>
       </section>
 
       {/* ── 04 · The fee split ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="04" label="Where the fees go" />
-          <h2 className={h2}>Every swap fee, <span className="text-gradient-accent">split on-chain.</span></h2>
-          <p className={lead}>No black box. The split is enforced by the vault contract, and any change to it emits a public event. Each project can set its own template — this is the default.</p>
+          <Head n="04" label="Portfolio accounting" />
+          <h2 className={h2}>One share. <span className="text-gradient-accent">A pro-rata portfolio claim.</span></h2>
+          <p className={lead}>The share represents a quote-valued claim on the engine’s pool assets, adapter balances, and resting liquidity.</p>
           <div className="grid grid-cols-[auto_1fr] gap-8 items-center mt-8 max-[640px]:grid-cols-1 max-[640px]:gap-5">
             <div className="soft-card p-7 max-[640px]:justify-self-start">
               <FeeSplitDonut />
@@ -195,12 +192,12 @@ function DefiLandingPageV2() {
             <div className="relative px-10 max-[800px]:px-6 py-[64px] max-[800px]:py-[48px]">
           <div className="flex items-baseline gap-3">
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">05</span>
-            <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">The Liquid Sovereign Account · spend the yield</span>
+          <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">Card refill · pre-enable</span>
           </div>
           <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
-            Earning here. <span className="text-gradient-accent">Spendable there.</span>
+            Refill from Earn. <span className="text-gradient-accent">Not spend-in-place.</span>
           </h2>
-          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[62ch] mt-4">Most yield locks your capital away. Here the balance keeps earning while it stays spendable as USDC — on a card or over the wire. A spend is a hold against the earning position, never an unwind.</p>
+          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[62ch] mt-4">The relayer can redeem a member’s Earn shares to their registered buffer wallet after a 48-hour destination delay. Purchases do not settle from the vault.</p>
           <div className="grid grid-cols-5 gap-3 mt-8 max-[900px]:grid-cols-1">
             {SPEND.map((s, i) => (
               <div key={s} className="rounded-2xl bg-white/[0.06] border border-white/15 p-5 flex flex-col gap-2.5">
@@ -232,7 +229,7 @@ function DefiLandingPageV2() {
             ))}
           </div>
           <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">
-            The V4 hook + ERC-4626 vault are in testing on Base Sepolia — empty and unaudited. Mainnet deposits are gated on an external audit; figures on this page are illustrative, not a projection or guarantee.
+            MarketEngine is live on Robinhood Chain testnet; Base Sepolia also has an engine deployment. Testnet only · unaudited · external audit gates real value.
           </p>
         </div>
       </section>
@@ -255,5 +252,5 @@ function DefiLandingPageV2() {
 
 export default async function DefiLandingPage() {
   const isV2 = isV2FromCookie((await cookies()).get(V2_COOKIE)?.value)
-  return isV2 ? <DefiLandingPageV2 /> : <V1MarketingStub topic="DeFi" headline="Earn on the pools. Never locked." blurb="LP into a curated Robinhood Chain pool with your full deposit — earn trading fees, compounded back into your position. No range to pick, no rebalancing." live={true} />
+  return isV2 ? <DefiLandingPageV2 /> : <V1MarketingStub topic="DeFi" headline="Earn on the pools. Never locked." blurb="MarketEngine shares represent quote-asset value in a curated Robinhood Chain pool. Deposits require a fresh mark; exits return both pool tokens pro-rata." live={true} />
 }

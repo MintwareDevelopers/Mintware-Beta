@@ -1,26 +1,22 @@
 'use client'
 
 // =============================================================================
-// ULVMechanics — "how it works" for the Unified Liquidity Vault. Design v2.
-// The flagship differentiator: capital lives in Aave earning yield, and a V4 hook
-// pulls just-in-time liquidity into the pool for each swap (atomic), capturing
-// fees + MEV. Presented as the MECHANISM under the page's testnet-beta framing —
-// no live TVL/yield claimed. The atomic-swap centerpiece is a dark 'pop' panel.
+// MarketEngine mechanics for the current testnet pool product.
 // =============================================================================
 
 const STEPS: { n: string; h: string; p: string; hot?: boolean }[] = [
-  { n: '01', h: 'Deposit', p: 'Add one side of the pair or both — the vault balances it. You receive vault shares representing your slice of the whole position.' },
-  { n: '02', h: 'Capital sits in Aave', p: 'By default almost nothing idles in the pool. The majority earns continuous lending yield in Aave (or another quality ERC-4626 vault).' },
-  { n: '03', h: 'A swap arrives → JIT liquidity', p: 'The V4 hook sees the trade, computes exactly how much liquidity it needs, pulls only that from Aave, executes, and returns the rest — atomically, one transaction.', hot: true },
-  { n: '04', h: 'Fees + MEV captured', p: 'Trading fees, plus MEV/arb value that would go to bots, plus impact fees on large trades — split by the project’s template (e.g. 60% LPs / 30% treasury / 10% buybacks).' },
-  { n: '05', h: 'Managed automatically', p: 'Optimal range, rebalancing, and fee compounding run on their own — keeping as much capital in Aave as possible while still giving traders good execution.' },
+  { n: '01', h: 'Deposit', p: 'Add either pool token or both with a minimum-shares floor.' },
+  { n: '02', h: 'Fresh mark', p: 'Deposits require a fresh external mark for the non-quote token.' },
+  { n: '03', h: 'Spot check', p: 'Pool spot must be near the mark before a deposit is accepted.', hot: true },
+  { n: '04', h: 'Resting liquidity', p: 'Capital sits in the v4 band plus per-token ERC-4626 adapters. Robinhood testnet adapters are idle custody.' },
+  { n: '05', h: 'In-kind exit', p: 'Withdraw pro-rata in both tokens with minimum-output checks; exits work when the mark is stale.' },
 ]
 
 const COMPONENTS: { k: string; v: string }[] = [
-  { k: 'Vault', v: 'Holds capital, issues shares, talks to Aave' },
-  { k: 'V4 Hook', v: 'Watches every swap, pulls JIT liquidity, captures MEV' },
-  { k: 'Aave', v: 'Provides the continuous base yield' },
-  { k: 'Fee Splitter', v: 'Distributes fees + MEV by the chosen template' },
+  { k: 'MarketEngine', v: 'One engine and one share token per curated pool' },
+  { k: 'Resting band', v: 'Managed Uniswap v4 liquidity with guarded recentering' },
+  { k: 'Token adapters', v: 'ERC-4626 adapters hold each pool token outside the band' },
+  { k: 'Testnet status', v: 'Robinhood Chain testnet · unaudited' },
 ]
 
 export function ULVMechanics() {
@@ -29,16 +25,14 @@ export function ULVMechanics() {
       <div className="max-w-[1100px] mx-auto px-6 py-[72px] max-[800px]:px-4 max-[800px]:py-[52px] mw-reveal">
         {/* header */}
         <div className="flex items-baseline gap-3.5 flex-wrap">
-          <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">How it works · Unified Liquidity Vault</span>
-          <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft rounded-full border border-hair px-2.5 py-1">The mechanism · in testing on Base</span>
+          <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">How it works · MarketEngine</span>
+          <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft rounded-full border border-hair px-2.5 py-1">Robinhood Chain testnet · unaudited</span>
         </div>
         <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.03] text-[clamp(1.8rem,3.6vw,2.9rem)] mt-4 max-w-[18ch] [text-wrap:balance]">
-          Capital in Aave, <span className="text-peri">liquidity on demand.</span>
+          Quote-valued shares, <span className="text-peri">liquidity in a resting band.</span>
         </h2>
         <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-ink-mid max-w-[62ch] mt-4">
-          A normal pool is a warehouse of inventory sitting idle, earning nothing until a customer walks in.
-          The ULV keeps that inventory in a high-yield account — and moves just enough to the front of the store
-          for each sale, the instant it’s needed.
+          One MarketEngine serves each curated pool. It issues one quote-valued share token and holds capital in a resting v4 band plus per-token adapters. Robinhood testnet adapters are idle custody and do not earn yield.
         </p>
 
         {/* atomic-swap centerpiece · dark pop */}
@@ -46,15 +40,15 @@ export function ULVMechanics() {
           <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(60% 130% at 12% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
           <div className="grain absolute inset-0 opacity-40" aria-hidden />
           <div className="relative flex items-center justify-between px-5 py-3 border-b border-white/12">
-            <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-pas-peri">One swap · one transaction</span>
-            <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-white/55">Atomic</span>
+            <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-pas-peri">Current pool lifecycle</span>
+            <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-white/55">Testnet</span>
           </div>
           <div className="relative grid grid-cols-[1fr_auto_1.3fr_auto_1fr] items-stretch max-[760px]:grid-cols-1">
-            <Phase label="Resting" title="Capital in Aave" sub="earning lending yield" tone="calm" />
-            <Arrow>pull JIT →</Arrow>
-            <Phase label="On swap" title="Just-enough liquidity" sub="hook sizes it to the trade, executes in-range" tone="hot" />
-            <Arrow>← return</Arrow>
-            <Phase label="Resting" title="Back in Aave" sub="remainder re-deposited, fees + MEV booked" tone="calm" />
+            <Phase label="Pool" title="Curated v4 pool" sub="one MarketEngine per pool" tone="calm" />
+            <Arrow>deposit →</Arrow>
+            <Phase label="Guard" title="Fresh mark" sub="spot must be near the mark" tone="hot" />
+            <Arrow>← withdraw</Arrow>
+            <Phase label="Exit" title="Both tokens" sub="pro-rata in-kind withdrawal" tone="calm" />
           </div>
         </div>
 
@@ -76,31 +70,19 @@ export function ULVMechanics() {
         <div className="grid grid-cols-[1fr_1fr] gap-4 mt-8 max-[820px]:grid-cols-1">
           {/* fee split */}
           <div className="soft-card p-5">
-            <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mb-3.5">Where the value goes · example template</div>
-            <div className="flex h-9 rounded-full overflow-hidden">
-              <div className="bg-peri" style={{ width: '60%' }} />
-              <div className="bg-coral2" style={{ width: '30%' }} />
-              <div className="bg-pas-peri" style={{ width: '10%' }} />
-            </div>
-            <div className="flex justify-between mt-2.5 text-[11px] font-medium">
-              <span className="text-peri-deep">60% LPs</span>
-              <span className="text-coral2-deep">30% treasury</span>
-              <span className="text-ink-mid">10% buybacks</span>
-            </div>
-            <p className="text-[12px] leading-[1.5] text-ink-mid mt-3.5">
-              Each project sets its own split. Trading fees, captured MEV, and impact fees all flow through it.
-            </p>
+            <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mb-3.5">Current engine behavior</div>
+            <p className="text-[13px] leading-[1.5] text-ink-mid">A single quote-valued share token represents each engine portfolio. The code does not describe the retired 60/30/10 fee split.</p>
           </div>
 
           {/* normal vs ULV */}
           <div className="grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
             <div className="rounded-2xl bg-ground-cool border border-hair p-5">
-              <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft">✕ Normal pool</div>
-              <p className="text-[13px] leading-[1.5] text-ink-mid mt-2.5">Inventory sits in the pool, mostly idle, earning nothing between trades. Bots skim the arb.</p>
+              <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft">Deposits</div>
+              <p className="text-[13px] leading-[1.5] text-ink-mid mt-2.5">A fresh mark and a spot-near-mark check are required.</p>
             </div>
             <div className="rounded-2xl bg-white border border-[rgba(108,108,240,0.28)] p-5">
-              <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">✴ Mintware ULV</div>
-              <p className="text-[13px] leading-[1.5] text-ink-mid mt-2.5">Capital earns in Aave, serves each trade just-in-time, and shares the value bots used to take.</p>
+              <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Withdrawals</div>
+              <p className="text-[13px] leading-[1.5] text-ink-mid mt-2.5">Return both tokens pro-rata and remain available when the mark is stale.</p>
             </div>
           </div>
         </div>

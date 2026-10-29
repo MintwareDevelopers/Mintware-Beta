@@ -63,6 +63,7 @@ export default function NetworkStatesSolutionPage() {
   return (
     <div className="font-atx-display bg-white text-ink min-h-screen overflow-x-clip">
       <V2Nav />
+      <div className="border-b border-hair-soft bg-ground-cool px-6 py-2 text-center text-[11px] text-ink-soft">Current liquidity: Robinhood Chain testnet · unaudited · external audit gates real value. Former ULV/JIT, Arc/CCTP, and spend-from-NAV mechanics are retired.</div>
 
       {/* ── HERO ── */}
       <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">

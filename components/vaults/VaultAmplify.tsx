@@ -1,17 +1,14 @@
 'use client'
 
 // =============================================================================
-// VaultAmplify — the value-communication layer beneath vault discovery.
-// Design v2 (Privy-esque). Sells the current wedge: one balance, three income
-// streams, earned pro-rata, and spendable while it earns. NO reputation- or
-// lock-multiplier weighting — pair vaults pay pro-rata by your share.
+// Current MarketEngine details beneath pool discovery.
 //
 //  · Live stats band (evergreen economics, GradientPanel)
-//  01 Three income streams (interactive: deposit × per-stream APY sliders)
-//  02 Dual-sided / senior-junior tranches (how the market gets made)
+//  01 Scenario calculator
+//  02 Retired matched issuance
 //  03 Trust, enforced on-chain
-//  04 Earning here, spendable there (dark 'pop' band)
-//  05 Vault leaderboard (ranked by TVL, real vs example)
+//  04 Earn-share card refill
+//  05 Curated pool discovery
 // =============================================================================
 
 import { useEffect, useState } from 'react'
@@ -25,12 +22,10 @@ function fmtUsd(n: number): string {
   return `$${Math.round(n).toLocaleString()}`
 }
 
-// The three income streams that stack on one balance. The colors mirror the
-// homepage's stacked-yield device (lending / swap fees / recaptured MEV).
 const STREAMS = [
-  { key: 'Best-rate lending', short: 'Lending', color: 'var(--color-peri)' },
-  { key: 'Swap fees', short: 'Swap fees', color: 'var(--color-peri-mid)' },
-  { key: 'Recaptured MEV', short: 'Recaptured MEV', color: 'var(--color-coral2)' },
+  { key: 'Scenario input A', short: 'Input A', color: 'var(--color-peri)' },
+  { key: 'Scenario input B', short: 'Input B', color: 'var(--color-peri-mid)' },
+  { key: 'Scenario input C', short: 'Input C', color: 'var(--color-coral2)' },
 ] as const
 
 // ── amplify-data shape (from /api/vaults/amplify-data) ───────────────────────
@@ -68,9 +63,9 @@ function SectionHead({ n, label, title, sub, onDark }: { n: string; label: strin
 // ─── Stats band — evergreen vault economics (GradientPanel) ──────────────────
 function LiveStatsBand() {
   const cells = [
-    { v: '3', k: 'Income streams · one balance' },
-    { v: '60%', k: 'Fees to LPs · pro-rata' },
-    { v: '0', k: 'Rebalances you manage' },
+    { v: '1', k: 'MarketEngine per curated pool' },
+    { v: '2', k: 'Pool tokens returned in kind' },
+    { v: '0', k: 'Yield from RH testnet adapters' },
   ]
 
   return (
@@ -78,7 +73,7 @@ function LiveStatsBand() {
       <div className="flex items-center gap-2 mb-4">
         <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block" />
         <span className="text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-mid">
-          In testing · Base — the economics, live at launch
+          Live on Robinhood Chain testnet · unaudited
         </span>
       </div>
       <div className="grid grid-cols-3 gap-4 max-[640px]:grid-cols-1">
@@ -93,11 +88,10 @@ function LiveStatsBand() {
   )
 }
 
-// ─── 01 · Three income streams (interactive) ─────────────────────────────────
+// ─── 01 · Hypothetical scenario calculator ───────────────────────────────────
 function IncomeStreams() {
   const [deposit, setDeposit] = useState(10_000)
-  // Each stream's APY is the user's own input — illustrative, not a Mintware
-  // projection. A plain USDC lender earns the first stream only.
+  // These three generic scenario rates are user inputs and do not model Mintware.
   const [lending, setLending] = useState(5)
   const [swapFees, setSwapFees] = useState(3)
   const [mev, setMev] = useState(2)
@@ -117,8 +111,8 @@ function IncomeStreams() {
         <SectionHead
           n="01"
           label="The wedge · every dollar working"
-          title="Same deposit. Three income streams instead of one."
-          sub="A plain lender earns one rate. Mintware stacks best-rate lending, swap fees, and recaptured MEV on the same balance — drive the model below."
+          title="Hypothetical scenario inputs."
+          sub="This calculator shows arithmetic from user-supplied assumptions; it does not model current Mintware yield or product mechanics."
         />
       </div>
 
@@ -127,10 +121,10 @@ function IncomeStreams() {
         <div className="p-8 max-[640px]:p-6 border-r border-hair-soft max-[820px]:border-r-0 max-[820px]:border-b flex flex-col gap-7">
           <div>
             <div className="flex items-baseline justify-between mb-3">
-              <span className={LABEL}>Your deposit</span>
+              <span className={LABEL}>Scenario balance</span>
               <span className="font-atx-display text-[22px] font-medium text-ink tabular-nums">{fmtUsd(deposit)}</span>
             </div>
-            <input type="range" min={1000} max={500_000} step={1000} value={deposit} onChange={(e) => setDeposit(Number(e.target.value))} className="ypn-range w-full" aria-label="Your deposit" />
+            <input type="range" min={1000} max={500_000} step={1000} value={deposit} onChange={(e) => setDeposit(Number(e.target.value))} className="ypn-range w-full" aria-label="Scenario balance" />
             <div className="flex justify-between mt-1.5 text-[10px] text-ink-soft">
               <span>$1K</span><span>$500K</span>
             </div>
@@ -139,10 +133,10 @@ function IncomeStreams() {
           {STREAMS.map((s, i) => (
             <div key={s.key}>
               <div className="flex items-baseline justify-between mb-3">
-                <span className={LABEL}>{s.key} APY</span>
+                <span className={LABEL}>{s.key} rate</span>
                 <span className="font-atx-display text-[22px] font-medium text-ink tabular-nums">{streamApys[i]}%</span>
               </div>
-              <input type="range" min={0} max={12} step={1} value={streamApys[i]} onChange={(e) => setters[i](Number(e.target.value))} className="ypn-range w-full" aria-label={`${s.key} APY`} />
+              <input type="range" min={0} max={12} step={1} value={streamApys[i]} onChange={(e) => setters[i](Number(e.target.value))} className="ypn-range w-full" aria-label={`${s.key} scenario rate`} />
               <div className="flex justify-between mt-1.5 text-[10px] text-ink-soft">
                 <span>0%</span><span>model your own · 12%</span>
               </div>
@@ -150,24 +144,24 @@ function IncomeStreams() {
           ))}
 
           <GradientPanel tone="lavender" className="p-5">
-            <div className={`${LABEL} mb-1`}>Your projected earnings / yr</div>
+            <div className={`${LABEL} mb-1`}>Scenario arithmetic / yr</div>
             <div className="font-atx-display text-[34px] font-medium text-peri-deep leading-none tabular-nums">
               {fmtUsd(totalEarn)}
             </div>
             <div className="text-[12px] text-coral2-deep mt-1.5 font-medium">
-              +{fmtUsd(totalEarn - lenderEarn)} vs lending alone — from swap fees + MEV
+              Scenario difference between all inputs and input A
             </div>
           </GradientPanel>
         </div>
 
         {/* comparison bars */}
         <div className="p-8 max-[640px]:p-6 flex flex-col justify-center gap-5">
-          <span className={LABEL}>Same {fmtUsd(deposit)} · lender vs the three-stream vault</span>
+          <span className={LABEL}>Scenario comparison · assumptions only</span>
 
-          {/* plain lender — lending only */}
+          {/* user-entered scenario input A */}
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
-              <span className="text-[13px] uppercase tracking-[0.06em] font-semibold text-ink-soft">USDC lender · one stream</span>
+              <span className="text-[13px] uppercase tracking-[0.06em] font-semibold text-ink-soft">Scenario input A</span>
               <span className="font-atx-display text-[15px] font-medium tabular-nums text-ink-mid">{fmtUsd(lenderEarn)}</span>
             </div>
             <div className="h-[26px] rounded-full bg-ground-cool relative overflow-hidden">
@@ -175,10 +169,10 @@ function IncomeStreams() {
             </div>
           </div>
 
-          {/* mintware — three streams stacked */}
+          {/* combined hypothetical inputs */}
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
-              <span className="text-[13px] uppercase tracking-[0.06em] font-semibold text-ink">Mintware vault · three streams</span>
+              <span className="text-[13px] uppercase tracking-[0.06em] font-semibold text-ink">Combined scenario inputs</span>
               <span className="font-atx-display text-[15px] font-medium tabular-nums text-ink">{fmtUsd(totalEarn)}</span>
             </div>
             <div className="h-[26px] rounded-full bg-ground-cool relative overflow-hidden flex">
@@ -198,7 +192,7 @@ function IncomeStreams() {
           </div>
 
           <p className="text-[10px] text-ink-soft mt-1 leading-[1.5]">
-            Illustrative model · each APY is your input, not a Mintware projection. You earn your pro-rata share of what the pool actually makes.
+            User-entered scenario only. It is not a Mintware yield estimate or projection.
           </p>
         </div>
       </div>
@@ -206,12 +200,12 @@ function IncomeStreams() {
   )
 }
 
-// ─── 02 · Dual-sided / senior-junior tranches ────────────────────────────────
+// ─── 02 · Former matched liquidity design ───────────────────────────────────
 const MATCHED = [
-  { name: 'Team locks its token', dur: 'One side of the pair', accent: 'var(--color-peri)', d: 'Cliff-locked on-chain for ≥90 days — a restriction on withdrawal, not a transfer of ownership.' },
-  { name: 'Community matches USDC', dur: 'The other side', accent: 'var(--color-peri-deep)', d: 'Real, two-sided depth funded by the people backing the launch — not a promise of it.' },
-  { name: 'Senior tranche', dur: 'Community capital', accent: 'var(--color-peri-mid)', d: 'Sits senior, redeemable at par — it holds its value while the pool works.' },
-  { name: 'Junior tranche', dur: 'Team capital', accent: 'var(--color-coral2)', d: 'First-loss: it absorbs the swings first, so the senior side stays steady.' },
+  { name: 'Matched issuance', dur: 'Retired', accent: 'var(--color-peri)', d: 'Community-matched launch issuance is not part of the current product.' },
+  { name: 'Lock tiers', dur: 'Retired', accent: 'var(--color-peri-deep)', d: 'The current MarketEngine does not impose lock periods.' },
+  { name: 'Senior issuance', dur: 'Retired', accent: 'var(--color-peri-mid)', d: 'Treasury senior/junior new issuance is not current.' },
+  { name: 'Current liquidity', dur: 'MarketEngine', accent: 'var(--color-coral2)', d: 'One engine serves each curated Uniswap v4 pool.' },
 ]
 
 function Tranches() {
@@ -219,9 +213,9 @@ function Tranches() {
     <div>
       <SectionHead
         n="02"
-        label="Dual-sided · how the market gets made"
-        title="Liquidity isn’t a solo act. Two sides make the market together."
-        sub="A matched vault pairs a team’s token with community USDC — cliff-locked and split into senior and junior tranches, so real depth is there from the first swap."
+        label="Retired · matched issuance"
+        title="The former matched-launch design is retired."
+        sub="Current pool liquidity uses one MarketEngine per curated pool; senior/junior issuance and lock tiers are not current features."
       />
       <div className="grid grid-cols-4 gap-3 max-[720px]:grid-cols-2">
         {MATCHED.map((t) => (
@@ -235,7 +229,7 @@ function Tranches() {
         ))}
       </div>
       <p className="text-[10px] text-ink-soft mt-3 leading-[1.5]">
-        Every backer earns their pro-rata share of all three income streams — by the size of their stake, and nothing else.
+        Current MarketEngine withdrawals return both pool tokens pro-rata in kind.
       </p>
     </div>
   )
@@ -243,11 +237,11 @@ function Tranches() {
 
 // ─── 03 · Trust, enforced on-chain ───────────────────────────────────────────
 const TRUST = [
-  { k: 'Non-custodial', d: 'You hold ERC-4626 shares. No one — not the team — can move your principal.' },
-  { k: 'Fee split on-chain', d: 'The 60/30/10 LP/treasury/buybacks split is enforced by the vault contract — any change emits a public event, never a silent tweak.' },
-  { k: 'Withdrawal queue', d: 'A 7-day on-chain notice — visible, enforced by the contract, no discretion.' },
-  { k: 'Lock cliffs enforced', d: 'A matched vault’s ≥90-day cliff and unlock date live on-chain; the early-exit penalty is automatic.' },
-  { k: 'MEV guard in the hook', d: 'Sandwich protection runs before every swap — value stays with LPs, not bots.' },
+  { k: 'Quote-valued share', d: 'Each engine issues one share token valued in the quote asset.' },
+  { k: 'Deposit guard', d: 'Deposits require a fresh mark and spot near that mark.' },
+  { k: 'Minimum outputs', d: 'Deposits have a min-shares floor; withdrawals have minimum token outputs.' },
+  { k: 'Stale mark', d: 'Withdrawals remain available when the mark is stale.' },
+  { k: 'Testnet status', d: 'Live on Robinhood Chain testnet · unaudited. External audit gates real value.' },
 ]
 
 function TrustOnChain() {
@@ -274,13 +268,13 @@ function TrustOnChain() {
   )
 }
 
-// ─── 04 · Earning here, spendable there · dark pop ───────────────────────────
+// ─── 04 · Earn-share card refill · dark pop ──────────────────────────────────
 const SPEND = [
-  { k: 'Capital earns in the vault', d: 'All three income streams stack on one balance' },
-  { k: 'Nothing is locked away', d: 'The balance stays spendable as USDC while it works' },
-  { k: 'Spend on the card or the wire', d: 'Pay anywhere your USDC is accepted' },
-  { k: 'A spend is a hold', d: 'Not a withdrawal — your position never unwinds' },
-  { k: 'Settled to the cent', d: 'Only the yield moves. The position keeps earning.' },
+  { k: 'Earn shares', d: 'The gateway can redeem a member’s Earn shares' },
+  { k: 'Registered buffer', d: 'Assets go to that member’s registered buffer wallet' },
+  { k: 'Propose → wait → accept', d: 'A destination change has a 48-hour delay' },
+  { k: 'Revoke any time', d: 'The member can revoke the destination registration' },
+  { k: 'Daily caps', d: 'Per-user and global UTC-day caps apply' },
 ]
 
 function SpendableLoop() {
@@ -291,13 +285,13 @@ function SpendableLoop() {
       <div className="relative p-8 max-[640px]:p-6 border-b border-white/12">
         <div className="flex items-center gap-3 mb-4">
           <span className="text-[12px] font-semibold text-pas-peri tabular-nums">04</span>
-          <span className="text-[11px] uppercase tracking-[0.14em] font-semibold text-white/55">The Liquid Sovereign Account · spend the yield</span>
+          <span className="text-[11px] uppercase tracking-[0.14em] font-semibold text-white/55">Card refill · pre-enable</span>
         </div>
         <h2 className="font-atx-display font-medium tracking-[-0.035em] leading-[1.02] text-[clamp(1.7rem,4vw,3rem)] text-white [text-wrap:balance]">
-          Earning here. <span className="text-pas-peri">Spendable there.</span>
+          Refill from Earn. <span className="text-pas-peri">No spend from NAV.</span>
         </h2>
         <p className="text-white/60 text-[15px] leading-[1.6] mt-4 max-w-[70ch]">
-          Most yield locks your capital away. Here the balance keeps earning while it stays spendable as USDC — on a card or over the wire. A spend is a hold against the earning position, never an unwind.
+          Bridge + Stripe card rails are pre-enable. The on-chain gateway redeems Earn shares to a member-registered buffer; it does not authorize card purchases or settle merchants from vault assets.
         </p>
       </div>
       <div className="relative grid grid-cols-5 gap-3 p-6 max-[900px]:grid-cols-1">
@@ -314,7 +308,7 @@ function SpendableLoop() {
   )
 }
 
-// ─── 05 · Vault leaderboard ──────────────────────────────────────────────────
+// ─── 05 · Curated pool discovery ────────────────────────────────────────────
 function Leaderboard({ data }: { data: AmplifyData | null }) {
   const rows = (data?.leaderboard ?? []).slice(0, 6)
   const anyExample = rows.some((v) => !isRealId(v.id))
@@ -323,17 +317,17 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
     <div>
       <SectionHead
         n="05"
-        label="The ecosystem · ranked by TVL"
-        title="The vaults, ranked. Liquidity rises to the top."
-        sub="Every vault is public and ranked by liquidity. Live vaults climb automatically as capital flows in — examples are shown until real vaults seed."
+        label="Discover · candidate ranking"
+        title="Candidate pools, curated for MarketEngine."
+        sub="Discover uses GeckoTerminal data and a risk score to rank candidate pools. Ranking does not certify a pool."
       />
       <div className="soft-card overflow-hidden">
         {/* header row */}
         <div className="grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-2.5 border-b border-hair-soft bg-ground-cool">
           <div className={`${LABEL} text-[10px]`}>#</div>
-          <div className={`${LABEL} text-[10px]`}>Vault</div>
+          <div className={`${LABEL} text-[10px]`}>Pool / instance</div>
           <div className={`${LABEL} text-[10px] max-[720px]:hidden`}>Surface</div>
-          <div className={`${LABEL} text-[10px] max-[720px]:hidden text-right`}>Model APY</div>
+          <div className={`${LABEL} text-[10px] max-[720px]:hidden text-right`}>Status</div>
           <div className={`${LABEL} text-[10px] text-right`}>TVL</div>
         </div>
         {rows.length === 0 ? (
@@ -349,14 +343,14 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
                   <span className="w-[7px] h-[7px] rounded-full inline-block shrink-0" style={{ background: real ? 'var(--color-peri)' : 'var(--color-hair)' }} />
                   <span className="font-atx-display text-[14px] font-medium truncate text-ink">{v.name}</span>
                   <span className={`text-[9px] uppercase tracking-[0.1em] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${real ? 'border-[rgba(108,108,240,0.3)] text-peri-deep' : 'border-hair text-ink-soft'}`}>
-                    {real ? 'Live' : 'Example'}
+                    {real ? 'Registered' : 'Candidate'}
                   </span>
                 </div>
                 <div className="max-[720px]:hidden text-[12px] text-peri-deep font-medium">
                   {v.surface}
                 </div>
                 <div className="max-[720px]:hidden text-[13px] text-right text-ink-mid tabular-nums">
-                  {v.netApyPct > 0 ? `${v.netApyPct.toFixed(1)}%` : '—'}
+                  {v.status}
                 </div>
                 {/* Real vaults show real TVL; example rows never render a fabricated $ figure. */}
                 <div className="text-[13px] font-medium text-right text-ink tabular-nums">
@@ -370,7 +364,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
       </div>
       {anyExample && (
         <p className="text-[10px] text-ink-soft mt-2.5 leading-[1.5]">
-          Rows marked <span className="text-ink-mid">Example</span> illustrate vault types on each surface · APY figures on example rows are illustrative, not projections.
+          Registered pools have an associated MarketEngine. A risk score ranks candidates and does not certify them.
         </p>
       )}
     </div>

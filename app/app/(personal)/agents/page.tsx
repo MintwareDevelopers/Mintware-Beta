@@ -1,8 +1,6 @@
 'use client'
 
-// Agent parking account — the clickable version of "park capital that earns while it stays spendable in
-// place." Reads GET /api/x402/account (live Arc vault: convertToAssets(shares(agent))) for any address.
-// Spec: docs/developers/agentkit-compute-402-spec.md. Design uses the Mintware mw-* tokens.
+// Agent parking account — testnet read surface. The former Arc spend-in-place path is retired.
 
 import { useState, useCallback } from 'react'
 
@@ -20,9 +18,9 @@ type Account = {
 }
 
 const LEGS = [
-  { t: 'Park', d: 'Deposit idle USDC into the yield vault. It starts earning immediately.' },
-  { t: 'Earn in place', d: 'The parked balance compounds in the yield source — it is never moved to a hot wallet.' },
-  { t: 'Spend per call', d: 'Each x402 payment draws from the earning position via a hold → settle. Capital never un-parks.' },
+  { t: 'Park', d: 'USDC can be placed in the testnet Earn vault over one adapter.' },
+  { t: 'Adapter', d: 'The vault uses one yield adapter; source availability can limit exits.' },
+  { t: 'Withdraw', d: 'The former x402 spend-in-place settlement path is retired.' },
 ]
 
 export default function AgentParkingPage() {
@@ -57,8 +55,7 @@ export default function AgentParkingPage() {
         A place to park capital that stays spendable.
       </h1>
       <p className="text-[16px] text-mw-ink-2 max-w-[62ch] mb-8">
-        Agents park idle USDC in a yield vault where it earns — and spend it per call over x402 without ever
-        un-parking. Never idle, never locked, always yours.
+        Agent parking is a separate testnet surface. Arc/CCTP settlement is retired; this page does not represent a live card or x402 spend path.
       </p>
 
       {/* Address input */}
@@ -85,7 +82,7 @@ export default function AgentParkingPage() {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <div className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-3 mb-2 font-sans">
-                Parked · earning
+                Reported vault shares
               </div>
               <div className="text-[36px] font-bold text-mw-ink tracking-[-0.02em] font-mono tabular-nums">
                 ${acct.parkedUsdcFormatted ?? '0'}
@@ -93,7 +90,7 @@ export default function AgentParkingPage() {
             </div>
             <div>
               <div className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-3 mb-2 font-sans">
-                Spendable now
+                Reported asset value
               </div>
               <div className="text-[36px] font-bold text-mw-teal tracking-[-0.02em] font-mono tabular-nums">
                 ${acct.spendableUsdcFormatted ?? '0'}
@@ -101,12 +98,7 @@ export default function AgentParkingPage() {
             </div>
           </div>
           <div className="text-[13px] text-mw-ink-3 mt-4">
-            {acct.earning
-              ? 'Earning yield, fully spendable in place.'
-              : 'Empty — park USDC to start earning while staying spendable.'}
-            {' · '}
-            spendable is {acct.spendableLive ? 'live (net of holds/caps)' : 'the full parked balance'} on{' '}
-            {acct.network ?? 'arc'}.
+            Testnet account data on {acct.network ?? 'Base Sepolia'} · unaudited. Former spend-in-place settlement is retired.
           </div>
         </div>
       )}
@@ -114,7 +106,7 @@ export default function AgentParkingPage() {
 
       {/* The loop */}
       <div className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-3 mb-4 font-sans">
-        Park → earn → spend
+        Testnet vault account
       </div>
       <div className="grid gap-3 mb-8">
         {LEGS.map((l) => (

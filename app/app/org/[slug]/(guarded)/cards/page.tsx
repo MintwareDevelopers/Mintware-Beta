@@ -1,13 +1,7 @@
 'use client'
 
-// Cards & Spend — the real thing, not the app/app/team/cards mock. Issue a sandbox Lithic card to a
-// member (owner), the member activates it once with their own wallet (standing EIP-712 spend
-// permit), then any swipe — real or simulated — is authorized live against the org treasury's NAV
-// through the same edge-auth engine x402 uses. Approved swipes under $250 can be settled on-chain
-// on demand (settleSpend), same call already proven in lib/proof/latestRun.ts leg 3.
-//
-// Everything on this page is real: real Lithic sandbox card, real ASA webhook round-trip, real NAV
-// hold, real on-chain settlement. Sandbox/testnet throughout — see the route file headers. Chrome
+// Organization cards page. The former Lithic / spend-in-place flow is retired; Bridge + Stripe are pre-enable.
+// MintwarePaymentGateway supports Earn-share refills to a member-registered buffer only. Chrome
 // comes from the shared TeamTerminalShell layout — this is the real "Cards & Spend."
 
 import { use, useCallback, useEffect, useState } from 'react'
@@ -118,11 +112,10 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
         <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {orgName || 'Org'}</Link>
         <div className="flex items-center gap-3 mt-3 flex-wrap">
           <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em]">Cards &amp; spend</h1>
-          <span className="live-chip"><span className="dot" aria-hidden />Lithic sandbox · testnet</span>
+          <span className="live-chip"><span className="dot" aria-hidden />Bridge + Stripe · pre-enable</span>
         </div>
         <p className="text-[13px] text-ink-mid mt-1.5 max-w-[64ch]">
-          A swipe authorizes live against the treasury&apos;s real NAV — the same edge-auth engine x402 uses,
-          gated by the holder&apos;s role cap. Nothing is pre-funded; capital keeps earning until a charge settles.
+          Card issuance is not enabled. The refill path redeems Earn shares to each member&apos;s registered buffer wallet; it does not authorize purchases or settle merchants.
         </p>
         {msg && <div className="text-[12.5px] text-[#D14343] mt-3">{msg}</div>}
 
@@ -186,7 +179,7 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-ink-soft mt-5">Sandbox card issuance (Lithic) + testnet settlement (Arc / Base Sepolia). Not production, not an offer.</p>
+        <p className="text-[11px] text-ink-soft mt-5">Bridge + Stripe card rails are pre-enable. Testnet only · unaudited · external audit gates real value.</p>
       </div>
     </MwAuthGuard>
   )

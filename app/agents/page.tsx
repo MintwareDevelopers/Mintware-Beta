@@ -32,7 +32,7 @@ const PLUGINS = [
   {
     id: 'agentkit',
     name: 'Coinbase AgentKit',
-    badge: 'Base · Arc',
+    badge: 'Base · testnet',
     desc: 'Park, pay over x402, quote + execute swaps, and check reputation — every action below callable by an AgentKit agent from natural language. The only runtime with a signer, so swap execution lives here.',
     install: 'pnpm add @mintwarehq/agentkit-actions @coinbase/agentkit zod',
     docs: '/docs',
@@ -272,24 +272,24 @@ function AgentsPageV2() {
 
       <LiveTodayStrip />
 
-      {/* ── The agent parking account + 402 payment engine (built · Arc testnet) — the primary story ── */}
+      {/* ── Agent parking account — separate testnet surface ── */}
       <section id="parking" className="border-b border-hair-soft bg-ground-cool scroll-mt-20">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[76px] max-[800px]:py-[52px]">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />New · live on Arc testnet</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Testnet · unaudited</span>
           <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-4">Agent treasury · pay for compute</div>
           <h2 className="font-atx-display font-medium text-ink mt-4 tracking-[-0.04em] leading-[1.05] text-[clamp(1.7rem,4vw,2.8rem)] max-w-[20ch] [text-wrap:balance]">
             A place to park capital that <span className="text-peri">stays spendable.</span>
           </h2>
           <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.55] mt-5 max-w-[64ch]">
-            Agents park idle USDC in a yield vault where it earns — and spend it per call over x402 without ever un-parking. Verification is a hold against the earning balance; settlement burns from it. Never idle, never locked, always yours.
+            Agent park/unpark tooling uses a testnet Earn vault. The former Arc/CCTP x402 spend-in-place settlement path is retired. External audit gates real value.
           </p>
 
           {/* Park → earn → spend + the actions */}
           <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3 mt-10">
             {[
-              { t: 'Park', d: 'Deposit idle USDC into the yield vault — it starts earning immediately.', tool: 'MINTWARE_PARK' },
-              { t: 'Earn in place', d: 'The parked balance compounds in the yield source; it never moves to a hot wallet.', tool: 'MINTWARE_TREASURY' },
-              { t: 'Spend per call', d: 'Each x402 payment draws from the earning position via a hold → settle. Capital never un-parks.', tool: 'MINTWARE_X402_PAY' },
+              { t: 'Park', d: 'Deposit USDC into a testnet Earn vault over one yield adapter.', tool: 'MINTWARE_PARK' },
+              { t: 'Adapter', d: 'The vault uses a single adapter; yield depends on the source and network.', tool: 'MINTWARE_TREASURY' },
+              { t: 'Withdraw', d: 'Redeem what the source can provide. The former x402 spend-in-place settlement path is retired.', tool: 'MINTWARE_X402_PAY' },
             ].map((s) => (
               <div key={s.t} className="soft-card p-5 flex flex-col">
                 <div className="font-atx-display font-semibold text-[15px] text-ink">{s.t}</div>
@@ -374,7 +374,7 @@ function AgentsPageV2() {
           {/* Honesty footer */}
           <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-5 mt-8 flex items-start gap-3 max-w-[860px]">
             <span className="w-[7px] h-[7px] rounded-full bg-peri mt-1.5 shrink-0" />
-            <p className="text-[13px] text-ink-mid leading-[1.55]">This is <span className="font-semibold text-ink">built and proven on Arc testnet</span> — the deposit→earn→CCTP→settle loop ran on-chain, and the x402 seller, facilitator, AgentKit, and MCP layers are code-complete and tested. It is <span className="font-semibold text-ink">not yet audited or on mainnet</span>, and nothing here is an offer. External audit gates real value.</p>
+            <p className="text-[13px] text-ink-mid leading-[1.55]">The current agent parking surface is testnet-only and unaudited. The former Arc/CCTP settlement loop is retired. External audit gates real value.</p>
           </div>
         </div>
       </section>
@@ -572,9 +572,9 @@ function AgentsPageV2() {
             { key: 'AGENT_PRIVATE_KEY',         desc: '0x-prefixed hex private key of the agent wallet', req: true },
             { key: 'CDP_API_KEY_NAME',           desc: 'Coinbase Developer Platform API key name (AgentKit only)', req: true },
             { key: 'CDP_API_KEY_PRIVATE_KEY',    desc: 'Coinbase Developer Platform API key secret (AgentKit only)', req: true },
-            { key: 'MINTWARE_PARK_VAULT',        desc: 'Yield vault address to park into (defaults to the Arc-testnet YPN vault)', req: false },
-            { key: 'MINTWARE_PARK_USDC',         desc: 'USDC token address on the parking network (defaults to Arc USDC)', req: false },
-            { key: 'MINTWARE_PARK_RPC',          desc: 'RPC for park/unpark reads + txs (defaults to Arc testnet)', req: false },
+            { key: 'MINTWARE_PARK_VAULT',        desc: 'Yield vault address to park into (Base Sepolia testnet default)', req: false },
+            { key: 'MINTWARE_PARK_USDC',         desc: 'USDC token address on the parking network', req: false },
+            { key: 'MINTWARE_PARK_RPC',          desc: 'RPC for park/unpark reads + transactions (testnet)', req: false },
           ].map(e => (
             <div key={e.key} className="flex items-center gap-4 px-5 py-3 border-b border-hair-soft last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1.5">
               <span className="font-mono text-[12px] font-semibold text-ink min-w-[220px] shrink-0 max-[560px]:min-w-0 max-[560px]:break-all">{e.key}</span>

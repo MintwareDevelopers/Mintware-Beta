@@ -27,7 +27,7 @@ import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 export const metadata: Metadata = {
   title: 'Liquid Sovereign Account — Mintware',
   description:
-    'Cash that earns while you spend it. USDC in a Uniswap v4 Unified Liquidity Vault earns institutional yield (best-venue lending + v4 MEV) and stays 100% spendable at Visa terminals in sub-400ms — you spend from yield, not your position. Coming soon.',
+    'The former spend-in-place YPN design is retired. Current MarketEngine liquidity is testnet-only; Bridge + Stripe card rails are pre-enable and support a separate Earn-share refill path.',
 }
 
 function YieldPaymentNetworkPageV2() {

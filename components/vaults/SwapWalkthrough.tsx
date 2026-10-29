@@ -1,29 +1,27 @@
 'use client'
 
-// SwapWalkthrough — "one swap, in numbers." Design v2. Makes the ULV mechanism
-// concrete by walking a single trade through the vault: capital resting in Aave,
-// JIT pull, fee + MEV capture, return. Illustrative figures (testnet framing).
+// MarketEngine walkthrough using current deposit and withdrawal mechanics.
 
 const STEPS: { n: string; h: string; body: string; stat: string; statLabel: string; hot?: boolean }[] = [
   {
-    n: '01', h: 'At rest', statLabel: 'in Aave, earning',
-    stat: '~$1.9M',
-    body: 'The vault holds $2.0M. About 95% sits in Aave earning lending yield — only a thin buffer waits in the pool. That capital is working every second, not idling.',
+    n: '01', h: 'Fresh mark', statLabel: 'deposit guard',
+    stat: 'Required',
+    body: 'A deposit needs a fresh mark for the non-quote token, with pool spot near that mark.',
   },
   {
-    n: '02', h: 'A $50k swap arrives', statLabel: 'pulled, just-in-time',
-    stat: '~$60k', hot: true,
-    body: 'The V4 hook sizes exactly how much liquidity this trade needs at the current range, and pulls only that from Aave — atomically, in the same transaction.',
+    n: '02', h: 'Add pool tokens', statLabel: 'one or both',
+    stat: 'Flexible', hot: true,
+    body: 'A single- or two-token deposit mints shares subject to the caller’s minimum-shares floor.',
   },
   {
-    n: '03', h: 'The swap executes', statLabel: 'fees + MEV captured',
-    stat: '$190',
-    body: 'Against that just-in-time liquidity: a 0.30% fee ($150), plus ~$40 of MEV/arbitrage the hook captures that a bot would otherwise have taken.',
+    n: '03', h: 'Hold engine shares', statLabel: 'quote-asset value',
+    stat: 'One token',
+    body: 'The engine issues a single share token valued in the pool’s quote asset.',
   },
   {
-    n: '04', h: 'Back to work', statLabel: 'split 60 / 30 / 10',
-    stat: '$114 / $57 / $19',
-    body: 'The liquidity returns to Aave; it never stopped earning. The $190 captured is split by the vault’s template — LPs / treasury / buybacks.',
+    n: '04', h: 'Withdraw in kind', statLabel: 'both pool tokens',
+    stat: 'Pro-rata',
+    body: 'Withdrawals return both pool tokens pro-rata with minimum-output checks and still work if the mark is stale.',
   },
 ]
 
@@ -32,15 +30,14 @@ export function SwapWalkthrough() {
     <section className="bg-ground-cool border-b border-hair-soft">
       <div className="max-w-[1100px] mx-auto px-6 py-[72px] max-[800px]:px-4 max-[800px]:py-[52px] mw-reveal">
         <div className="flex items-baseline gap-3.5 flex-wrap">
-          <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Worked example · illustrative</span>
-          <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft rounded-full border border-hair px-2.5 py-1">Numbers illustrate the mechanism</span>
+          <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">MarketEngine · current mechanics</span>
+          <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft rounded-full border border-hair px-2.5 py-1">Testnet · unaudited</span>
         </div>
         <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.03] text-[clamp(1.8rem,3.6vw,2.9rem)] mt-4 max-w-[16ch] [text-wrap:balance]">
-          One swap, <span className="text-peri">in numbers.</span>
+          One engine, <span className="text-peri">four steps.</span>
         </h2>
         <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-ink-mid max-w-[62ch] mt-4">
-          Here’s a single $50k trade moving through a vault that holds $2M — and why the capital
-          behind it earns in two places at once.
+          Deposits are guarded by a fresh mark and spot check; withdrawals return both pool tokens pro-rata.
         </p>
 
         <div className="grid grid-cols-4 gap-3 mt-9 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
@@ -48,7 +45,7 @@ export function SwapWalkthrough() {
             <div key={s.n} className={`rounded-2xl border p-5 flex flex-col ${s.hot ? 'bg-[rgba(108,108,240,0.06)] border-[rgba(108,108,240,0.28)]' : 'bg-white border-hair'}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className={`text-[12px] font-semibold tabular-nums ${s.hot ? 'text-peri-deep' : 'text-ink-soft'}`}>{s.n}</span>
-                {s.hot && <span className="text-[9px] uppercase tracking-[0.08em] font-semibold rounded-full bg-[rgba(108,108,240,0.14)] text-peri-deep px-2 py-0.5">JIT</span>}
+                {s.hot && <span className="text-[9px] uppercase tracking-[0.08em] font-semibold rounded-full bg-[rgba(108,108,240,0.14)] text-peri-deep px-2 py-0.5">Guard</span>}
               </div>
               <div className="font-atx-display text-[15px] font-medium tracking-[-0.01em] leading-[1.2] text-ink">{s.h}</div>
               <div className="mt-3 mb-0.5">
@@ -64,8 +61,7 @@ export function SwapWalkthrough() {
         <div className="rounded-2xl bg-white border border-hair px-5 py-4 flex items-center gap-3 flex-wrap mt-3">
           <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">The payoff</span>
           <span className="text-[13.5px] text-ink-mid leading-[1.5]">
-            A normal pool would have left that <b className="text-ink">$1.9M idle</b> between trades. Here it earned Aave
-            yield the <i>whole time</i> — <b className="text-ink">and</b> the swap fees + MEV on top. Two earning layers from one deposit.
+            Robinhood testnet adapters hold allocated tokens ready and do not earn yield. External audit gates real value.
           </span>
         </div>
       </div>

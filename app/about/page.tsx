@@ -32,9 +32,9 @@ function Head({ n, label }: { n: string; label: string }) {
 
 // ── data ─────────────────────────────────────────────────────────────────────
 const PILLARS: [string, string, string, string][] = [
-  ['Earn', 'The vault engine', 'One balance earns three ways at once — best-rate lending routed across venues, Uniswap V4 market-making, and recaptured MEV. Dual-sided pairs, built security-first. In testing ahead of launch.', '/vaults'],
-  ['Spend', 'The Liquid Sovereign Account', 'Your balance stays spendable as USDC — on a card or over x402 — while it keeps earning. Never idle, never locked, always yours.', '/yield-payment-network'],
-  ['Match', 'Liquidity for teams', 'Teams lock their token, the community matches in USDC — real depth and tighter spreads, with every fee during the lock going to the community.', '/teams'],
+  ['Earn', 'The MarketEngine', 'One quote-valued share tracks a curated Uniswap V4 pool portfolio, held across a resting liquidity band and token adapters. Live on Robinhood Chain testnet; unaudited.', '/vaults'],
+  ['Spend', 'The Liquid Sovereign Account', 'The former spend-in-place YPN design is retired. Earn shares can refill a member’s registered buffer wallet; card rails are pre-enable.', '/yield-payment-network'],
+  ['Match', 'Liquidity for teams', 'Community-matched launch issuance is retired. Current pool liquidity uses a curated MarketEngine with pro-rata in-kind withdrawals.', '/teams'],
 ]
 
 export default function AboutPage() {

@@ -17,7 +17,7 @@ import { V2Nav } from '@/components/ui2/V2Nav'
 export const metadata: Metadata = {
   title: 'For Companies — Mintware',
   description:
-    'A corporate treasury that earns while it stays spendable. Non-custodial USDC that puts idle cash to work in DeFi, with role-capped team cards and vendor payouts on the same balance — native USDC settlement, no lockups. In testing on testnet.',
+    'MarketEngine liquidity and Earn-share card refill on Robinhood Chain testnet. Unaudited; external audit gates real value.',
 }
 
 const COPY = {
@@ -26,7 +26,7 @@ const COPY = {
     title: 'Your treasury should be',
     titleAccent: 'earning and spendable —',
     titleRest: 'at the same time.',
-    sub: 'Crypto-native companies hold their runway in stablecoins, then leave it idle in a wallet earning nothing — because the moment it earns, it stops being spendable. Mintware ends that trade-off: one non-custodial USDC balance that keeps working in DeFi while your team spends it on cards and pays vendors, at par, in real time.',
+    sub: 'Current curated liquidity uses MarketEngine: one quote-valued share token for each selected Uniswap v4 pool. Card rails are Bridge + Stripe, pre-enable; the payment gateway only refills a member-registered buffer from Earn shares.',
     ctaPrimary: { label: 'See the treasury terminal', href: '/teams' },
     ctaSecondary: { label: 'Read the proof', href: '/proof' },
   },
@@ -58,27 +58,27 @@ const COPY = {
   solution: {
     eyebrow: 'How Mintware solves it',
     title: 'One balance. Always working. Always spendable.',
-    body: 'Mintware is the Yield Payment Network — a treasury balance that stays spendable at par, like cash, while the capital keeps earning in DeFi. Every company function draws on that same productive balance.',
+    body: 'The former spend-from-NAV treasury design is retired. Current liquidity and card refill are separate paths with distinct contracts.',
     cards: [
       {
         index: '01',
         title: 'Put idle treasury to work — without giving up liquidity',
-        body: 'USDC in the vault earns protocol-native yield from the pools it backs: idle capital is rehypothecated into best-venue lending (the adapter shops Aave + Morpho for the top USDC rate), and just-in-time V4 liquidity recaptures fees and MEV that would otherwise leak to arbitrageurs — a second layer stacked on the same capital. Your operating cash stops sitting still.',
+        body: 'MarketEngine capital sits in a resting v4 band plus per-token ERC-4626 adapters. Robinhood testnet adapters are idle custody and do not earn yield.',
       },
       {
         index: '02',
-        title: 'Spend straight from the earning balance',
-        body: 'A card swipe or a vendor payout is a hold against the position, then a settle — the balance never has to un-park to be spent. No off-ramp, no unwind, no cashing out first. Never idle, never locked.',
+        title: 'Refill a registered buffer',
+        body: 'The payment relayer redeems Earn shares to the member’s registered buffer wallet. Purchases do not settle from vault NAV.',
       },
       {
         index: '03',
         title: 'Role-capped team cards + vendor payouts',
-        body: 'The team treasury terminal issues cards with per-role daily caps, runs vendor payouts, and enforces policy and approvals — all on the same non-custodial balance. Belt-and-suspenders: a role cap plus an independent authorization check on every spend.',
+        body: 'Bridge + Stripe card rails are pre-enable. The on-chain gateway supports refills only; it does not authorize purchases or settle merchants.',
       },
       {
         index: '04',
         title: 'Native USDC settlement, your keys',
-        body: 'Settlement is USDC-native over Circle / Arc rails with CCTP bridging; card spend runs through a regulated card partner. Mintware never touches fiat and never takes custody — funds live in your wallet or in autonomous, audited contracts.',
+        body: 'Arc/CCTP settlement is retired. Current card rails are Bridge + Stripe, pre-enable. Contracts are testnet-only and unaudited.',
       },
     ],
   },
@@ -87,43 +87,43 @@ const COPY = {
   math: {
     eyebrow: 'The math',
     title: 'What idle runway actually costs.',
-    body: 'A simple, defensible model. A startup that parks $2M of runway idle for a year gives up the yield it could have earned with no loss of liquidity — because on Mintware the same $2M stays fully spendable while it works.',
+    body: 'MarketEngine shares represent quote-asset value in one curated pool. The Robinhood testnet adapters do not earn yield.',
     rows: [
       { label: 'Runway held idle in a wallet', sub: 'spendable, ~0% yield', value: '$0 / yr', tone: 'flat' },
-      { label: 'Same $2M, productive + spendable', sub: 'illustrative ~12% stacked, still 100% spendable', value: '≈ $240,000 / yr', tone: 'earn' },
-      { label: 'Opportunity cost of doing nothing', sub: 'at no loss of liquidity', value: '≈ $240,000 / yr', tone: 'accent' },
+      { label: 'Robinhood testnet adapters', sub: 'idle custody · no adapter yield', value: 'Testnet', tone: 'earn' },
+      { label: 'Current share value', sub: 'denominated in the quote asset', value: 'MarketEngine', tone: 'accent' },
     ],
     footnote:
-      'Illustrative only. The stacked model targets ~11–14% — a best-venue lending floor (~6–8%, shopping Aave + Morpho, where some USDC markets have reached ~7–8%; Aave USDC ~3.3–3.5% in 2026) plus a ~4–5% LP-fee + MEV-recapture layer on the same capital. A ~12% midpoint is a modelling assumption, not a promised or fixed rate — actual yield is variable and set by the market.',
+      'This page does not provide a yield projection. External audit gates real value.',
   },
 
   terminal: {
     eyebrow: 'The treasury terminal',
     title: 'A finance stack, not a wallet.',
-    body: 'Multi-tenant org treasuries give the whole company one productive balance with real controls on top of it.',
+    body: 'The current on-chain payment gateway only supports Earn-share refills to registered member buffers.',
     features: [
-      { k: 'Role-capped cards', v: 'Issue cards mapped to roles, each with its own daily cap. Contributor spend is bounded by policy, not trust.' },
-      { k: 'Vendor payouts', v: 'Pay suppliers in USDC from the same balance the treasury earns on — no separate float to fund.' },
-      { k: 'Policy & approvals', v: 'Approval flows and spend policy are enforced in the terminal before value ever moves.' },
-      { k: 'Every spend, double-checked', v: 'A role cap (the belt) plus an independent authorization check off live balance (the suspenders) gate each card swipe.' },
+      { k: 'Bridge + Stripe', v: 'Card rails are pre-enable.' },
+      { k: 'Refill only', v: 'The relayer redeems Earn shares to the member’s registered buffer wallet.' },
+      { k: 'No spend from NAV', v: 'Purchases do not settle against the vault.' },
+      { k: 'Testnet status', v: 'Live on Robinhood Chain testnet · unaudited.' },
     ],
   },
 
   // The single deliberate dark-pop moment (house style) — the mechanics, honestly.
   mechanics: {
     eyebrow: 'The mechanics, honestly',
-    title: 'How the dollar stays a dollar.',
-    intro: 'The reason a spendable balance can also be a working one is the structure underneath it.',
+    title: 'How the current engine works.',
+    intro: 'MarketEngine offers quote-valued shares and pro-rata in-kind exits for a curated pool.',
     items: [
-      { k: 'Structured tranches', v: 'Company capital can sit senior and price-free — behaving like a dollar — while a first-loss junior tranche absorbs market moves. The volatility lands on the tranche built to take it.' },
-      { k: 'Solvency-aware redemption', v: 'Par while the first-loss cushion covers it; a fair, transparent pro-rata outcome in the tail. No race for the exit, no first-redeemer advantage.' },
-      { k: 'Non-custodial by design', v: 'Self-custody via Privy + external wallets. Mintware never holds your keys; value lives in your wallet or in autonomous contracts.' },
-      { k: 'Native USDC rails', v: 'USDC-native settlement + CCTP bridging on Circle / Arc; a regulated partner carries the card and fiat legs. Mintware never touches fiat.' },
+      { k: 'Deposit guard', v: 'Deposits need a fresh mark and pool spot near that mark.' },
+      { k: 'Resting band', v: 'Capital sits in the Uniswap v4 band plus per-token adapters.' },
+      { k: 'Pro-rata exit', v: 'Withdrawals return both pool tokens in kind with minimum outputs.' },
+      { k: 'Retired flows', v: 'Treasury tranches, spend-from-NAV, and Arc/CCTP are not current.' },
     ],
   },
 
   honesty:
-    'Honest status: Mintware is in testing on testnet (Base Sepolia + Circle’s Arc testnet), pre-launch and unaudited — the whole loop has been proven end-to-end on-chain with real transaction hashes, but on empty vaults with valueless test USDC. This page describes the vision and where we are building to, not a live production service. Nothing here is a deposit, a savings or insured account, a guaranteed or fixed yield, or an offer, investment, legal, or tax advice; illustrative figures are models, not promises. External audit and a production card/settlement partner gate real value.',
+    'Current MarketEngine contracts are live on Robinhood Chain testnet · unaudited. External audit gates real value. Former spend-from-NAV cards, Arc/CCTP settlement, and Treasury senior/junior issuance are retired.',
 
   trust: {
     eyebrow: 'Why trust it',
@@ -131,9 +131,9 @@ const COPY = {
     body: 'We would rather show the plumbing working than ask you to take our word for it.',
     points: [
       { k: 'Non-custodial', v: 'Your keys, your funds. Mintware and its contracts never take custody.' },
-      { k: 'Testnet-proven end to end', v: 'Deposit → earn → authorize → spend, plus a native USDC bridge — every leg executed on-chain with real, explorable hashes.' },
-      { k: 'Self-reviewed & hardened', v: 'An audit-readiness pass with 0 Criticals and all Highs remediated, on top of formal, machine-checked verification of the money-path invariants.' },
-      { k: 'Built on Circle / Arc rails', v: 'USDC-native settlement and CCTP bridging on Circle’s infrastructure — not a bespoke bridge of our own.' },
+      { k: 'Current liquidity', v: 'One MarketEngine per curated pool; testnet only and unaudited.' },
+      { k: 'Card refill', v: 'Bridge + Stripe are pre-enable; the on-chain gateway supports Earn-share refills only.' },
+      { k: 'Retired designs', v: 'Arc/CCTP settlement, spend-from-NAV, and matched issuance are not current.' },
     ],
     cta: { label: 'See the on-chain proof', href: '/proof' },
   },
@@ -148,13 +148,14 @@ const COPY = {
   },
 
   sources:
-    'Sources: CoinDesk Research & “Crypto card spending hits $18B” (Jan 2026); Grant Graham, “Stablecoins in Corporate Treasury” (2026); Artemis Analytics & Bancoli B2B stablecoin data (2025–26); insights4vc, “The State of Stablecoin Cards” (2026); Aave / Morpho / eco.com USDC-yield comparison (2026, best-venue lending floor ~6–8%); Vesto / Slash startup-treasury guidance. Figures are dated and approximate; the stacked ~11–14% yield target is illustrative, not a promised rate.',
+    'Market and treasury figures are historical context and do not describe current product mechanics.',
 } as const
 
 export default function CompaniesSolutionPage() {
   return (
     <div className="min-h-screen bg-white text-ink overflow-x-clip">
       <V2Nav active="teams" />
+      <div className="border-b border-hair-soft bg-ground-cool px-6 py-2 text-center text-[11px] text-ink-soft">Current liquidity: Robinhood Chain testnet · unaudited · external audit gates real value. Former spend-from-NAV and matched-launch mechanics are retired.</div>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="bg-white border-b border-hair-soft">
