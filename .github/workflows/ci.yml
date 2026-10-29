@@ -155,66 +155,13 @@ jobs:
           cargo test --locked
           cargo clippy --all-targets -- -D warnings
 
-  formal-proofs:
-    name: Formal proofs (Halmos, advisory)
-    runs-on: ubuntu-latest
-    # Where the symbolic proofs actually EXECUTE. The repo's macOS-13-arm64 dev box can't install a
-    # recent Halmos (its yices-solver wheel targets macOS 14+, so uv falls back to 0.2.6, which crashes
-    # with an internal IndexError before solving). Linux has the manylinux yices wheels, so `pipx install
-    # halmos` gets a current build and the 7 MWFormalProofs specs run here. Advisory (continue-on-error)
-    # until a green run is observed and promoted to a hard gate — see docs/developers/ulv-formal-verification.md.
-    continue-on-error: true
-    timeout-minutes: 30 # narrow build (halmos-ci profile) + 7 proofs at a 120s solver timeout each fits well inside
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive # forge lib deps (v4-core/periphery, forge-std)
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          # Pin to a specific KNOWN-GOOD version, not the action's default (nightly) or a moving `stable`
-          # (which silently advanced 1.5.1 → 1.8.0 and broke CI once). Bump this deliberately + re-verify.
-          # The two setUp()s that forge 1.8 exposed (vm.prank strictness + CREATE-nonce accounting across
-          # calls) are now fixed in this repo, so the full non-fork suite is green on 1.8.0.
-          version: "1.8.0"
-
-      - name: Install Halmos
-        run: |
-          pipx install halmos
-          halmos --version
-
-      # Build ONLY what MWFormalProofs needs (profile `halmos-ci` in foundry.toml: the test/formal dir + MWDynamicFee
-      # + forge-std). The old `forge build --ast` compiled all 322 files via-IR and the runner was shut down ~13 min
-      # in; Halmos also re-runs its own `forge build --ast --extra-output storageLayout metadata`, which the profile
-      # matches exactly so that second build is a cache hit, not a second full compile.
-      - name: Build with AST (Halmos reads the source AST)
-        env:
-          FOUNDRY_PROFILE: halmos-ci
-        run: forge build
-
-      - name: Halmos — symbolic proofs (MWFormalProofs, all 7 check_*)
-        # Uses Halmos's BUNDLED default solver (yices) — the only download-free option in CI.
-        # Observed outcome (stable across runs): 3/7 PASS — every proof against real MWDynamicFee hook
-        # code — while the 4 pure mulDiv lemmas (nonlinear 256-bit mul + division by a symbolic value)
-        # TIMEOUT. Established, don't re-litigate: raw time is not the lever (they time out at both 60s
-        # and 300s), and --solver bitwuzla/cvc5 needs a solver DOWNLOAD that CI blocks ("Download not
-        # allowed") so it errors, not solves. Those 4 remain fuzz-proven at 256x128k via the Forge
-        # invariant suite. Advisory (continue-on-error) — the 4 timeouts make this exit 1 by design.
-        env:
-          FOUNDRY_PROFILE: halmos-ci # Halmos's own internal `forge build` must use the same narrow profile
-        run: |
-          halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs \
-            --solver-timeout-assertion 120000
-
   coq-proofs:
     name: Formal proofs (Coq, mulDiv lemmas)
     runs-on: ubuntu-latest
-    # A REAL gate (not advisory): these are the 4 nonlinear mulDiv lemmas that Halmos/SMT can't
-    # decide (div-by-symbolic). Coq's nia proves them as decidable, machine-checked theorems — so
-    # `coqc` exiting 0 IS the proof. If this job is green, the 4 are formally verified; combined with
-    # Halmos's 3/7 on live hook code, all 7 MWFormalProofs properties are covered by a proof (not just
-    # fuzzing). See docs/developers/ulv-formal-verification.md.
+    # A REAL gate (not advisory): the 4 nonlinear mulDiv lemmas that SMT solvers can't decide
+    # (div-by-symbolic). Coq's nia proves them as decidable, machine-checked theorems — so `coqc`
+    # exiting 0 IS the proof. (The advisory Halmos job was removed with its MWFormalProofs target in
+    # the 2026-10 simplification; history: docs/archive/retired-mechanics/.)
     steps:
       - uses: actions/checkout@v7
       - name: Install Coq
