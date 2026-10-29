@@ -64,7 +64,7 @@ export default async function OgImage() {
               <span style={{ display: 'flex', color: PERI }}>Always yours.</span>
             </div>
             <div style={{ display: 'flex', fontSize: 24, lineHeight: 1.45, color: INK_MID, marginTop: 26, maxWidth: 820 }}>
-              USDC that earns three ways at once — and stays liquid and spendable. The LPs who bring real, committed liquidity earn the most.
+              USDC designed to earn three ways at once — and stay liquid and spendable. The LPs who bring real, committed liquidity earn the most.
             </div>
           </div>
 
