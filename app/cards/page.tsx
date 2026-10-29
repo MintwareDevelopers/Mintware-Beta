@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { WaitlistForm } from '@/components/marketing/WaitlistForm'
-import { Section, Eyebrow, H2, Hero, GlassList, Rows, Steps, Kicker, CTA } from '@/components/marketing/Story'
+import { Section, Eyebrow, H2, Hero, Rows, Kicker, CTA } from '@/components/marketing/Story'
+import { CardVisual } from '@/components/marketing/CardVisual'
+import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { FlowDiagram } from '@/components/ui2/FlowDiagram'
 
 export const metadata = { title: 'Card — Mintware', description: 'Spend what you’ve earned. A card whose balance never stops working.' }
 
@@ -16,7 +19,7 @@ export default function CardsPage() {
       lede="Most cards spend money that’s doing nothing. Yours spends from a balance that’s earning — and refills itself as you go, so everything you don’t spend keeps working."
       actions={<div className="w-full max-w-[480px]"><WaitlistForm source="card" /></div>}
       tone="coral"
-      aside={<GlassList title="Your Mintware card" items={['Spends from an earning balance', 'Refills itself as you go', 'Limits you set', 'Cut off any card instantly']} />}
+      aside={<CardVisual />}
     />
 
     <Section tint>
@@ -33,11 +36,14 @@ export default function CardsPage() {
     <Section>
       <Eyebrow>How it works</Eyebrow>
       <H2 soft="You spend it.">Your balance earns.</H2>
-      <Steps items={[
-        ['Your card balance earns', 'Stablecoins grow in a curated lending market until you need them.'],
-        ['Your card refills itself', 'As you spend, your earning balance tops your card up — within limits you set.'],
-        ['Everything else keeps working', 'Only what you need ever moves. The rest stays put, earning.'],
-      ]} />
+      <GradientPanel tone="coral" className="p-8 max-[800px]:p-4 mt-12">
+        <FlowDiagram steps={[
+          { label: 'Your balance earns', sub: 'Stablecoins in a curated lending market' },
+          { label: 'You tap to pay', sub: 'Anywhere cards are accepted' },
+          { label: 'Your card refills', sub: 'Only the amount you spent, within your limits' },
+          { label: 'The rest keeps working', sub: 'Nothing else moves' },
+        ]} />
+      </GradientPanel>
     </Section>
 
     <Section tint>

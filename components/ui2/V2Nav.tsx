@@ -10,13 +10,13 @@ import { MintwareMark } from '@/components/ui2/MintwareMark'
 
 const FEATURES = [
   { key: 'markets', href: '/markets', label: 'Markets' },
+  { key: 'rwas', href: '/rwas', label: 'RWAs' },
   { key: 'issuers', href: '/issuers', label: 'Issuers' },
   { key: 'cards', href: '/cards', label: 'Card' },
   { key: 'agents', href: '/agents', label: 'Agents' },
-  { key: 'about', href: '/about', label: 'About' },
 ] as const
 
-export type V2NavActive = 'markets' | 'issuers' | 'earn' | 'cards' | 'agents' | 'about'
+export type V2NavActive = 'markets' | 'rwas' | 'issuers' | 'cards' | 'agents'
 
 export function V2Nav({ active }: { active?: V2NavActive }) {
   const [open, setOpen] = useState(false)

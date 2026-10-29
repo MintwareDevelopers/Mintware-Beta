@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
+import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { FlowDiagram } from '@/components/ui2/FlowDiagram'
 import { WaitlistForm } from '@/components/marketing/WaitlistForm'
 import { Section, Eyebrow, H2, P, Hero, GlassList, Rows, Steps, Kicker, CTA } from '@/components/marketing/Story'
 
@@ -40,11 +42,14 @@ export default function IssuersPage() {
     <Section tint>
       <Eyebrow>How it works</Eyebrow>
       <H2 soft="to traded.">From tokenized</H2>
-      <Steps items={[
-        ['We curate your market', 'We review your token, structure and pool, and open it on Mintware.'],
-        ['Your holders bring the depth', 'Anyone can back your market with a single asset — and earn from it.'],
-        ['Your market runs itself', 'Liquidity stays in play around the clock, on its own engine on Uniswap v4.'],
-      ]} />
+      <GradientPanel tone="coral" className="p-8 max-[800px]:p-4 mt-12">
+        <FlowDiagram steps={[
+          { label: 'Your asset, tokenized', sub: 'Stocks, land, water, credit' },
+          { label: 'Curated by Mintware', sub: 'Reviewed and opened' },
+          { label: 'Holders bring depth', sub: 'Backing it with one asset' },
+          { label: 'A market that trades', sub: 'Fair prices, around the clock' },
+        ]} />
+      </GradientPanel>
     </Section>
 
     <Section>

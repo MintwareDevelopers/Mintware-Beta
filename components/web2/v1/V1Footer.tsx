@@ -21,7 +21,6 @@ const V2_LINKS = [
   { href: '/issuers', label: 'Issuers' },
   { href: '/cards', label: 'Card' },
   { href: '/agents', label: 'Agents' },
-  { href: '/about', label: 'About' },
   { href: '/the-math', label: 'The Math' },
   { href: '/proof', label: 'Proof' },
   { href: '/docs', label: 'Docs' },

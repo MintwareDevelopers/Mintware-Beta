@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
+import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { FlowDiagram } from '@/components/ui2/FlowDiagram'
 import { Section, Eyebrow, H2, Hero, GlassList, Rows, Steps, Kicker, CTA } from '@/components/marketing/Story'
 
 export const metadata = { title: 'Agents — Mintware', description: 'Money built for agents. Pay per call, earn between calls, and carry a reputation worth trusting.' }
@@ -31,8 +33,17 @@ export default function AgentsPage() {
     </Section>
 
     <Section>
-      <Eyebrow>Works where you build</Eyebrow>
-      <H2 soft="in minutes.">Plug in,</H2>
+      <Eyebrow>How a paid call works</Eyebrow>
+      <H2 soft="paid in seconds.">Every request,</H2>
+      <GradientPanel tone="lavender" className="p-8 max-[800px]:p-4 mt-12">
+        <FlowDiagram steps={[
+          { label: 'Your agent asks', sub: 'For data, compute or an API' },
+          { label: 'Gets a price', sub: 'An x402 quote, per request' },
+          { label: 'Pays in USDC', sub: 'Settled directly, no account' },
+          { label: 'Gets the result', sub: 'And builds its reputation' },
+        ]} />
+      </GradientPanel>
+      <div className="mt-16"><Eyebrow>Works where you build</Eyebrow></div>
       <Steps items={[
         ['Claude and Cursor', 'Mintware tools over MCP, ready for your assistant.'],
         ['AgentKit', 'Drop-in actions for Coinbase AgentKit agents.'],

@@ -61,6 +61,7 @@ const nextConfig = {
       { source: '/solutions/:path*', destination: '/issuers', permanent: true },
       { source: '/yield-payment-network', destination: '/cards', permanent: true },
       { source: '/earn', destination: '/cards', permanent: true },
+      { source: '/about', destination: '/', permanent: true },
       { source: '/explorer', destination: '/', permanent: true },
       { source: '/earn/:pool', destination: '/markets/:pool', permanent: true },
     ]

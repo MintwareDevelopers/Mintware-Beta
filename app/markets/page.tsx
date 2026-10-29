@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
+import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { FlowDiagram } from '@/components/ui2/FlowDiagram'
 import { DiscoverMarkets } from '@/components/marketing/DiscoverMarkets'
 import { PositionCard } from '@/components/marketing/PositionCard'
 import { Section, Eyebrow, H2, P, Hero, Rows, Steps, Kicker, CTA } from '@/components/marketing/Story'
@@ -40,12 +42,16 @@ export default function MarketsPage() {
 
     <Section tint>
       <Eyebrow>How it works</Eyebrow>
-      <H2 soft="One of them is yours.">Three steps.</H2>
-      <Steps items={[
-        ['You add one asset', 'A stablecoin or the market’s own token. You get one share — your slice of the whole position.'],
-        ['Mintware keeps it working', 'In the market when trading is busy, in yield when it’s quiet, always following the price.'],
-        ['You leave when you like', 'Your share of both assets, out in a single step.'],
-      ]} />
+      <H2 soft="It works on its own.">Add once.</H2>
+      <GradientPanel tone="lavender" className="p-8 max-[800px]:p-4 mt-12">
+        <FlowDiagram steps={[
+          { label: 'You add one asset', sub: 'A stablecoin or the market’s own token' },
+          { label: 'You get one share', sub: 'Your slice of the whole position' },
+          { label: 'Busy market → in the pool', sub: 'Earning on every trade' },
+          { label: 'Quiet market → in yield', sub: 'Still earning' },
+          { label: 'You leave anytime', sub: 'Your share of both assets' },
+        ]} />
+      </GradientPanel>
     </Section>
 
     <Section>

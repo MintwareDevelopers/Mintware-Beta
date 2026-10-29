@@ -9,9 +9,9 @@
 ## Public site map
 
 The public marketing site uses one light design system and the owner-approved vision copy. Primary routes are
-`/`, `/markets`, `/issuers`, `/cards`, `/agents`, and `/about`; the header carries the Testnet chip and
+`/`, `/markets`, `/rwas`, `/issuers`, `/cards`, and `/agents`; the header carries the Testnet chip and
 links to `/v1`. Pool detail is `/markets/[pool]`. Earn (the stablecoin vault) is presented as the card's
-earning balance, not a standalone page. Legacy `/earn`, `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
+earning balance, not a standalone page. Legacy `/about`, `/earn`, `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
 `/solutions/:path*`, `/yield-payment-network`, and `/explorer` redirect to their current destinations. Legal and
 risk content remain on their existing routes. Canonical route inventory is generated in the AUTO block below.
 
@@ -156,7 +156,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | Route | File |
 |---|---|
 | `/` | `app/page.tsx` |
-| `/about` | `app/about/page.tsx` |
 | `/agent/[address]` | `app/(web3)/agent/[address]/page.tsx` |
 | `/agents` | `app/agents/page.tsx` |
 | `/agents/leaderboard` | `app/(web3)/agents/leaderboard/page.tsx` |
@@ -204,6 +203,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/proof` | `app/proof/page.tsx` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
 | `/risk-disclosures` | `app/risk-disclosures/page.tsx` |
+| `/rwas` | `app/rwas/page.tsx` |
 | `/terms` | `app/terms/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` |
 | `/v1` | `app/v1/page.tsx` |

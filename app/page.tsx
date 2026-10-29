@@ -148,7 +148,7 @@ export default function HomePage() {
 
     <CTA title="Liquidity should be" soft="a public good.">
       <Link href="/v1" className="glass-pill-primary">Open the app</Link>
-      <Link href="/about" className="glass-pill">Our story</Link>
+      <Link href="/rwas" className="glass-pill">Real-world assets</Link>
     </CTA>
     <p className={`${wrap} pb-10 text-[11.5px] text-ink-soft`}>Market data: rwa.xyz, Token Terminal, Robinhood (Oct 2026).</p>
   </main>
