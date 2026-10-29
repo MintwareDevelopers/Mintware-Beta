@@ -24,7 +24,7 @@ function TokenIcon({ logo, sym, size, ring, z, left }: { logo: string | null; sy
         // eslint-disable-next-line @next/next/no-img-element
         <img src={logo!} alt={sym} width={size} height={size} onError={() => setFailed(true)} style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
       ) : (
-        <span style={{ fontSize: Math.round(size * 0.32), fontWeight: 700, color: '#8A82F4', letterSpacing: '-0.02em' }}>{initials(sym)}</span>
+        <span style={{ fontSize: Math.round(size * 0.32), fontWeight: 700, color: '#5A57DE', letterSpacing: '-0.02em' }}>{initials(sym)}</span>
       )}
     </span>
   )
@@ -36,7 +36,7 @@ export function TokenPair({
   baseSymbol,
   quoteSymbol,
   size = 30,
-  ring = '#12121C',
+  ring = "#FFFFFF",
 }: {
   baseLogo: string | null
   quoteLogo: string | null

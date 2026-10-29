@@ -39,22 +39,22 @@ export function V1DisclaimerGate() {
 
   return (
     <div className="fixed inset-0 z-[400] grid place-items-center p-4 font-atx-display" role="dialog" aria-modal="true" aria-label="Welcome to Mintware">
-      <div className="absolute inset-0" style={{ background: 'rgba(4,4,8,0.72)', backdropFilter: 'blur(4px)' }} />
-      <div className="relative w-full max-w-[440px] rounded-[18px] overflow-hidden" style={{ background: '#12121C', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 30px 80px rgba(0,0,0,0.6)' }}>
+      <div className="absolute inset-0" style={{ background: 'rgba(40,36,90,0.28)', backdropFilter: 'blur(4px)' }} />
+      <div className="relative w-full max-w-[440px] rounded-[18px] overflow-hidden" style={{ background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)' }}>
         <div className="h-[92px] flex items-center justify-center" style={{ background: 'radial-gradient(120% 120% at 50% 0%, rgba(138,130,244,0.28), transparent 70%)' }}>
           <div className="flex items-center gap-2.5">
             <span className="w-[26px] h-[26px] rounded-[7px_7px_9px_9px]" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }} />
-            <span className="font-bold text-[19px] tracking-[-0.01em]" style={{ color: '#F4F4FA' }}>Mintware</span>
+            <span className="font-bold text-[19px] tracking-[-0.01em]" style={{ color: '#191923' }}>Mintware</span>
           </div>
         </div>
         <div className="px-7 pb-7 pt-1">
-          <h2 className="font-semibold text-[19px] tracking-[-0.01em]" style={{ color: '#F4F4FA' }}>Welcome — this is a testnet preview</h2>
-          <p className="text-[13.5px] leading-[1.6] mt-2.5" style={{ color: '#9B9BAD' }}>
-            The LP Gateway runs on Robinhood Chain testnet — <span style={{ color: '#F4F4FA' }}>unaudited, with no real value.</span> A
+          <h2 className="font-semibold text-[19px] tracking-[-0.01em]" style={{ color: '#191923' }}>Welcome — this is a testnet preview</h2>
+          <p className="text-[13.5px] leading-[1.6] mt-2.5" style={{ color: '#494957' }}>
+            The LP Gateway runs on Robinhood Chain testnet — <span style={{ color: '#191923' }}>unaudited, with no real value.</span> A
             liquidity position is not a deposit, a savings product, or a guaranteed or fixed return; its value
             moves with the pool price and is subject to impermanent loss. By clicking Enter you confirm you
             understand and accept the{' '}
-            <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>terms</Link>.
+            <Link href="/legal" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>terms</Link>.
           </p>
 
           <label className="flex items-center gap-2.5 mt-5 cursor-pointer select-none">
@@ -64,7 +64,7 @@ export function V1DisclaimerGate() {
               onChange={(e) => setDontShow(e.target.checked)}
               className="w-[15px] h-[15px] cursor-pointer accent-[#6C6CF0]"
             />
-            <span className="text-[12.5px]" style={{ color: '#9B9BAD' }}>Do not show again</span>
+            <span className="text-[12.5px]" style={{ color: '#494957' }}>Do not show again</span>
           </label>
 
           <button
