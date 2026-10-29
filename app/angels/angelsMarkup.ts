@@ -163,13 +163,13 @@ export const ANGELS_HTML = `<!doctype html>
 <section class="slide">
   <span class="num mono">09</span>
   <div class="label">Where we are</div>
-  <h2>Built and <span class="grad">proven end-to-end.</span></h2>
+  <h2>Testnet work and the <span class="grad">path to launch.</span></h2>
   <div class="grid3" style="margin-top:24px">
-    <div class="card"><h3>Built</h3><p>The full system exists — earn, spend, and settle on-chain — not a concept deck.</p></div>
+    <div class="card"><h3>Live on testnet</h3><p>MarketEngine is live on Robinhood Chain testnet; its adapters hold test assets without yield.</p></div>
     <div class="card"><h3>Security-first</h3><p>Built to pass an independent audit before real money moves — the bar, not an afterthought.</p></div>
-    <div class="card"><h3>Proven</h3><p>The whole loop has run live — earned, spent, and settled — down to a real transaction.</p></div>
+    <div class="card"><h3>Testnet demo</h3><p>A past testnet demo recorded an earn, spend, and settlement flow down to a transaction.</p></div>
   </div>
-  <div class="kicker">Running on test networks today; an <b>independent security audit is the gate</b> before real money moves. We're building to that bar, not around it.</div>
+  <div class="kicker">Past demonstrations ran on test networks; an <b>independent security audit is the gate</b> before real money moves. We're building to that bar, not around it.</div>
 </section>
 
 <!-- 10 · BUSINESS MODEL -->

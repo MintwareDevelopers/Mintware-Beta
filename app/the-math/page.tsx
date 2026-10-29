@@ -102,7 +102,7 @@ export default function TheMath() {
               </div>
             </div>
             <div className="text-[12.5px] text-ink-mid max-w-[30ch] pb-1.5">
-              Built on a floor that’s <b className="text-ink">live today</b>
+              Compared against external lending rates that are <b className="text-ink">live today</b>
               {floorLive != null ? <> — a real <b className="text-peri-deep num">{pct(floorLive)}</b> best-of lending rate</> : <> — a real best-of lending rate</>}.
               The climb is the roadmap.
             </div>
@@ -113,8 +113,8 @@ export default function TheMath() {
         {/* honest anchor — unmissable, not buried */}
         <div className="mt-4 rounded-[12px] px-4 py-3.5 text-[13px] text-ink leading-[1.5]"
           style={{ background: 'linear-gradient(110deg, rgba(244,161,131,.13), var(--color-ground-cool))', border: '1px solid color-mix(in srgb, var(--color-coral2-deep) 30%, transparent)' }}>
-          <b>Where we are vs. where we’re going.</b> This is the destination. <b>Today it’s testnet and
-          unaudited</b> — the <b>~{floorLive != null ? pct(floorLive) : '5–6%'} floor is live and verifiable</b>;
+          <b>Where we are vs. where we’re going.</b> This is the destination. <b>MarketEngine is on testnet and
+          unaudited</b> — the <b>~{floorLive != null ? pct(floorLive) : '5–6%'} figure is an external lending benchmark</b>;
           the climb to {ENGINE.targetLo}–{ENGINE.targetHi}% is <b>projected activity yield</b> (fees + MEV + the
           ETH slice), earned only at scale with real volume. This is a roadmap, <b>not current returns, and not
           investment advice.</b>
@@ -122,16 +122,14 @@ export default function TheMath() {
 
         {/* what's shipped today grounds the model */}
         <p className="mt-3 text-[12.5px] text-ink-soft leading-[1.5] max-w-[68ch]">
-          What’s live right now: the <a href="/proof" className="text-peri-deep no-underline hover:underline">LP Gateway</a> is
-          deployed and proven on Robinhood Chain testnet (deposit → earn as curated-pool liquidity) — the engine
-          below is what runs under it.
+          MarketEngine is live on Robinhood Chain testnet with a tUSDG/tPONS pool; its adapters hold test assets without yield. The lending rates above are external benchmarks, not Mintware product returns.
         </p>
 
         {/* why it's grounded, not vapor */}
         <h2 className="font-atx-display font-bold text-[clamp(1.3rem,2.8vw,1.7rem)] tracking-[-0.02em] mt-10 mb-3">Grounded, not vapor</h2>
         <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3">
           {[
-            { t: 'The floor is live today', d: <>The base of the engine — a best-of curated lending rate — is a <b className="text-ink">real, current number</b>{floorLive != null ? <> (<b className="text-peri-deep num">{pct(floorLive)}</b> right now, pinned to live data)</> : ''}. The foundation already works.</> },
+            { t: 'External rates are live data', d: <>The lending comparison is a <b className="text-ink">current external benchmark</b>{floorLive != null ? <> (<b className="text-peri-deep num">{pct(floorLive)}</b> right now, pinned to live data)</> : ''}, not a Mintware product return.</> },
             { t: 'The recipe is proven', d: <>Bunni hit <b className="text-ink">~13% on stablecoins</b> with this exact stack — rehypothecated floor + fees + MEV — before an accounting bug ended them. The yield isn’t theoretical.</> },
             { t: 'Built with the safety they lacked', d: <>Senior/junior tranches, <b className="text-ink">atomic (not leveraged)</b> capture, and conservation-audited accounting — the exact class of bug that took Bunni down, closed by invariant tests.</> },
           ].map(c => (
@@ -160,7 +158,7 @@ export default function TheMath() {
 
         {/* deposit control */}
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[11.5px] font-semibold tracking-[0.1em] uppercase text-ink-soft">On a deposit of</span>
+          <span className="text-[11.5px] font-semibold tracking-[0.1em] uppercase text-ink-soft">On a modeled balance of</span>
           <div className="inline-flex items-center gap-1.5">
             {[10_000, 25_000, 100_000, 500_000].map(v => (
               <button key={v} onClick={() => setDep(v)}

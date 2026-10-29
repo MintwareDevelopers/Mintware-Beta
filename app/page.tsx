@@ -23,21 +23,21 @@ import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 const ey = 'text-[12px] uppercase tracking-[0.13em] font-semibold text-peri-deep'
 
-// V1 (default) shows the live LP Gateway front; V2 (unlocked) shows the full vision below.
+// V1 (default) shows the current MarketEngine testnet entry point; V2 (unlocked) shows the product vision below.
 export default function HomePage() {
   return useV2Mode() ? <HomeV2 /> : <HomeV1 />
 }
 
 const ENGINES = [
-  { n: '01', t: 'Best-rate lending', d: 'Idle capital is routed to the venue paying the most — and re-routed as rates move. Never parked in one place, earning less than it could.' },
-  { n: '02', t: 'Market-making', d: 'Your liquidity provides just-in-time depth on Uniswap V4 exactly when trades need it, and earns the swap fees for it.' },
-  { n: '03', t: 'Recaptured MEV', d: 'The value bots usually skim off your trades gets caught and handed back — to you and the pool, not the searchers.' },
+  { n: '01', t: 'Best-rate lending', d: 'Designed to route idle capital to lending venues as rates move, rather than park it in one place.' },
+  { n: '02', t: 'Market-making', d: 'The planned engine adds just-in-time Uniswap V4 depth around trades, with swap fees accruing to liquidity.' },
+  { n: '03', t: 'Recaptured MEV', d: 'The design aims to return some value otherwise captured by bots to liquidity providers.' },
 ]
 
 const DOORS = [
-  { glyph: '🧍', t: 'You', d: 'The Liquid Sovereign Account. Cash that earns while it stays spendable — on your card, anywhere. Earn, spend, stay sovereign.', tag: 'Your account', tagLive: false, go: 'Open your account →', href: '/yield-payment-network' },
-  { glyph: '👥', t: 'Teams', d: 'A treasury that works: matched liquidity, cards, payroll, and role-capped spend — every balance reading live off the on-chain vault.', tag: 'For treasuries', tagLive: false, go: 'See the treasury →', href: '/teams' },
-  { glyph: '🤖', t: 'Agents', d: 'An x402 parking account: idle USDC earns while it pays per call. Your agent’s balance is never dead weight between requests.', tag: '◆ x402 loop live', tagLive: true, go: 'Wire up an agent →', href: '/agents' },
+  { glyph: '🧍', t: 'You', d: 'The planned Liquid Sovereign Account: cash designed to earn while it stays spendable, including through a future card.', tag: 'In development', tagLive: false, go: 'Explore the vision →', href: '/yield-payment-network' },
+  { glyph: '👥', t: 'Teams', d: 'A treasury roadmap spanning matched liquidity, cards, payroll, and role-capped spend.', tag: 'Roadmap', tagLive: false, go: 'See the roadmap →', href: '/teams' },
+  { glyph: '🤖', t: 'Agents', d: 'The x402 parking-account concept is designed to let idle USDC earn between per-call payments.', tag: 'Designed for agents', tagLive: false, go: 'Explore agent tools →', href: '/agents' },
 ]
 
 function HomeV2() {
@@ -49,16 +49,16 @@ function HomeV2() {
     <div className="font-atx-display bg-ground-cool text-ink min-h-screen overflow-x-clip">
       <V2Nav />
 
-      {/* ① HERO — the promise, no caveats */}
+      {/* ① HERO — the product vision */}
       <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">
         <AirbrushSplash tone="mix" />
         <div className="relative mx-auto max-w-[1120px] px-7 max-[640px]:px-[18px] pt-[96px] pb-[88px] max-[640px]:pt-[60px] max-[640px]:pb-[56px] flex flex-col items-center text-center">
-          <span className="live-chip mb-6"><span className="dot" aria-hidden />One balance · earning &amp; spendable</span>
+          <span className="live-chip mb-6"><span className="dot" aria-hidden />Account in development</span>
           <h1 className="font-atx-display font-semibold text-ink tracking-[-0.045em] leading-[1.02] text-[clamp(2.7rem,7vw,5.1rem)] [text-wrap:balance]">
             Never idle.<br />Never locked.<br /><span className="text-gradient-accent">Always yours.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1.02rem,1.6vw,1.28rem)] leading-[1.55] mt-6 max-w-[56ch]">
-            Money shouldn’t have to choose between earning and being spendable. Yours does both — it earns the moment it lands, and spends the second you need it. No unwinding. No lockups.
+            Money shouldn’t have to choose between earning and being spendable. The planned account is designed to do both, without unwinding or lockups.
           </p>
           <div className="mt-9 flex flex-wrap gap-3.5 items-center justify-center">
             <button onClick={() => launchApp()} className="glass-pill-primary">{launchLabel}</button>
@@ -67,7 +67,7 @@ function HomeV2() {
         </div>
       </section>
 
-      {/* Tasteful, additive V1 pointer — the first live product, bridging to /v1. Never replaces content. */}
+      {/* Current MarketEngine testnet status and a link to its historical proof. */}
       <LiveTodayStrip />
 
       {/* ② WHAT WE ARE — Uniswap V4 vaults for everyone (comes out swinging, states it directly) */}
@@ -75,19 +75,19 @@ function HomeV2() {
         <div className="mx-auto max-w-[1120px] px-7 max-[640px]:px-[18px] py-[92px] max-[640px]:py-[60px]">
           <div className="grid grid-cols-[1.05fr_0.95fr] gap-[44px] items-center max-[860px]:grid-cols-1 max-[860px]:gap-9">
             <div>
-              <div className={ey}>Built on Uniswap V4</div>
+              <div className={ey}>Designed for Uniswap V4</div>
               <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.8rem,3.6vw,2.9rem)] mt-3.5 [text-wrap:balance]">
                 The market-making engine the pros use, <span className="text-gradient-accent">opened to everyone.</span>
               </h2>
               <p className="text-ink-mid text-[clamp(1.02rem,1.6vw,1.2rem)] leading-[1.55] mt-[18px] max-w-[46ch]">
-                Mintware puts your dollars in a Uniswap&nbsp;V4 vault that runs the same automated, MEV-protected strategy the pros deploy — earning lending, swap fees, and recaptured MEV, all at once.
+                Mintware is designing a Uniswap&nbsp;V4 vault to combine lending, swap fees, and MEV recapture in one automated strategy.
               </p>
-              <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> Three engines, one balance — always working.</div>
+              <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> Three planned engines, one balance.</div>
             </div>
 
             {/* illustrative APY comparison — the lender's whole rate is our first segment */}
             <div className="soft-card p-[26px]">
-              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Illustrative — not a projection or guarantee</div>
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Illustrative design target — not current yield</div>
               <div className="flex items-end justify-center gap-8 h-[210px] mt-4">
                 {/* lender */}
                 <div className="flex-1 max-w-[110px] flex flex-col items-center justify-end h-full">
@@ -106,7 +106,7 @@ function HomeV2() {
               </div>
               <div className="flex justify-center gap-8 mt-3 text-center">
                 <div className="flex-1 max-w-[110px]"><div className="text-[12.5px] font-semibold text-ink">USDC lender</div><div className="text-[11px] text-ink-soft">one job · lending</div></div>
-                <div className="flex-1 max-w-[110px]"><div className="text-[12.5px] font-semibold text-ink">Mintware vault</div><div className="text-[11px] text-ink-soft">three jobs</div></div>
+                <div className="flex-1 max-w-[110px]"><div className="text-[12.5px] font-semibold text-ink">Planned vault</div><div className="text-[11px] text-ink-soft">three jobs</div></div>
               </div>
               <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-hair-soft text-[11px] text-ink-mid flex-wrap">
                 <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[3px] bg-peri inline-block" />Lending</span>
@@ -128,7 +128,7 @@ function HomeV2() {
                 One balance,<br /><span className="text-gradient-accent">earning and spendable at once.</span>
               </h2>
               <p className="text-ink-mid text-[clamp(1.02rem,1.6vw,1.2rem)] leading-[1.55] mt-[18px] max-w-[46ch]">
-                Your dollars earn a real yield while they sit — and stay spendable to the cent, on a card or over the wire, without cashing out or unwinding a thing. It’s a checking account that never stops working.
+                The account is designed for dollars to earn while staying spendable by card or transfer, without cashing out or unwinding a thing.
               </p>
               <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> The yield is what you spend. The balance stays put.</div>
             </div>
@@ -137,14 +137,14 @@ function HomeV2() {
             <div className="soft-card p-[30px]">
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="text-[12px] uppercase tracking-[0.1em] text-ink-soft font-semibold">Spendable balance</div>
+                <div className="text-[12px] uppercase tracking-[0.1em] text-ink-soft font-semibold">Illustrative balance</div>
                   <div className="font-atx-display font-semibold text-[clamp(2.4rem,5vw,3.3rem)] tracking-[-0.03em] mt-1.5 tabular-nums">$12,480<span className="text-[0.5em] text-ink-soft">.00</span></div>
                 </div>
-                <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold rounded-full px-3 py-2 bg-mw-green-muted text-mw-green"><span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block" />earning</span>
+                <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold rounded-full px-3 py-2 bg-mw-green-muted text-mw-green"><span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block" />design</span>
               </div>
               <div className="flex gap-2.5 mt-[22px] flex-wrap">
-                <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold rounded-full px-3 py-2 bg-mw-green-muted text-mw-green">↑ yielding right now</span>
-                <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold rounded-full px-3 py-2 bg-[rgba(108,108,240,0.11)] text-peri-deep">◆ spendable in full</span>
+                <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold rounded-full px-3 py-2 bg-mw-green-muted text-mw-green">↑ yield planned</span>
+                <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold rounded-full px-3 py-2 bg-[rgba(108,108,240,0.11)] text-peri-deep">◆ designed for spending</span>
               </div>
               <div className="flex justify-between mt-5 pt-[18px] border-t border-hair-soft text-[13px] text-ink-soft">
                 <span>Position</span><span className="text-ink font-medium">untouched</span>
@@ -161,12 +161,12 @@ function HomeV2() {
             <div>
               <div className={ey}>The card</div>
               <h2 className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[1.04] text-[clamp(1.8rem,3.6vw,2.9rem)] mt-3.5 [text-wrap:balance]">
-                A card that spends your <span className="text-gradient-accent">yield</span>, not your savings.
+                A card designed to spend accrued <span className="text-gradient-accent">yield</span>, not the position.
               </h2>
               <p className="text-ink-mid text-[clamp(1.02rem,1.6vw,1.2rem)] leading-[1.55] mt-[18px] max-w-[44ch]">
-                Tap to pay — and your balance never stops earning. A swipe is a <b className="text-ink">hold</b> against your working capital, not a withdrawal. Authorized in milliseconds, settled to the exact cent.
+                The planned card is designed to spend accrued yield while your position stays in place. Authorization and merchant settlement are future work.
               </p>
-              <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> You spent $42.10. Your position didn’t move — only the yield did.</div>
+              <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> Illustrative future card experience.</div>
             </div>
 
             {/* card scene — the receipt fills in tap → authorized → settled → still earning, on scroll */}
@@ -192,7 +192,7 @@ function HomeV2() {
             ))}
           </div>
           <div className="mt-[26px] text-[14.5px] text-ink-mid rounded-[14px] px-5 py-4 bg-[rgba(108,108,240,0.06)] border border-[rgba(108,108,240,0.14)]">
-            <b className="text-ink">You spend the yield, not the position.</b> A payment is a hold against your earning balance, settled in just enough dollars to cover it. Everything else keeps working.
+            <b className="text-ink">The design spends yield, not the position.</b> A future payment would hold against the earning balance, then settle only the amount due.
           </div>
         </div>
       </section>
@@ -227,11 +227,11 @@ function HomeV2() {
               Get in before it <span className="text-gradient-accent">opens.</span>
             </h2>
             <p className="text-[15px] text-ink-mid leading-[1.6] mt-4 max-w-[46ch]">
-              Live and provable — every claim here has an <span className="text-ink font-semibold">on-chain receipt.</span>
+              Historical testnet records are available for inspection.
             </p>
             <Link href="/proof" className="group inline-flex items-center gap-2.5 mt-5 rounded-full border border-hair bg-white/70 pl-3 pr-3.5 py-2 text-[12.5px] text-ink-mid no-underline hover:border-[rgba(76,76,214,0.4)] hover:bg-white transition-colors">
               <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block shrink-0" />
-              <span className="text-ink-soft">Last settle</span>
+              <span className="text-ink-soft">Past testnet settle</span>
               <span className="font-mono text-ink font-bold">$2.00 · 12→10 USDC</span>
               <span className="text-peri-deep font-semibold group-hover:translate-x-0.5 transition-transform">proof →</span>
             </Link>
@@ -239,7 +239,7 @@ function HomeV2() {
               <WaitlistForm />
             </div>
             <div className="text-[12px] text-ink-soft mt-4 leading-[1.5] max-w-[52ch]">
-              Non-custodial · in testing on Base Sepolia · not a deposit or guaranteed return. <Link href="/legal" className="text-peri-deep font-semibold no-underline hover:underline">Legal →</Link>
+              MarketEngine is live on Robinhood Chain testnet. Adapters hold test assets without yield; unaudited. <Link href="/legal" className="text-peri-deep font-semibold no-underline hover:underline">Legal →</Link>
             </div>
           </GradientPanel>
         </div>

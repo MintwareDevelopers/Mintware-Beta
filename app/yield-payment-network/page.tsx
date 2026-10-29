@@ -21,13 +21,13 @@ import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 //
 // First page converted to the Privy-esque v2 design system (periwinkle pastel +
 // translucent glass; see components/ui2 + globals.css v2 tokens). Honesty
-// framing: COMING SOON / in testing. All copy lives in constants/ypn-landing.ts.
+// framing: roadmap and in development. All copy lives in constants/ypn-landing.ts.
 // =============================================================================
 
 export const metadata: Metadata = {
   title: 'Liquid Sovereign Account — Mintware',
   description:
-    'Cash that earns while you spend it. USDC in a Uniswap v4 Unified Liquidity Vault earns institutional yield (best-venue lending + v4 MEV) and stays 100% spendable at Visa terminals in sub-400ms — you spend from yield, not your position. Coming soon.',
+    'The Liquid Sovereign Account is designed to combine Uniswap v4 liquidity and lending with future card spending from yield. The vault and card experience are in development.',
 }
 
 function YieldPaymentNetworkPageV2() {

@@ -42,13 +42,13 @@ const BRIGHT_LINES: { n: number; title: string; do: string; dont: string }[] = [
   {
     n: 3,
     title: 'No trading on users’ behalf — they self-direct',
-    do: 'Let users choose to deposit into a vault. The vault’s behaviour (JIT provisioning, rebalancing) is deterministic protocol code they opt into by depositing.',
+    do: 'Current MarketEngine development uses a Robinhood Chain testnet pool; its adapters hold test assets without yield. Future vault mechanics would be disclosed in their contracts.',
     dont: 'Hold trading authority over a user’s account, exercise investment discretion, or give personalised recommendations.',
   },
   {
     n: 4,
     title: 'No promise of return — we are not a deposit-taker',
-    do: 'Route protocol-native economics (LP fees, MEV recapture, on-chain lending yield) to the LP position that earned them — in full, unrestricted, senior and junior alike. Where a vault pairs a protected and a first-loss position, payout order (protected side first) is fixed in contract logic, not a settable parameter; any risk parameter that affects the size of protection is bounded, publicly disclosed on-chain, and either instant only when it tightens protection or delayed 48h with an on-chain event when it loosens it.',
+    do: 'MarketEngine testnet adapters currently hold test assets without yield. Lending, MEV recapture, and senior/junior payout designs are roadmap items, not current product returns or protections.',
     dont: 'Promise, guarantee, or owe a return or a par-value outcome; hold user deposits as a liability on a Mintware balance sheet; market a “savings account” or an “always whole” claim; or let payout order itself be changed post-deployment by anyone.',
   },
   {
@@ -60,7 +60,7 @@ const BRIGHT_LINES: { n: number; title: string; do: string; dont: string }[] = [
   {
     n: 6,
     title: 'First-loss capital is the team’s own — never sold to depositors',
-    do: 'Fund the loss-absorbing side of a vault only with the team’s own capital (typically the token the team already brought to seed the pool). Restrict that position on-chain to team-controlled addresses.',
+    do: 'A team-funded first-loss tranche is a roadmap design and is not part of the current MarketEngine testnet pool.',
     dont: 'Tokenize, market, or sell first-loss exposure to depositors or outside investors as an investment product, or let it become a freely transferable instrument once any lock period ends.',
   },
 ]
@@ -94,24 +94,24 @@ const REGIMES: { regime: string; sub: string; trigger: string; why: string }[] =
 ]
 
 const PARTNERS: { who: string; role: string; note: string; mw?: boolean }[] = [
-  { who: 'Circle / Arc', role: 'Stablecoin & settlement rail', note: 'Issues USDC, runs CCTP bridging and USDC-native settlement on Arc. The regulated stablecoin and cross-chain value layer.' },
-  { who: 'Card issuer (production tier)', role: 'Card issuance & fiat settlement', note: 'Issues the card, connects to the card networks, and settles to fiat — carrying the card-program / MSB / bank-partner obligations. (Any sandbox card today is demo-only.)' },
+  { who: 'Circle / Arc', role: 'Future settlement design', note: 'Arc and Circle were explored for a future USDC settlement flow; this is not the current MarketEngine payment rail.' },
+  { who: 'Bridge + Stripe', role: 'Card integrations in development', note: 'Card issuance and settlement are not live through Mintware. No purchase authorization, merchant settlement, or customer card-buffer refill is currently supported.' },
   { who: 'Privy', role: 'Non-custodial wallet infra', note: 'Embedded-wallet key management and auth — keys stay under the user’s control. Reinforces non-custody and shrinks Mintware’s security and data surface.' },
-  { who: 'Mintware', role: 'Software · interface · analytics', note: 'Front-end, reputation analytics, and off-chain coordination (edge-auth authorises against on-chain NAV; the relayer submits protocol transactions). By design, the software layer above regulated partners.', mw: true },
+  { who: 'Mintware', role: 'Software · interface · analytics', note: 'Builds the MarketEngine interface and supporting software. The current testnet pool uses tUSDG/tPONS; adapters hold test assets without earning yield.', mw: true },
 ]
 
 const DISCLOSURES: { title: string; body: string }[] = [
   {
     title: 'Testnet and unaudited — do not deposit real value',
-    body: 'Everything Mintware operates today runs on public test networks, with unaudited smart-contract code and no real assets. Nothing here is production software. Do not send real funds to any Mintware contract or interface until an external security audit is complete and this page says otherwise. Before any vault holds real value, we intend to add a protocol-fee-funded loss reserve and third-party smart-contract coverage as additional backstops on top of the first-loss protections described above.',
+    body: 'MarketEngine is live on Robinhood Chain testnet with the tUSDG/tPONS test pool; its adapters hold test assets without earning yield. Other vault and payment components are tested on Base Sepolia. Contracts are unaudited, and no real customer funds are supported. Do not send real funds to a Mintware contract or interface. Bridge + Stripe card integrations are in development: a purchase is not authorized or settled through Mintware today.',
   },
   {
     title: 'A vault balance is not a bank deposit',
-    body: 'A senior vault balance is a claim on an autonomous smart-contract vault — not a deposit, not a savings account, and not a money-market fund. It is not held by a bank, is not FDIC- or SIPC-insured, and carries no government or Mintware guarantee. Its value depends entirely on the vault’s on-chain solvency.',
+    body: 'Senior/junior tranches are a roadmap design, not a currently available product. No live MarketEngine position has a senior claim or first-loss junior tranche. Any future vault balance would be a claim on an autonomous smart-contract vault, not a bank account or insured balance.',
   },
   {
     title: 'No promised or guaranteed return',
-    body: 'Any yield is generated by protocol-native mechanics (LP fees, on-chain lending, MEV recapture) and varies with market conditions. Mintware does not promise, guarantee, or owe a fixed rate of return. Illustrative or historical figures are not indicative of future results, and yield can be zero.',
+    body: 'MarketEngine’s Robinhood Chain testnet adapters hold assets without earning yield. Future vault designs may seek protocol-native returns, which would vary with market conditions; Mintware does not promise or guarantee a return. Historical testnet records and illustrative figures are not future results.',
   },
   {
     title: 'Smart contracts carry risk, including total loss',
@@ -119,19 +119,19 @@ const DISCLOSURES: { title: string; body: string }[] = [
   },
   {
     title: 'Providing liquidity carries impermanent loss',
-    body: 'The LP Gateway is non-custodial software, in testing on Robinhood Chain testnet with unaudited code and no real assets. Supplying liquidity to a pool is not a deposit, a savings account, or a guaranteed or fixed return: the position’s value moves with the pool price and can suffer impermanent loss, and you could lose some or all of the value you interact with. Any amount you can spend comes from the yield the position earns — a buffer, not a promised balance, and not your whole position. An external audit is the gate before real value.',
+    body: 'MarketEngine is live on Robinhood Chain testnet with unaudited code and test assets (tUSDG/tPONS). Testnet adapters hold assets without yield. A pool position can change in value with token prices and may suffer impermanent loss; testnet activity does not represent a real-value return. No spendable-yield feature is currently available. An external audit is required before real value is supported.',
   },
   {
     title: 'The stablecoin issuer can freeze or wipe balances',
-    body: 'The LP Gateway’s quote asset on Robinhood Chain is USDG, issued by Paxos. USDG’s contract lets its issuer pause transfers, freeze any address, and wipe a frozen balance — powers that belong to the issuer, not Mintware, and that we cannot override or reverse. If an address holding gateway funds at rest (the yield source, the pool, or a gateway contract) were frozen or wiped, that value could become inaccessible or be permanently lost. This is the same risk any USDG holder carries; it applies to funds routed through the gateway exactly as to funds held directly, and it is one reason exposure stays bounded.',
+    body: 'MarketEngine’s current Robinhood Chain testnet pool uses test assets tUSDG and tPONS, not Paxos-issued USDG. Test tokens have no real value. A future pool using an issuer-controlled stablecoin could be affected by that issuer’s pause, freeze, or wipe controls; those powers would belong to the issuer, not Mintware.',
   },
   {
     title: 'A paired token’s own controls can delay the liquidity leg',
-    body: 'Each pool pairs USDG with a third-party token Mintware does not control. Some tokens give an owner the power to pause transfers, blacklist or freeze addresses, mint supply, or upgrade the code. If such a control is used against the pool or a gateway address, the deployed-liquidity leg of a withdrawal may not be able to execute until it is lifted; the idle leg still pays out, and the claim on the blocked leg is kept as shares rather than lost, but no software can make a paused token move. We screen pools to avoid paired tokens with these controls — a heuristic and a human judgement, not a guarantee, and a token’s controls can change after listing.',
+    body: 'The current MarketEngine test pool pairs tUSDG with tPONS, test assets on Robinhood Chain. MarketEngine is designed for curated pools, but token contracts can have controls such as pausing, freezing, minting, or upgrades. Such controls could block transfers or withdrawals. Testnet adapters hold assets without yield; testnet activity does not establish how a future pool would behave with real assets.',
   },
   {
     title: 'A protected position is a priority claim, not a guarantee',
-    body: 'Where a vault pairs a protected position with a first-loss position, protection means the protected side is paid first — a fixed order in the contract code, not a settable parameter and not a promise that it will always be made whole. Parameters affecting the size of protection are bounded and publicly disclosed on-chain (changes that loosen protection are delayed 48h and logged; changes that tighten it apply immediately). In an extreme loss event the first-loss balance could still be exhausted before the protected side is fully covered. First-loss capital is the team’s own and is restricted on-chain to team-controlled addresses; it is never sold to depositors or outside investors as an investment.',
+    body: 'Senior/junior protection is a future vault design and is not part of the current MarketEngine testnet pool. If introduced, priority would describe payment order in contract code, not a guarantee of repayment; losses could exceed any first-loss balance.',
   },
   {
     title: 'Not investment, legal, or tax advice',
@@ -166,15 +166,15 @@ export default function LegalDisclosuresPage() {
           Software, not a<br /><span className="text-gradient-accent">financial intermediary.</span>
         </h1>
         <p className="text-ink-mid text-[clamp(1.02rem,2.2vw,1.28rem)] leading-[1.5] max-w-[60ch] mt-5">
-          Mintware builds the tools; <span className="text-ink font-medium">users hold their own keys and act for themselves.</span> Every
-          regulated leg — fiat, cards, USDC — belongs to a licensed partner. This page explains how the product is structured and sets out
+          Mintware builds the tools; <span className="text-ink font-medium">users hold their own keys and act for themselves.</span> Future
+          fiat and card settlement require licensed partners. This page explains the current testnet product and sets out
           the risks you should understand before using it.
         </p>
 
         <div className="grid grid-cols-3 max-[640px]:grid-cols-1 gap-3 mt-6">
           <Fact k="Entity" v="Delaware LLC" />
           <Fact k="Nature" v="Non-custodial software" />
-          <Fact k="Product stage" v="Testnet · pre-launch · unaudited" />
+          <Fact k="Product stage" v="MarketEngine · live on testnet · unaudited" />
         </div>
 
         {/* read-first banner */}
@@ -319,7 +319,7 @@ export default function LegalDisclosuresPage() {
         <div className="mt-14 pt-6 border-t border-hair text-[13px] text-ink-soft leading-[1.6]">
           <p>
             <b className="text-ink-mid">This is information, not legal advice</b>, and creates no relationship, offer, or guarantee. The
-            product is early, on testnet, and unaudited; do not rely on it with real value. Terms and disclosures may change as the
+            MarketEngine is live on Robinhood Chain testnet; its adapters hold test assets without yield. Contracts are unaudited. Terms and disclosures may change as the
             structure, partners, and product evolve.
           </p>
           <p className="font-mono text-[11px] text-ink-soft mt-3">
