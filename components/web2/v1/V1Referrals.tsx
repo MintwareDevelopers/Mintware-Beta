@@ -1,12 +1,6 @@
 'use client'
 
-// Referrals — the V1 "invite & earn" surface. Reuses the existing referral system (deterministic mw_ code +
-// /ref/[code] link + server-gated referral_stats via useReferral). Presents the CONCRETE program model:
-// referrer earns 20% of Mintware's 10% performance fee on referred harvests (→30% Tier 2), referee's perf
-// fee drops 10%→9%. Paid in stable at harvest, never from a token or their principal. Dark app skin.
-// HONEST: testnet — rewards illustrative, live with the mainnet gateway; browser never writes
-// referral_records directly (POST /api/referral/apply, 24h referrer time-gate). Full spec:
-// docs/developers/lp-gateway-referrals.md.
+// Referral attribution surface. The former harvest-based fee rewards are retired.
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -17,8 +11,6 @@ import { useReferral } from '@/lib/rewards/referral/useReferral'
 const CARD = { background: '#12121C', border: '1px solid rgba(255,255,255,0.07)' }
 const INNER = { background: '#0E0E16', border: '1px solid rgba(255,255,255,0.06)' }
 
-// Tier-2 unlock threshold (referred TVL). Illustrative on testnet; the tier engine turns on with mainnet.
-const TIER2_TVL = 250_000
 
 export function V1Referrals() {
   const { address, isConnected } = useMintwareIdentity()
@@ -35,7 +27,7 @@ export function V1Referrals() {
   }
   const share = () => {
     if (!refLink) return
-    const text = encodeURIComponent(`Put USDG to work in curated Robinhood-Chain pools with Mintware — earn trading fees, compounded back in. ${refLink}`)
+    const text = encodeURIComponent(`Explore curated pools on Mintware. ${refLink}`)
     window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'noopener')
   }
 
@@ -47,13 +39,11 @@ export function V1Referrals() {
       {/* hero */}
       <div className="text-[12px] uppercase tracking-[0.13em] font-semibold" style={{ color: '#8A82F4' }}>Refer · Robinhood Chain</div>
       <h1 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.05] text-[clamp(1.7rem,3.4vw,2.4rem)] mt-2.5 max-w-[24ch]">
-        Bring others to the Gateway —{' '}
-        <span style={{ backgroundImage: 'linear-gradient(100deg,#8A82F4,#F0A183)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>share in the yield.</span>
+        Bring others to Discover —{' '}
+        <span style={{ backgroundImage: 'linear-gradient(100deg,#8A82F4,#F0A183)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>share a pool.</span>
       </h1>
       <p className="text-[14.5px] leading-[1.6] mt-3 max-w-[60ch]" style={{ color: '#9B9BAD' }}>
-        Earn <b style={{ color: '#F4F4FA' }}>20% of Mintware&rsquo;s 10% performance fee</b> on the trading fees your referrals harvest — paid in
-        stable, from our revenue, <b style={{ color: '#F4F4FA' }}>never from a token or their deposit</b>. They get a fee discount too.{' '}
-        <span style={{ color: '#F0B45E' }}>Illustrative on testnet — live with the mainnet gateway.</span>
+        Referral links attribute invites and support reputation signals. <b style={{ color: '#F4F4FA' }}>Harvest-based referral rewards and performance-fee discounts are retired.</b> MarketEngine is testnet-only and unaudited.
       </p>
 
       {!isConnected ? (
@@ -84,19 +74,19 @@ export function V1Referrals() {
           <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
             <StatCard k="Referrals" v={String(treeSize)} sub="wallets you brought" />
             <StatCard k="Sharing score" v={`${sharing}`} sub="of 125" accent />
-            <StatCard k="Est. earned" v="$0.00" sub="illustrative · live at mainnet" />
+            <StatCard k="Fee rewards" v="Retired" sub="no harvest-based payout" />
           </div>
 
           {/* tier progress */}
           <div className="rounded-[16px] p-6 mt-4" style={CARD}>
             <div className="flex items-baseline justify-between flex-wrap gap-2">
-              <div className="text-[13px] font-semibold" style={{ color: '#F4F4FA' }}>Tier 1 · <span style={{ color: '#8A82F4' }}>20% of our fee</span></div>
-              <div className="text-[12px]" style={{ color: '#63636F' }}>Unlock Tier 2 (<span style={{ color: '#34D399' }}>30%</span>) at ${TIER2_TVL.toLocaleString()} referred TVL</div>
+              <div className="text-[13px] font-semibold" style={{ color: '#F4F4FA' }}>Referral attribution</div>
+              <div className="text-[12px]" style={{ color: '#63636F' }}>Reward tiers retired</div>
             </div>
             <div className="h-2.5 rounded-full mt-3 overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
               <div style={{ width: '4%', height: '100%', background: 'linear-gradient(90deg,#8A82F4,#6C6CF0)' }} />
             </div>
-            <div className="text-[11.5px] mt-2" style={{ color: '#4A4A55' }}>Progress is illustrative on testnet — the tier engine turns on with the mainnet gateway.</div>
+            <div className="text-[11.5px] mt-2" style={{ color: '#4A4A55' }}>Referral links can still attribute invitations; no referral fee payout is active.</div>
           </div>
         </>
       )}
@@ -104,14 +94,14 @@ export function V1Referrals() {
       {/* the model */}
       <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
         <div className="rounded-[16px] p-5" style={CARD}>
-          <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>You earn</div>
-          <div className="font-mono font-bold text-[26px] mt-1.5" style={{ color: '#8A82F4' }}>20%<span className="text-[15px]" style={{ color: '#63636F' }}> → 30%</span></div>
-          <div className="text-[12.5px] mt-1 leading-[1.5]" style={{ color: '#9B9BAD' }}>of our 10% performance fee on your referrals&rsquo; harvested fees (≈2% of their gross fees). 30% once you pass ${TIER2_TVL.toLocaleString()} referred TVL.</div>
+          <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Attribution</div>
+          <div className="font-mono font-bold text-[26px] mt-1.5" style={{ color: '#8A82F4' }}>Referral link</div>
+          <div className="text-[12.5px] mt-1 leading-[1.5]" style={{ color: '#9B9BAD' }}>Invitations can be associated with a wallet; no fee share is paid.</div>
         </div>
         <div className="rounded-[16px] p-5" style={CARD}>
-          <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>They save</div>
-          <div className="font-mono font-bold text-[26px] mt-1.5" style={{ color: '#34D399' }}>10% → 9%</div>
-          <div className="text-[12.5px] mt-1 leading-[1.5]" style={{ color: '#9B9BAD' }}>their performance fee drops for their referred lifetime — the two-sided hook.</div>
+          <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Pool status</div>
+          <div className="font-mono font-bold text-[26px] mt-1.5" style={{ color: '#34D399' }}>Testnet</div>
+          <div className="text-[12.5px] mt-1 leading-[1.5]" style={{ color: '#9B9BAD' }}>Current contracts are unaudited; external audit gates real value.</div>
         </div>
       </div>
 
@@ -120,15 +110,13 @@ export function V1Referrals() {
         <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>How it works</div>
         <div className="grid gap-4 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
           <Step n="01" t="Share your link" d="Your /ref link tags a wallet to you the first time they arrive — permanent, first-referrer-wins." />
-          <Step n="02" t="They put USDG to work" d="They deposit into a curated pool; the deployed liquidity earns real trading fees." />
-          <Step n="03" t="You both share our fee" d="On each harvest we take 10%; you get 20% of that in stable, and their fee is discounted to 9%. Never their principal." />
+          <Step n="02" t="They explore pools" d="Discover ranks candidate pools using market data and a risk score; ranking is not certification." />
+          <Step n="03" t="Rewards are retired" d="Referral links do not pay harvest-based rewards or reduce protocol fees." />
         </div>
       </div>
 
       <p className="text-[12px] mt-5" style={{ color: '#63636F' }}>
-        Robinhood testnet · rewards are illustrative and go live with the mainnet gateway · paid in stable at
-        harvest, from our fee — never a token, never your referral&rsquo;s deposit. One referrer per wallet, 24h
-        server-side gate, self-referral excluded.{' '}
+        Robinhood Chain testnet · unaudited · external audit gates real value.{' '}
         <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>

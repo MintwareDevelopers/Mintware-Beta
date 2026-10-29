@@ -1,151 +1,42 @@
 # Architecture
 
-## Three Groupings Rule (ALWAYS ENFORCE)
-
-Every feature, file, and refactor maps to one of:
+## Three groupings
 
 | Grouping | Scope |
 |---|---|
-| **Web2** | UI, fast APIs, indexing, off-chain auth |
-| **Web3** | Wallets, contracts, on-chain reads/writes, on-chain verification |
-| **Rewards** | Referrals, points, distribution, quests, claims, tokenomics, anti-abuse |
+| **Web2** | UI, APIs, indexing, off-chain authentication |
+| **Web3** | Wallets, contracts, chain reads/writes, on-chain verification |
+| **Rewards** | Referrals, points, distributions, claims, and anti-abuse |
 
-**Rewards is the core pillar.** It may call into Web2 (DB reads) and Web3 (claim tx) but lives in its own grouping.
+Canonical page, API, cron, and contract inventories are generated in [`../STATE.md`](../STATE.md). Do not hand-copy
+route lists there. Campaign issuance and the former LP Gateway mechanics are retired; RWA remains a testnet demo.
 
-Test: "Does this exist to get value to the user for their on-chain behaviour?" → yes = Rewards.
+## Main boundaries
 
-> **Canonical route lists live in [`../STATE.md`](../STATE.md)** (generated `AUTO:pages` +
-> `AUTO:crons` blocks). The tables below are the annotated, hand-maintained view. Campaigns and
-> RWA are **SHELVED** — their pages/routes were removed (archived to `docs/archive/`). Do not
-> reintroduce `/dashboard`, `/campaign/[id]`, `/swap`, `/leaderboard` at the root, or any
-> `(rewards)/campaign*` surface as if live.
+- `app/` contains Next.js App Router pages and routes; `components/` holds UI; `lib/` holds shared services and
+  domain logic.
+- `app/app/` contains guarded Personal, Team, organization, and RWA workspaces. `V2AppGate` protects guarded
+  workspaces; verify current route groups in the generated route inventory.
+- `app/api/gateway/*` is a legacy route namespace for MarketEngine discovery, curation, registry, and transaction
+  event recording. It does not expose the retired PositionManager/Staging system.
+- `contracts-v4/src/vaults/MintwareMarketEngine*.sol` implements current V1 pool liquidity. Earn and refill are
+  in `contracts-v4/src/payments/MintwareYieldVault.sol` and `MintwarePaymentGateway.sol`.
+- `lib/rewards/universal/*` and `lib/rewards/vault/*` implement current rewards processing. The former campaign
+  product is retired.
+- `components/web2/providers.tsx` configures Privy and wagmi. RainbowKit is not used.
 
-## Directory Layout
+## Current surfaces
 
-```
-app/
-  layout.tsx              # Root layout — fonts, metadata, <Providers>, <Analytics>
-  globals.css             # Tailwind base + @theme tokens + @layer components
-  page.tsx                # Landing page — Tailwind v4
-  about/ defi/ docs/ teams/                # Marketing pages (public)
-  vaults/ yield-payment-network/ agents/   # Marketing pages (public)
-  explorer/page.tsx       # Redirects to /explorer.html
-  app/                    # ▼ Retail app — bifurcates User / Team after Launch (soft gate)
-    page.tsx              # Launch entry
-    account/              # USER: Liquid Sovereign Account — the money home (auth)
-    swap/ vaults/         # USER: real LI.FI swap · vault list
-    vault/[id]/ vault/create/   # USER: vault detail / create (auth)
-    profile/                    # USER: identity — redirects into /app/account (auth)
-    agents/               # Agent parking account + x402 (spend-in-place)
-    arc/                  # Circle Arc settlement demo
-    team/                 # TEAM: treasury terminal
-      page.tsx            #   Overview
-      vaults/ swap/ cards/ policy/ team/ developers/
-  (web3)/
-    agent/[address]/      # Agent detail (auth)
-    agents/leaderboard/   # Agent leaderboard — ERC-8004
-  (rewards)/
-    vaults/               # /vaults marketing surface
-    ref/[code]/           # Referral capture → redirect
+The detailed route inventory lives in `STATE.md`'s generated `AUTO:pages` block. Product behavior and status live
+in [`lp-gateway.md`](lp-gateway.md), [`payments-ypn.md`](payments-ypn.md), and [`rwa-liquidity.md`](rwa-liquidity.md).
+All contract products are testnet-only and unaudited; external audit gates real value.
 
-components/
-  marketing/  ui/  ui2/  vaults/
-  web2/
-    AppShell.tsx (ONE chrome for every /app workspace: Personal / Team / RWA)  ScopeSwitcher.tsx (workspace switcher)
-    MwNav.tsx (marketing + standalone pages only)  MwFooter.tsx  MwAuthGuard.tsx  AppMode.tsx
-    TeamGuard.tsx  useTeamSession.ts  CommandPalette.tsx  LaunchModal.tsx
-    providers.tsx         # Privy + wagmi provider tree (NOT RainbowKit)
-  web3/  rewards/referral/
+## Design notes
 
-lib/
-  web2/api.ts             # API base URL + shared helpers
-  web3/wagmi.ts           # @privy-io/wagmi createConfig (NOT getDefaultConfig)
-  web3/useMintwareIdentity.ts
-  rewards/universal/*     # live rewards pipeline (campaign engine shelved)
-  rewards/vault/weighted* # vault-weighted epoch rails
-  attribution/*  x402/*  auth/*  eas.ts  supabase.ts
-
-app/api/
-  (web2)/    attribution/score-v2 · swap/quote · vault(s) · waitlist
-  (web3)/    agents/* · wallet-link
-  (rewards)/ referral(/apply) · auth/connect
-             cron/* (universal-*, vault-*, treasury) · universal/trade-signal
-             vault/{deposit,withdraw,weighted-claim,attribution-snapshot}
-  (admin)/   oracle/* (testnet deploy + smoke helpers)
-  x402/      account · score · scores · supported · verify · settle
-  team/session
-
-public/
-  explorer.html           # Static D3 explorer
-  .well-known/
-    agent.json  erc8004-registration.json  agent-reputation-oracle.json  x402.json
-```
-
-## Pages Reference
-
-Auth = `MwAuthGuard` (soft-gate today; dev bypass when `NODE_ENV === 'development'`). The
-User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` (default off).
-
-### Marketing / public (no auth)
-
-| Route | File |
-|---|---|
-| `/` | `app/page.tsx` |
-| `/about` · `/defi` · `/docs` · `/teams` | `app/{about,defi,docs,teams}/page.tsx` |
-| `/vaults` | `app/(rewards)/vaults/page.tsx` |
-| `/yield-payment-network` | `app/yield-payment-network/page.tsx` |
-| `/the-math` | `app/the-math/page.tsx` — interactive yield-engine simulator (floor + fees + MEV stack, take-home vs a fund, real DeFi precedents). Footer-linked as "The Math"; the on-platform home of the value-prop model. |
-| `/agents` | `app/agents/page.tsx` (public — leads with earn + x402) |
-| `/agents/leaderboard` | `app/(web3)/agents/leaderboard/page.tsx` (auth) |
-| `/agent/[address]` | `app/(web3)/agent/[address]/page.tsx` (auth) |
-| `/explorer` | `app/explorer/page.tsx` → redirects to `/explorer.html` |
-| `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
-| `/legal` | `app/legal/page.tsx` — **PUBLIC** "Legal & Disclosures" page (no auth): non-custodial-software positioning, five bright lines, partner licence map, Delaware-LLC entity note, and user-facing risk disclosures. `/proof`-doc style, light-only, footer-linked as "Legal". Information, not legal advice; nothing on it is an offer. (Internal risk-register/counsel content was removed when it was made public.) |
-
-### Retail app `/app/*` (User / Team split)
-
-| Route | File | Tier | Auth |
-|---|---|---|---|
-| `/app` | `app/app/page.tsx` | entry | No |
-| `/app/account` | `app/app/account/page.tsx` | User — Liquid Sovereign Account | Yes |
-| `/app/swap` | `app/app/swap/page.tsx` | User | No |
-| `/app/vaults` | `app/app/vaults/page.tsx` | User | No |
-| `/app/vault/[id]` | `app/app/vault/[id]/page.tsx` | User | Yes |
-| `/app/vault/create` | `app/app/vault/create/page.tsx` | User | Yes |
-| `/app/profile` | `app/app/profile/page.tsx` | User — identity | Yes |
-| `/app/agents` | `app/app/agents/page.tsx` | Agent parking account + x402 | No |
-| `/app/arc` | `app/app/arc/page.tsx` | Circle Arc settlement demo | No |
-| `/app/team` | `app/app/team/page.tsx` | Team — Overview | No |
-| `/app/team/{vaults,swap,cards,policy,team,developers}` | `app/app/team/*/page.tsx` | Team treasury terminal | No |
-
-## Key Design Decisions
-
-1. **`'use client'` on interactive pages** — Privy/wagmi hooks require it. Explorer redirect is the RSC exception.
-2. **Privy is the single wallet layer** — RainbowKit was removed (PR #175). Provider tree in `components/web2/providers.tsx`; wagmi via `@privy-io/wagmi` `createConfig`. See `.claude/rules/web3.md`.
-3. **User/Team split is soft-gated today** — the retail app forks into User + Team after Launch; hard gating (Privy RBAC + middleware + `verifyPrivySession`) is flag-gated on `TEAM_HARD_GATE` (default off = showcase). See `.claude/STATE.md`.
-4. **Campaigns + RWA shelved** — the campaign dashboard/claim/`/campaign/[id]` surface and RWA pages were removed and archived. The live rewards path is the universal pipeline (`lib/rewards/universal/*`) + vault-weighted epoch rails.
-5. **shadcn/ui exists but unused** — scaffolded at init; app uses custom CSS + `components/ui`/`ui2`.
-6. **Explorer stays static** — D3 complexity; `/explorer` redirects to `/public/explorer.html`.
-7. **Dev auth bypass** — `MwAuthGuard` skips redirect when `NODE_ENV === 'development'`.
-8. **Attribution's human-facing surface was gutted 2026-08-28** — `/attribution` marketing page,
-   `/app/leaderboard`, `/[address]` public wallet lookup, EAS score-attestation UI (`AttestationBadge`),
-   and the fabricated swap-widget score preview are all removed. The scoring engine
-   (`lib/attribution/*`, `/api/attribution/score-v2`) and its two live reward-weighting consumers
-   (vault-weighted epoch close, universal pipeline rebate gating) are untouched — direction is to
-   reface Attribution toward AI-agent reputation for the x402/ERC-8004 economy, not human display.
-   `AttributionScorePreview`/`app/[address]`/`app/api/(rewards)/eas/attest-score` no longer exist —
-   don't recreate them. See memory `attribution_review_2026_08_28`.
-9. **One app shell for every workspace (2026-10-02).** Personal, Team and RWA all render inside `AppShell`
-   (sidebar with the workspace switcher on top + top bar with the wallet control); only the sidebar menu changes.
-   Personal routes live in the `app/app/(personal)/` route group (URLs unchanged) with one layout; Team keeps
-   `TeamTerminalShell` (now a thin AppShell config); RWA has `app/app/rwa/layout.tsx`. The menu is visible whether or
-   not a wallet is connected. `MwNav` remains only for marketing/standalone pages (`/agents/leaderboard`, `/docs`, …,
-   and the org invite-accept page). The marketing footer is hidden on every shell route (`isAppShellPath`).
-10. **IA audit + V2 gate (2026-10-02).** (a) **All of `/app` is behind the V2 password** — `components/web2/V2AppGate.tsx`
-   (server) wraps every workspace layout (`(personal)`, `team`, `org/(guarded)`, `org/[slug]/(guarded)`, `rwa`) and
-   renders `V2Access` instead of the page until `lib/v2/gate.ts#hasV2Unlock` passes. Stricter than `isV2FromCookie`
-   (true for everyone while `NEXT_PUBLIC_V1_MODE_ENABLED` is off), which is what let deep links skip the Launch modal's
-   password. `/app/org/[slug]/accept` stays ungated (invitees). (b) **Token-issuer flows are Team jobs**: the
-   liquidity router, community-matched launch, seed-a-pool (vault create) and staged single side moved from Personal to
-   `app/app/team/liquidity/{page,launch,create,staged}` (old `/app/liquidity*` + `/app/vault/create` redirect in
-   `next.config.mjs`). Personal is retail-only: Account · Swap · Earn (Vaults, LP Gateway ↗ /v1) · Agent account.
+1. Interactive wallet pages use client components where Privy/wagmi hooks are needed.
+2. `proxy.ts`, `TeamGuard`, and `V2AppGate` implement separate route and workspace gates; check their code before
+   changing access claims.
+3. Personal, Team, organization, and RWA workspaces share the `AppShell` family.
+4. The explorer is static at `public/explorer.html`; `/explorer` redirects there.
+5. Keep archived product designs clearly historical. A source file or retained deployed contract does not make a
+   retired product current.

@@ -2,6 +2,15 @@
 
 Source of truth: `docs/schema.sql`
 
+## MarketEngine tables (current)
+
+The former LP Gateway position, fee-ledger, alert, snapshot, and cost-basis tables were dropped on 2026-10-29.
+The retained MarketEngine tables are `gateway_instances` (including MarketEngine address/code-hash columns),
+`gateway_instance_history`, `gateway_pool_requests`, and `market_engine_tx_events`. Registry/history/request
+names retain the `gateway_` prefix for compatibility. Positions are read from the engine on-chain; transaction
+events are receipt-verified and idempotent. See migration `20261028000003_remove_lp_gateway.sql` and
+`20261028000002_market_engine_registry.sql`.
+
 ## Referral Tables
 
 **`wallet_profiles`**
@@ -129,11 +138,11 @@ Source of truth: `docs/schema.sql`
   `lib/x402/permitStore.ts`; never browser-read. The permit is verified against the SAME scheme the
   card flow uses (`lib/org/spendPermit.ts` — domain `Mintware Payment Gateway`/`2.0`, typehash
   `DelegatedSpendPermit(address user,uint256 maxDailySpendUSDC,uint256 nonce,uint256 deadline)`).
-- `20260908000003_gateway_ledger_view_security.sql` — **security (round-3 F-1/F-7):** the two gateway fee-ledger
-  views (`gateway_fee_balances`, `gateway_fee_ledger_reconciliation`) were owner-executed views over deny-all tables
-  and therefore **readable with the public anon key**; now `security_invoker = on` + `REVOKE ALL` from `PUBLIC`/
-  `anon`/`authenticated`, and `EXECUTE` on `record_gateway_harvest` revoked from `PUBLIC` (service role only).
-  Rule: every view over an RLS table must be `security_invoker` — a plain view runs as its owner and bypasses RLS.
+- `20261028000002_market_engine_registry.sql` — adds MarketEngine verification fields to `gateway_instances`
+  and creates `market_engine_tx_events`; positions remain chain-derived.
+- `20261028000003_remove_lp_gateway.sql` — drops legacy position, cost-basis, snapshot, alert, and fee-ledger
+  tables/views and the associated RPCs. It preserves the curation/registry/history tables and card-spend data.
+- Historical Gateway fee-ledger migrations describe objects subsequently removed; they are not the current schema.
 - `20261028000001_drop_dead_tables.sql` — **cleanup (Disk IO / memory pressure on the Free instance):** drops 18
   relations nothing on `main` references — `participants`, `campaign_leaderboard` (view), `campaign_payouts`,
   `epoch_state`, `swap_events`, `swap_quotes`, `token_pool_deductions`, `vault_deals`/`vault_issuers`/

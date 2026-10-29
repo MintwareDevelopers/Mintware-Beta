@@ -74,7 +74,7 @@ export default function PayPage({ params }: { params: Promise<{ slug: string }> 
       <div className="max-w-[560px] mx-auto">
         <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {orgName || 'Org'}</Link>
         <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Pay a vendor</h1>
-        <p className="text-[13px] text-ink-mid mt-1.5">Straight from the treasury — no idle float. Authorized against your role cap and the treasury's live balance.</p>
+        <p className="text-[13px] text-ink-mid mt-1.5">Straight from the treasury — no idle float. Authorized against your role cap and the treasury&apos;s live balance.</p>
 
         {perm === 'denied' ? (
           <div className="soft-card p-6 mt-6 text-[13.5px] text-ink-mid leading-[1.55]">
@@ -111,7 +111,7 @@ export default function PayPage({ params }: { params: Promise<{ slug: string }> 
 
             {result && <div className={`mt-4 rounded-[var(--radius-card)] border p-4 text-[13px] leading-[1.5] ${result.ok ? 'border-[rgba(42,158,138,0.3)] bg-mw-green-muted text-ink' : 'border-[rgba(194,83,122,0.3)] bg-white text-ink'}`}>{result.text}</div>}
 
-            <p className="text-[11.5px] text-ink-soft mt-6">Cross-chain payments route via Circle CCTP. Testnet-only, unaudited — no real value moves.</p>
+            <p className="text-[11.5px] text-ink-soft mt-6">Arc/CCTP cross-chain settlement is retired. This treasury payment surface is testnet-only and unaudited.</p>
           </>
         )}
       </div>
