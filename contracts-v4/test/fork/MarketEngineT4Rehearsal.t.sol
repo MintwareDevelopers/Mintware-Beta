@@ -32,7 +32,12 @@ contract MarketEngineT4RehearsalTest is Test {
     uint256 constant Q96 = 1 << 96;
 
     function test_full_funded_market_rehearsal() external {
-        vm.createSelectFork(vm.envString("BASE_SEPOLIA_RPC_URL"));
+        string memory rpc = vm.envOr("BASE_SEPOLIA_RPC_URL", string(""));
+        if (bytes(rpc).length == 0) {
+            vm.skip(true, "BASE_SEPOLIA_RPC_URL is unset");
+            return;
+        }
+        vm.createSelectFork(rpc);
         assertEq(block.chainid, FORK_CHAIN_ID);
         assertEq(MODULE.codehash, MODULE_HASH, "lifecycle module hash mismatch");
         // Existing Chainlink ratio mark is stale on this pinned fork (its quote feed is over ten

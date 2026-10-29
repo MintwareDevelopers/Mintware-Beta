@@ -15,7 +15,6 @@
 // =============================================================================
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
 
 const LABEL = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
@@ -49,8 +48,7 @@ type AmplifyData = {
   stats: { count: number; tvlUsd: number; surfaces: number; live: boolean }
   leaderboard: LbVault[]
 }
-const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-const isRealId = (id: string) => /^0x[0-9a-fA-F]{40}$/.test(id) || isUuid(id)
+const isRealId = (id: string) => /^0x[0-9a-fA-F]{40}$/.test(id) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 
 function SectionHead({ n, label, title, sub, onDark }: { n: string; label: string; title: string; sub?: string; onDark?: boolean }) {
   return (
@@ -343,8 +341,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
         ) : (
           rows.map((v, i) => {
             const real = isRealId(v.id)
-            const clickable = isUuid(v.id) // approved vaults resolve at /vault/[id]
-            const rowClass = `grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-3.5 ${i < rows.length - 1 ? 'border-b border-hair-soft' : ''}${clickable ? ' hover:bg-ground-cool no-underline text-inherit' : ''}`
+            const rowClass = `grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-3.5 ${i < rows.length - 1 ? 'border-b border-hair-soft' : ''}`
             const inner = (
               <>
                 <div className="text-[15px] font-semibold text-ink-soft tabular-nums">{i + 1}</div>
@@ -354,7 +351,6 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
                   <span className={`text-[9px] uppercase tracking-[0.1em] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${real ? 'border-[rgba(108,108,240,0.3)] text-peri-deep' : 'border-hair text-ink-soft'}`}>
                     {real ? 'Live' : 'Example'}
                   </span>
-                  {clickable && <span className="text-[11px] text-ink-soft max-[720px]:hidden">↗</span>}
                 </div>
                 <div className="max-[720px]:hidden text-[12px] text-peri-deep font-medium">
                   {v.surface}
@@ -368,9 +364,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
                 </div>
               </>
             )
-            return clickable
-              ? <Link key={v.id} href={`/app/vault/${v.id}`} className={rowClass}>{inner}</Link>
-              : <div key={v.id} className={rowClass}>{inner}</div>
+            return <div key={v.id} className={rowClass}>{inner}</div>
           })
         )}
       </div>

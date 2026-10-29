@@ -9,7 +9,7 @@ const admin: GateSession = { authenticated: true, role: 'admin' }
 
 describe('evaluateGate — flag off (showcase)', () => {
   it('never redirects when the hard gate is disabled', () => {
-    for (const path of ['/app/team', '/app/team/cards', '/app/account', '/app/vaults']) {
+    for (const path of ['/app/team', '/app/team/cards', '/app/account', '/app/agents']) {
       expect(evaluateGate(path, anon, { hardGateEnabled: false })).toEqual({ action: 'allow' })
     }
   })
@@ -17,7 +17,7 @@ describe('evaluateGate — flag off (showcase)', () => {
 
 describe('evaluateGate — flag on', () => {
   it('allows unprotected app paths for anyone', () => {
-    expect(evaluateGate('/app/vaults', anon, ON)).toEqual({ action: 'allow' })
+    expect(evaluateGate('/app/agents', anon, ON)).toEqual({ action: 'allow' })
     expect(evaluateGate('/app/swap', anon, ON)).toEqual({ action: 'allow' })
     expect(evaluateGate('/app/leaderboard', anon, ON)).toEqual({ action: 'allow' })
   })

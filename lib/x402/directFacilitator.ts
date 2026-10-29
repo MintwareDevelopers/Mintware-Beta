@@ -2,8 +2,7 @@
 // signature + structural check (recipient == payTo, amount, window, valid EIP-3009 signature); there is NO
 // NAV hold, because the payer isn't parking capital in a vault — they just pay. `settle` submits the signed
 // transfer straight to the seller's wallet (lib/x402/directSettler.ts). This is the safer/simpler model when
-// the seller only wants the fee; the vault-backed YpnFacilitator (edge-auth hold → settleSpend) is the
-// separate "payer's capital keeps earning" product. Select with X402_SETTLE_PROVIDER=direct.
+// the seller only wants the fee. Select with X402_SETTLE_PROVIDER=direct.
 
 import { PaymentRequirements, PaymentPayload, VerifyResult, SettleResult } from './types'
 import { checkPayloadAgainst } from './protocol'
@@ -33,7 +32,7 @@ export class DirectFacilitator implements Facilitator {
   }
 
   async settle(reqs: PaymentRequirements, payload: PaymentPayload): Promise<SettleResult> {
-    // permit/edge are ignored in the direct model (no DelegatedSpendPermit / settleSpend).
+    // Direct settlement uses only the payer's EIP-3009 payment authorization.
     const res = await this.cfg.settler.settle({ payload, reqs })
     const result = { success: res.success, txHash: res.txHash, network: reqs.network, errorReason: res.errorReason }
     logSettleEvent(reqs, payload, result, 'direct')

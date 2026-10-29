@@ -7,7 +7,7 @@ import { createPublicClient, http } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { requireActiveCaller } from '@/lib/org/requireActiveCaller'
 import { rpcForChain } from '@/lib/org/treasuryReader'
-import { VAULT_ABI } from '@/lib/web3/artifacts/treasuryV2'
+import { readCardFundingGateway } from '@/lib/org/cardFundingReader'
 import { getStandingForWallet } from '@/lib/org/standing'
 
 export const dynamic = 'force-dynamic'
@@ -27,19 +27,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (error) return ctx.json({ error: 'query_failed' }, 500)
 
       // The gateway address + chain id are the EIP-712 domain a member signs to activate their card
-      // (DelegatedSpendPermit — see the activate route). Read live off the vault, not cached, so a
+      // (funding destination Gateway). Read live off the vault, not cached, so a
       // redeployed gateway never gets a stale domain silently signed against.
       let gateway: { address: string; chainId: number } | null = null
-      if (auth.org.treasury_vault_address && auth.org.treasury_chain_id) {
-        const rpcUrl = rpcForChain(auth.org.treasury_chain_id)
+      if (auth.org.card_funding_vault_address && auth.org.card_funding_chain_id) {
+        const rpcUrl = rpcForChain(auth.org.card_funding_chain_id)
         if (rpcUrl) {
           try {
             const publicClient = createPublicClient({ transport: http(rpcUrl) })
-            const addr = await publicClient.readContract({
-              address: auth.org.treasury_vault_address as `0x${string}`,
-              abi: VAULT_ABI, functionName: 'gateway',
-            })
-            gateway = { address: addr as string, chainId: auth.org.treasury_chain_id }
+            const addr = await readCardFundingGateway(publicClient, auth.org.card_funding_vault_address as `0x${string}`, auth.org.treasury_vault_address)
+            gateway = { address: addr, chainId: auth.org.card_funding_chain_id }
           } catch { /* leave null — activation UI shows "treasury not readable" rather than guessing */ }
         }
       }

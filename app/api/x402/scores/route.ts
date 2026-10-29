@@ -80,7 +80,7 @@ export const POST = createHandler(async (req, ctx) => {
   )
 
   facilitator
-    .settle(decision.requirements, decision.payload, decision.holdId)
+    .settle(decision.requirements, decision.payload)
     .catch((e) => ctx.log.warn('x402', 'batch settle failed (deferred)', { err: String(e) }))
 
   return ctx.json({

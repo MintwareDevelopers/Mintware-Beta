@@ -30,18 +30,18 @@ import { useAccount } from 'wagmi'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
-import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
+import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { buildGatewayDepositMessage, buildGatewayWithdrawMessage } from '@/lib/web3/signedActionMessages'
-import { depositSharesQuote, withdrawLegsQuote, parsePoolState, type SerializedPoolState } from '@/lib/gateway/positionReader'
-import { applyToleranceBps } from '@/lib/gateway/v4Math'
-import { sanitizeAmountInput } from '@/lib/gateway/amountInput'
+import { applyToleranceBps } from '@/lib/marketEngine/math'
+import { sanitizeAmountInput } from '@/lib/marketEngine/amountInput'
 
 // C-6 slippage tolerance applied to every dry quote before it becomes an on-chain floor (bps).
 export const SLIPPAGE_TOLERANCE_BPS = 100
 
 type Meta = {
   positionManager: `0x${string}`; staging: `0x${string}` | null; poolAddress: string; pairLabel: string | null; chainId: number; rpcUrl: string
-  usdg: `0x${string}` | null; pairedAsset: `0x${string}` | null; pairedDecimals: number | null
+  engineAddress?: `0x${string}`; token0?: `0x${string}`; token1?: `0x${string}`; token0Decimals?: number; token1Decimals?: number
+  usdg: `0x${string}` | null; quoteAsset?: `0x${string}`; pairedAsset: `0x${string}` | null; pairedDecimals: number | null
   feePips: number | null; dynamicFee: boolean; inRange?: boolean | null; currentTick?: number | null
   source: 'registry' | 'env-fallback'; live: boolean; supportsMin: boolean | null
   // D-4: which yield source backs the staging window — 'real' earns immediately while staged, 'idle'
@@ -51,7 +51,7 @@ type Meta = {
 type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; live: boolean }
 type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
 type Position = { shares: string; positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; recorded?: boolean; costBasisComplete?: boolean; history?: Snapshot[] }
-type PositionResponse = { position: Position; poolState: SerializedPoolState | null }
+type PositionResponse = { position: Position; poolState: null; totalNav?: string; totalSupply?: string }
 type Status = 'idle' | 'quote' | 'review' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'recorded' | 'record_failed'
 type Review =
   | { kind: 'deposit'; amountAtomic: bigint; estShares: bigint; minShares: bigint; withMin: boolean }
@@ -60,6 +60,7 @@ type PendingRecord = { kind: 'deposit' | 'withdraw'; txHash: `0x${string}` }
 
 const ERC20_ABI = [
   { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 's', type: 'address' }, { name: 'v', type: 'uint256' }], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }] },
 ] as const
 
 const usd = (n: number) => (n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(2)}`)
@@ -69,7 +70,7 @@ const norm = (label: string) => label.replace(/\s*\/\s*/g, '-').toLowerCase()
 const shortId = (id: string) => (id.length > 16 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id)
 const fmtUnits = (a: bigint, decimals: number | null, symbol: string) =>
   decimals == null ? `${a.toString()} ${symbol} (raw units)` : `${Number(formatUnits(a, decimals)).toLocaleString('en-US', { maximumFractionDigits: 6 })} ${symbol}`
-const fmtShares = (a: bigint) => Number(formatUnits(a, 6)).toLocaleString('en-US', { maximumFractionDigits: 6 })
+const fmtShares = (a: bigint) => Number(formatUnits(a, 18)).toLocaleString('en-US', { maximumFractionDigits: 6 })
 
 const PANEL = { background: '#12121C', border: '1px solid rgba(255,255,255,0.07)' }
 const INNER = { background: '#0E0E16', border: '1px solid rgba(255,255,255,0.06)' }
@@ -95,7 +96,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const [review, setReview] = useState<Review | null>(null)
   const [pending, setPending] = useState<PendingRecord | null>(null)
   const [err, setErr] = useState('')
-  const [alert, setAlert] = useState<{ sinceIso: string } | null>(null)
 
   // The route param is the pool's registry key (poolId). Legacy label slugs still render metrics but
   // can never resolve a deposit target (meta 404s) — the page says so instead of guessing.
@@ -114,7 +114,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   }, [pairLabel])
 
   useEffect(() => {
-    setMetaState('loading')
     fetch(`/api/gateway/meta?pool=${encodeURIComponent(slug)}${pmQuery}`).then(async (r) => {
       const d = await r.json().catch(() => null)
       if (r.ok && d?.success) { setMeta(d.meta); setMetaState('ok') }
@@ -123,10 +122,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     fetch('/api/gateway/discover').then((r) => r.json()).then((d) => {
       const list: Metrics[] = d?.success && Array.isArray(d.pools) ? d.pools : []
       setM(list.find((p) => p.poolAddress?.toLowerCase() === decoded) ?? list.find((p) => norm(p.pairLabel) === decoded) ?? null)
-    }).catch(() => {})
-    fetch(`/api/gateway/alerts?pool=${encodeURIComponent(slug)}`).then((r) => r.json()).then((d) => {
-      const oor = (d?.alerts ?? []).find((a: { kind: string; firing: boolean; sinceIso: string }) => a.kind === 'out_of_range' && a.firing)
-      setAlert(oor ? { sinceIso: oor.sinceIso } : null)
     }).catch(() => {})
   }, [slug, decoded, pmQuery])
 
@@ -139,10 +134,14 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       const d = await r.json()
       if (!d?.success) { setPos(null); return null }
       setPos(d.position)
-      return { position: d.position, poolState: d.poolState ?? null }
+      return { position: d.position, poolState: d.poolState ?? null, totalNav: d.totalNav, totalSupply: d.totalSupply }
     } catch { setPos(null); return null }
   }, [address, slug, pmQuery])
-  useEffect(() => { void fetchPosition() }, [fetchPosition])
+  useEffect(() => {
+    if (!address) return
+    const timer = window.setTimeout(() => { void fetchPosition() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchPosition, address])
 
   // Real trailing yield, Meteora-style: 24h fees ÷ TVL, annualized. 24h fees = 24h volume × fee tier.
   const feeRate = meta?.feePips != null ? meta.feePips / 1e6 : null
@@ -195,13 +194,14 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     return (await connector.getProvider()) as import('viem').EIP1193Provider
   }
   function chainObj(mm: Meta) {
-    return { id: mm.chainId, name: 'robinhood', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [mm.rpcUrl] } } } as const
+    const name = mm.chainId === 84532 ? 'Base Sepolia' : mm.chainId === 46630 ? 'Robinhood Chain Testnet' : `Chain ${mm.chainId}`
+    return { id: mm.chainId, name, nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [mm.rpcUrl] } } } as const
   }
   async function ensureChain(eth: Awaited<ReturnType<typeof getSignerProvider>>, mm: Meta) {
     const hex = `0x${mm.chainId.toString(16)}`
+    const chain = chainObj(mm)
     try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] }) }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    catch (e) { if ((e as any)?.code === 4902) await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: 'Robinhood Chain Testnet', rpcUrls: [mm.rpcUrl], nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 } }] }); else throw e }
+    catch (e) { if ((e as { code?: number })?.code === 4902) await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: chain.name, rpcUrls: [mm.rpcUrl], nativeCurrency: chain.nativeCurrency }] }); else throw e }
   }
   async function clients(mm: Meta) {
     const eth = await getSignerProvider()
@@ -213,8 +213,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     }
   }
   function fail(e: unknown, fallback: string) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setErr((e as any)?.shortMessage ?? (e as Error)?.message ?? fallback)
+    setErr((e as (Error & { shortMessage?: string }))?.shortMessage ?? (e as Error)?.message ?? fallback)
     setStatus('idle'); setReview(null)
   }
   function requireWallet(): boolean {
@@ -240,8 +239,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       if (!res.ok || !d?.success) throw new Error(d?.error ?? `record_failed_${res.status}`)
       setStatus('recorded'); setPending(null)
     } catch (e) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setErr(`Recording failed (${(e as any)?.shortMessage ?? (e as Error)?.message ?? 'unknown'}). Your ${kind} is confirmed on-chain and your funds are safe — retry to record it.`)
+      setErr(`Recording failed (${(e as (Error & { shortMessage?: string }))?.shortMessage ?? (e as Error)?.message ?? 'unknown'}). Your ${kind} is confirmed on-chain and your funds are safe — retry to record it.`)
       setStatus('record_failed')
     } finally {
       void fetchPosition()
@@ -261,19 +259,27 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     if (atomic <= 0n) { setErr('Enter an amount.'); return }
     setStatus('quote')
     try {
-      const fresh = await fetchPosition()
-      const st = fresh?.poolState ? parsePoolState(fresh.poolState) : null
-      if (!st) {
-        if (withMinAvailable) throw new Error('Couldn’t read the pool’s live state to price a floor — try again in a moment.')
-        setReview({ kind: 'deposit', amountAtomic: atomic, estShares: 0n, minShares: 0n, withMin: false })
-        setStatus('review'); return
+      const { eth, wallet, pub } = await clients(meta)
+      const target = meta.engineAddress ?? meta.positionManager
+      setStatus('switch'); await ensureChain(eth, meta)
+      const allowance = await pub.readContract({ address: meta.usdg!, abi: ERC20_ABI, functionName: 'allowance', args: [address as `0x${string}`, target] })
+      if (BigInt(allowance) < atomic) {
+        setStatus('approve')
+        const approval = await wallet.writeContract({ address: meta.usdg!, abi: ERC20_ABI, functionName: 'approve', args: [target, atomic] })
+        const receipt = await pub.waitForTransactionReceipt({ hash: approval })
+        if (receipt.status !== 'success') throw new Error('Token approval failed. No deposit was made.')
       }
-      const estShares = depositSharesQuote(atomic, st.totalShares, st.totalNav)
+      const quoteIs0 = meta.quoteAsset?.toLowerCase() === meta.token0?.toLowerCase()
+      const simulation = await pub.simulateContract({ address: target, abi: MARKET_ENGINE_ABI, functionName: 'deposit', account: address as `0x${string}`, args: [quoteIs0 ? atomic : 0n, quoteIs0 ? 0n : atomic, 0n] })
+      const estShares = BigInt(simulation.result)
       if (estShares <= 0n) throw new Error('Amount is too small to mint any shares at the current NAV.')
       const minShares = applyToleranceBps(estShares, SLIPPAGE_TOLERANCE_BPS)
       setReview({ kind: 'deposit', amountAtomic: atomic, estShares, minShares, withMin: withMinAvailable })
       setStatus('review')
-    } catch (e) { fail(e, 'Could not price the deposit') }
+    } catch (e) {
+      const message = (e as (Error & { shortMessage?: string }))?.shortMessage ?? (e as Error)?.message
+      fail(new Error(message ? `Could not quote this deposit from the MarketEngine: ${message}` : 'The MarketEngine could not quote this amount. Check the amount and try again.'), 'Could not quote this amount from the MarketEngine.')
+    }
   }
   async function confirmDeposit() {
     if (!meta || !review || review.kind !== 'deposit' || !meta.usdg) return
@@ -281,13 +287,9 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     try {
       const { eth, wallet, pub } = await clients(meta)
       setStatus('switch'); await ensureChain(eth, meta)
-      setStatus('approve')
-      const ah = await wallet.writeContract({ address: meta.usdg, abi: ERC20_ABI, functionName: 'approve', args: [meta.positionManager, review.amountAtomic] })
-      await pub.waitForTransactionReceipt({ hash: ah })
       setStatus('deposit')
-      const dh = review.withMin
-        ? await wallet.writeContract({ address: meta.positionManager, abi: LP_GATEWAY_ABI, functionName: 'depositWithMin', args: [review.amountAtomic, review.minShares] })
-        : await wallet.writeContract({ address: meta.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deposit', args: [review.amountAtomic] })
+      const quoteIs0 = meta.quoteAsset?.toLowerCase() === meta.token0?.toLowerCase()
+      const dh = await wallet.writeContract({ address: meta.engineAddress ?? meta.positionManager, abi: MARKET_ENGINE_ABI, functionName: 'deposit', args: [quoteIs0 ? review.amountAtomic : 0n, quoteIs0 ? 0n : review.amountAtomic, review.minShares] })
       const rc = await pub.waitForTransactionReceipt({ hash: dh })
       if (rc.status !== 'success') throw new Error('Deposit reverted — nothing moved (a floor not met reverts the whole tx).')
       setAmount(''); setReview(null)
@@ -306,19 +308,18 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       const shares = fresh?.position?.shares != null ? BigInt(fresh.position.shares) : 0n
       const toBurn = (shares * BigInt(wpct)) / 100n
       if (toBurn <= 0n) throw new Error('Nothing to withdraw.')
-      const st = fresh?.poolState ? parsePoolState(fresh.poolState) : null
-      if (!st) {
-        if (withMinAvailable) throw new Error('Couldn’t read the pool’s live state to price a floor — try again in a moment.')
-        setReview({ kind: 'withdraw', sharesToBurn: toBurn, estQuote: 0n, estPaired: 0n, minQuote: 0n, minPaired: 0n, lpQuotable: false, withMin: false })
-        setStatus('review'); return
-      }
-      const legs = withdrawLegsQuote(toBurn, st)
+      const { pub } = await clients(meta)
+      const simulation = await pub.simulateContract({ address: meta.engineAddress ?? meta.positionManager, abi: MARKET_ENGINE_ABI, functionName: 'withdraw', account: address as `0x${string}`, args: [toBurn, address as `0x${string}`, 0n, 0n] })
+      const legs = simulation.result as readonly [bigint, bigint, bigint]
+      const quoteIs0 = meta.quoteAsset?.toLowerCase() === meta.token0?.toLowerCase()
+      const quoteAmount = quoteIs0 ? legs[1] : legs[2]
+      const pairedAmount = quoteIs0 ? legs[2] : legs[1]
       setReview({
         kind: 'withdraw', sharesToBurn: toBurn,
-        estQuote: legs.quoteOut, estPaired: legs.pairedOut,
-        minQuote: applyToleranceBps(legs.quoteOut, SLIPPAGE_TOLERANCE_BPS),
-        minPaired: legs.lpQuotable ? applyToleranceBps(legs.pairedOut, SLIPPAGE_TOLERANCE_BPS) : 0n,
-        lpQuotable: legs.lpQuotable, withMin: withMinAvailable,
+        estQuote: quoteAmount, estPaired: pairedAmount,
+        minQuote: applyToleranceBps(quoteAmount, SLIPPAGE_TOLERANCE_BPS),
+        minPaired: applyToleranceBps(pairedAmount, SLIPPAGE_TOLERANCE_BPS),
+        lpQuotable: true, withMin: true,
       })
       setStatus('review')
     } catch (e) { fail(e, 'Could not price the withdrawal') }
@@ -330,9 +331,8 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       const { eth, wallet, pub } = await clients(meta)
       setStatus('switch'); await ensureChain(eth, meta)
       setStatus('withdraw')
-      const wh = review.withMin
-        ? await wallet.writeContract({ address: meta.positionManager, abi: LP_GATEWAY_ABI, functionName: 'withdrawWithMin', args: [review.sharesToBurn, review.minQuote, review.minPaired] })
-        : await wallet.writeContract({ address: meta.positionManager, abi: LP_GATEWAY_ABI, functionName: 'withdraw', args: [review.sharesToBurn] })
+      const quoteIs0 = meta.quoteAsset?.toLowerCase() === meta.token0?.toLowerCase()
+      const wh = await wallet.writeContract({ address: meta.engineAddress ?? meta.positionManager, abi: MARKET_ENGINE_ABI, functionName: 'withdraw', args: [review.sharesToBurn, address as `0x${string}`, quoteIs0 ? review.minQuote : review.minPaired, quoteIs0 ? review.minPaired : review.minQuote] })
       const rc = await pub.waitForTransactionReceipt({ hash: wh })
       if (rc.status !== 'success') throw new Error('Withdraw reverted — nothing moved (a floor not met reverts the whole tx).')
       setReview(null)
@@ -398,16 +398,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         </div>
       )}
 
-      {alert && (
-        <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px] flex items-start gap-2.5" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
-          <span>⚠</span>
-          <span>
-            <span style={{ fontWeight: 600 }}>Out of range ~{Math.max(1, Math.round((Date.now() - Date.parse(alert.sinceIso)) / 36e5))}h — LP fees paused.</span>{' '}
-            <span style={{ color: '#9B9BAD' }}>Your position is still fully deployed (no yield accrues while out of range); fees resume automatically when price re-enters the range.</span>
-          </span>
-        </div>
-      )}
-
       <div className="grid gap-5 mt-6 grid-cols-1 min-[900px]:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]">
         {/* LEFT: pool info */}
         <div className="rounded-[16px] p-6 min-[900px]:order-1 order-2" style={PANEL}>
@@ -459,9 +449,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           {/* explorers */}
           {(meta || m) && (() => {
             const id = meta?.poolAddress ?? m!.poolAddress
+            const explorerBase = meta?.chainId === 84532 ? 'https://sepolia.basescan.org' : meta?.chainId === 46630 ? 'https://robinhoodchain.blockscout.com' : null
             return (
               <div className="flex gap-3 mt-5 flex-wrap text-[12.5px]">
-                {meta && <a href={`https://robinhoodchain.blockscout.com/address/${meta.positionManager}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Gateway on Explorer ↗</a>}
+                {meta && explorerBase && <a href={`${explorerBase}/address/${meta.positionManager}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Gateway on Explorer ↗</a>}
                 <a href={`https://www.geckoterminal.com/robinhood/pools/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>GeckoTerminal ↗</a>
                 <a href={`https://dexscreener.com/robinhood/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>DEXScreener ↗</a>
               </div>

@@ -1,6 +1,6 @@
 import { createHandler } from '@/lib/web2/routeHandler'
-import { gatewayConfig } from '@/lib/gateway/chain'
 import { discoverAndIngest } from '@/lib/gateway/discovery'
+import { marketEngineConfig } from '@/lib/gateway/marketEngine'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 // zeros rather than a 500, so the queue is left untouched (no prune on a failed read).
 export const POST = createHandler(
   async (_req, ctx) => {
-    const cfg = gatewayConfig()
+    const cfg = marketEngineConfig()
     if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
     const res = await discoverAndIngest({ supabase: ctx.supabase, chainId: cfg.chainId, log: ctx.log })
     if (res.upstream === 'error') ctx.log.warn('gateway.discover', 'upstream read failed — queue untouched', { ...res })

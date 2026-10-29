@@ -1,5 +1,5 @@
 // Shared "is this caller an active member (or the owner) of this org" check — used by every card
-// route that needs it (issue, list, simulate-swipe, settle). Pulled out once these routes started
+// route that needs it (list, settle). Pulled out once these routes started
 // duplicating it rather than let the copies drift.
 
 import { policyForRole, type RolePolicy } from '@/lib/org/rolePresets'
@@ -12,6 +12,8 @@ export type OrgRow = {
   owner_wallet: string
   treasury_vault_address: string | null
   treasury_chain_id: number | null
+  card_funding_vault_address: string | null
+  card_funding_chain_id: number | null
 }
 
 export type ActiveCallerResult =
@@ -26,7 +28,7 @@ export async function requireActiveCaller(
   const caller = callerAddress.toLowerCase()
   const { data: org } = await supabase
     .from('orgs')
-    .select('id, owner_wallet, treasury_vault_address, treasury_chain_id')
+    .select('id, owner_wallet, treasury_vault_address, treasury_chain_id, card_funding_vault_address, card_funding_chain_id')
     .eq('id', orgId)
     .single()
   if (!org) return { error: 'org not found', status: 404 }

@@ -10,7 +10,7 @@ import {
 
 const fresh: OnboardState = {
   cardIssued: false,
-  permitSigned: false,
+  destinationRegistered: false,
   approvalGranted: false,
   bufferPrimed: false,
   liveProvisioned: false,
@@ -27,7 +27,7 @@ describe('card onboarding — ordered sequence', () => {
       seen.push(n)
       s = step({
         cardIssued: s.cardIssued || n === 'issue_card',
-        permitSigned: s.permitSigned || n === 'sign_permit',
+        destinationRegistered: s.destinationRegistered || n === 'register_destination',
         approvalGranted: s.approvalGranted || n === 'grant_approval',
         bufferPrimed: s.bufferPrimed || n === 'prime_buffer',
         liveProvisioned: s.liveProvisioned || n === 'go_live',
@@ -37,35 +37,35 @@ describe('card onboarding — ordered sequence', () => {
     expect(onboardComplete(s)).toBe(true)
   })
 
-  it('marks sign_permit as the one member step', () => {
-    expect(isMemberStep('sign_permit')).toBe(true)
+  it('marks register_destination as the one member step', () => {
+    expect(isMemberStep('register_destination')).toBe(true)
     expect(isMemberStep('grant_approval')).toBe(false)
     expect(isMemberStep('prime_buffer')).toBe(false)
   })
 
   it('requires the permit BEFORE the buffer can be primed', () => {
-    // issued but no permit → next is sign_permit, never prime
-    expect(nextOnboardStep(step({ cardIssued: true }))).toBe('sign_permit')
+    // issued but no permit → next is register_destination, never prime
+    expect(nextOnboardStep(step({ cardIssued: true }))).toBe('register_destination')
   })
 })
 
 describe('card onboarding — cold-decline (go-live) guard', () => {
   it('blocks go-live until the buffer is primed', () => {
     expect(
-      goLiveBlocked(step({ cardIssued: true, permitSigned: true, approvalGranted: true, bufferPrimed: false })),
+      goLiveBlocked(step({ cardIssued: true, destinationRegistered: true, approvalGranted: true, bufferPrimed: false })),
     ).toBe('buffer not primed')
-    expect(nextOnboardStep(step({ cardIssued: true, permitSigned: true, approvalGranted: true }))).toBe('prime_buffer')
+    expect(nextOnboardStep(step({ cardIssued: true, destinationRegistered: true, approvalGranted: true }))).toBe('prime_buffer')
   })
 
   it('reports the earliest missing precondition', () => {
     expect(goLiveBlocked(fresh)).toBe('card not issued')
-    expect(goLiveBlocked(step({ cardIssued: true }))).toBe('permit not signed')
-    expect(goLiveBlocked(step({ cardIssued: true, permitSigned: true }))).toBe('approval not granted')
+    expect(goLiveBlocked(step({ cardIssued: true }))).toBe('funding destination not registered')
+    expect(goLiveBlocked(step({ cardIssued: true, destinationRegistered: true }))).toBe('approval not granted')
   })
 
   it('allows go-live once fully primed, and is a no-op when already live', () => {
     expect(
-      goLiveBlocked(step({ cardIssued: true, permitSigned: true, approvalGranted: true, bufferPrimed: true })),
+      goLiveBlocked(step({ cardIssued: true, destinationRegistered: true, approvalGranted: true, bufferPrimed: true })),
     ).toBeNull()
     expect(goLiveBlocked(step({ liveProvisioned: true, bufferPrimed: false }))).toBeNull()
   })

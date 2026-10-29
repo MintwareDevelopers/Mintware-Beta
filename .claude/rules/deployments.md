@@ -200,7 +200,6 @@ exist as bearer routes and run only when hit manually with `CRON_SECRET` (and th
 | `/api/cron/vault-weighted-epoch-close` | `0 1 * * 1` |
 | `/api/cron/farcaster-weekly-cast` | `0 2 * * 1` |
 | `/api/cron/gateway-discover` | `0 5 * * *` |
-| `/api/cron/gateway-snapshot` | `0 6 * * *` |
 <!-- /AUTO:crons -->
 
 ⚠ **Legacy (Hobby) note:** "max once/day per cron" applied on Hobby. With **5 crons live in `vercel.json`**

@@ -2,7 +2,7 @@
 //
 // Unlike the Lithic ASA route, we do NOT authorize here (Bridge does, at its own pull time). This route
 // only reacts to POSTED movements: a spend resyncs the cached buffer balance from chain and tops it back
-// up (Gateway.refillBuffer redeeming a vault slice); a refund resyncs only. All the decision logic is in
+// up (Gateway.refill redeeming a vault slice); a refund resyncs only. All the decision logic is in
 // lib/org/bridgeReconcile.ts; verification/normalization in lib/cards/bridgeClient.ts.
 //
 // Replay defense (audit): verifyBridgeWebhook rejects events outside a freshness window; this route

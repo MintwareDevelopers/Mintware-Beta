@@ -57,7 +57,7 @@ function SwapContent() {
           <div className="max-w-[520px]">
             <div className={`${LABEL} mb-3`}>The other surface</div>
             <Link
-              href="/app/vaults"
+              href="/v1"
               className="block soft-card px-5 py-4 transition-colors hover:border-[rgba(232,138,103,0.4)]"
               style={{ borderLeft: '3px solid var(--color-coral2)' }}
             >

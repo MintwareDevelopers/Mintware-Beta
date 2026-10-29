@@ -1,7 +1,7 @@
 'use client'
 
 // Curator dashboard — the auto-surfaced candidate queue (ranked safest-first) with Approve / Reject,
-// an optional "approve + register" (deployed PM + staging addresses → on-chain verified against the
+// an optional "approve + register" (deployed MarketEngine address → on-chain verified against the
 // trust root), and a live-instance list with an explicit, reasoned Deactivate.
 //
 // Audit closeout 2026-09-08 (O-3 / R-2): there is NO secret field any more. The curator connects an
@@ -30,7 +30,8 @@ type Instance = {
   chainId: number
   pairLabel: string | null
   positionManager: string
-  staging: string
+  marketEngineAddress?: string
+  staging: string | null
   status: 'active' | 'inactive'
   verification: string | null
 }
@@ -48,8 +49,7 @@ export default function CuratePage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const [registerFor, setRegisterFor] = useState<string | null>(null)
-  const [pm, setPm] = useState('')
-  const [staging, setStaging] = useState('')
+  const [engineAddress, setEngineAddress] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -68,7 +68,7 @@ export default function CuratePage() {
     requestId?: string | null
     poolAddress?: string | null
     chainId?: number | null
-    instance?: { positionManager: string; staging: string } | null
+    instance?: { marketEngineAddress: string } | null
     reason?: string
   }) {
     if (!address) throw new Error('Connect the curator wallet first.')
@@ -80,8 +80,7 @@ export default function CuratePage() {
       requestId: input.requestId ?? null,
       poolAddress: input.poolAddress ?? null,
       chainId: input.chainId ?? null,
-      positionManager: input.instance?.positionManager ?? null,
-      staging: input.instance?.staging ?? null,
+      marketEngineAddress: input.instance?.marketEngineAddress ?? null,
     })
     const authSignature = await signMessageAsync({ message: authMessage })
     const res = await fetch('/api/gateway/curate', {
@@ -109,17 +108,16 @@ export default function CuratePage() {
     setBusy(c.id)
     setMsg('')
     try {
-      const withInstance = action === 'approve' && registerFor === c.id && pm && staging
+      const withInstance = action === 'approve' && registerFor === c.id && engineAddress
       await signed({
         curateAction: action,
         requestId: c.id,
         poolAddress: c.pool_address,
         chainId: c.chain_id,
-        instance: withInstance ? { positionManager: pm.trim(), staging: staging.trim() } : null,
+        instance: withInstance ? { marketEngineAddress: engineAddress.trim() } : null,
       })
       setRegisterFor(null)
-      setPm('')
-      setStaging('')
+      setEngineAddress('')
       load()
     } catch (e) {
       setMsg(String((e as Error).message))
@@ -200,7 +198,7 @@ export default function CuratePage() {
                       disabled={busy === c.id || !isConnected}
                       className="rounded-full bg-[#16a34a] text-white text-[13px] font-semibold px-4 py-2 disabled:opacity-60"
                     >
-                      {registerFor === c.id && pm && staging ? 'Approve + register' : 'Approve'}
+                      {registerFor === c.id && engineAddress ? 'Approve + register' : 'Approve'}
                     </button>
                     <button
                       onClick={() => act(c, 'reject')}
@@ -213,7 +211,7 @@ export default function CuratePage() {
                 </div>
                 <div>
                   <button
-                    onClick={() => { setRegisterFor(registerFor === c.id ? null : c.id); setPm(''); setStaging('') }}
+                    onClick={() => { setRegisterFor(registerFor === c.id ? null : c.id); setEngineAddress('') }}
                     className="text-[12px] text-peri-deep underline underline-offset-2"
                   >
                     {registerFor === c.id ? 'Cancel register' : 'Also register the deployed instance…'}
@@ -221,20 +219,13 @@ export default function CuratePage() {
                   {registerFor === c.id && (
                     <div className="mt-2 flex flex-col gap-2">
                       <input
-                        placeholder="Deployed PositionManager (0x…)"
-                        value={pm}
-                        onChange={(e) => setPm(e.target.value)}
-                        className="py-2 px-3.5 rounded-full bg-white border border-hair text-[12.5px] font-mono outline-none focus:border-[rgba(108,108,240,0.5)]"
-                      />
-                      <input
-                        placeholder="Deployed Staging (0x…)"
-                        value={staging}
-                        onChange={(e) => setStaging(e.target.value)}
+                        placeholder="Deployed MarketEngine (0x…)"
+                        value={engineAddress}
+                        onChange={(e) => setEngineAddress(e.target.value)}
                         className="py-2 px-3.5 rounded-full bg-white border border-hair text-[12.5px] font-mono outline-none focus:border-[rgba(108,108,240,0.5)]"
                       />
                       <div className="text-[11px] text-ink-soft leading-[1.5]">
-                        Verified on-chain before anything is written: factory record or allowlisted code hash,
-                        staging wiring, platform USDG, no hooks. An already-active pool is refused — deactivate it first.
+                        Verified on-chain before anything is written: allowlisted engine code hash, pool key, quote asset, owner, and active status. An already-active pool is refused — deactivate it first.
                       </div>
                     </div>
                   )}
@@ -263,7 +254,7 @@ export default function CuratePage() {
                     </span>
                     {i.verification && <span className="text-[10.5px] font-mono text-ink-soft">via {i.verification}</span>}
                   </div>
-                  <div className="font-mono text-[11px] text-ink-soft mt-1 break-all">PM {i.positionManager} · staging {i.staging}</div>
+                  <div className="font-mono text-[11px] text-ink-soft mt-1 break-all">MarketEngine {i.marketEngineAddress ?? i.positionManager}</div>
                 </div>
                 {i.status === 'active' && (
                   <button

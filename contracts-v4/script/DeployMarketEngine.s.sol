@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Script, console2} from "forge-std/Script.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
-import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import { Script, console2 } from "forge-std/Script.sol";
+import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
+import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
+import { IHooks } from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 
-import {IMarketAdapterBinding} from "../src/vaults/IMarketAdapterBinding.sol";
-import {MintwareMarketEngine} from "../src/vaults/MintwareMarketEngine.sol";
-import {MintwareMarketEngineCore} from "../src/vaults/MintwareMarketEngineCore.sol";
-import {MintwareMarketLifecycleModule} from "../src/vaults/MintwareMarketLifecycleModule.sol";
-import {MarketEngineAdapterDeployment} from "./lib/MarketEngineAdapterDeployment.sol";
+import { IMarketAdapterBinding } from "../src/vaults/IMarketAdapterBinding.sol";
+import { MintwareMarketEngine } from "../src/vaults/MintwareMarketEngine.sol";
+import { MintwareMarketEngineCore } from "../src/vaults/MintwareMarketEngineCore.sol";
+import { MintwareMarketLifecycleModule } from "../src/vaults/MintwareMarketLifecycleModule.sol";
+import { MarketEngineAdapterDeployment } from "./lib/MarketEngineAdapterDeployment.sol";
 
 /// @notice Canonical Foundry installer for one eligible, hookless V4 market pool.
 /// @dev Creates one engine and two token-specific adapters. Existing product claim owners remain untouched.
@@ -19,12 +19,16 @@ import {MarketEngineAdapterDeployment} from "./lib/MarketEngineAdapterDeployment
 contract DeployMarketEngine is Script {
     uint256 private constant ROBINHOOD_MAINNET_CHAIN_ID = 4663;
     uint256 private constant BASE_SEPOLIA_CHAIN_ID = 84532;
+    uint256 private constant ROBINHOOD_TESTNET_CHAIN_ID = 46630;
     address private constant BASE_SEPOLIA_POOL_MANAGER = 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408;
+    address private constant ROBINHOOD_TESTNET_POOL_MANAGER =
+        0x8366a39CC670B4001A1121B8F6A443A643e40951;
 
     error MainnetRequiresDedicatedPreflight();
     error EnvValueOutOfRange(string name);
     error InvalidOwner();
     error InvalidConfiguration();
+    error UnsupportedChain(uint256 chainId);
     error InvalidAdapterSource(address asset, address source);
 
     function _uint24(string memory name) private view returns (uint24 value) {
@@ -52,7 +56,22 @@ contract DeployMarketEngine is Script {
     }
 
     function run() external {
-        if (block.chainid == ROBINHOOD_MAINNET_CHAIN_ID) revert MainnetRequiresDedicatedPreflight();
+        if (block.chainid == ROBINHOOD_MAINNET_CHAIN_ID) {
+            revert MainnetRequiresDedicatedPreflight();
+        }
+        address poolManager = vm.envAddress("MARKET_POOL_MANAGER");
+        bool testOnly = vm.envOr("MARKET_TEST_ONLY", false);
+        if (block.chainid == BASE_SEPOLIA_CHAIN_ID) {
+            if (!testOnly || poolManager != BASE_SEPOLIA_POOL_MANAGER) {
+                revert InvalidConfiguration();
+            }
+        } else if (block.chainid == ROBINHOOD_TESTNET_CHAIN_ID) {
+            if (!testOnly || poolManager != ROBINHOOD_TESTNET_POOL_MANAGER) {
+                revert InvalidConfiguration();
+            }
+        } else {
+            revert UnsupportedChain(block.chainid);
+        }
 
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
@@ -60,11 +79,6 @@ contract DeployMarketEngine is Script {
         address guardian = vm.envAddress("MARKET_GUARDIAN");
         if (owner == address(0) || guardian == address(0)) revert InvalidOwner();
 
-        address poolManager = vm.envAddress("MARKET_POOL_MANAGER");
-        if (
-            block.chainid == BASE_SEPOLIA_CHAIN_ID
-                && (!vm.envOr("MARKET_TEST_ONLY", false) || poolManager != BASE_SEPOLIA_POOL_MANAGER)
-        ) revert InvalidConfiguration();
         address currency0 = vm.envAddress("MARKET_CURRENCY0");
         address currency1 = vm.envAddress("MARKET_CURRENCY1");
         address quoteAsset = vm.envAddress("MARKET_QUOTE_ASSET");
@@ -88,11 +102,11 @@ contract DeployMarketEngine is Script {
         if (
             poolManager.code.length == 0 || currency0 >= currency1 || currency0 == address(0)
                 || currency1 == address(0) || quoteAsset == address(0) || mark.code.length == 0
-                || lifecycleModule.code.length == 0
-                || tickSpacing <= 0 || fee > 1_000_000 || maxMarkAge == 0 || maxSpotMarkDeviationBps == 0
-                || maxSpotMarkDeviationBps > 10_000 || maxPositionBps == 0 || maxPositionBps > 10_000
-                || recenterEdgeTicks <= 0 || maxRecenterTickMove <= 0 || recenterCooldown == 0
-                || (source0 != address(0) && source0.code.length == 0)
+                || lifecycleModule.code.length == 0 || tickSpacing <= 0 || fee > 1_000_000
+                || maxMarkAge == 0 || maxSpotMarkDeviationBps == 0
+                || maxSpotMarkDeviationBps > 10_000 || maxPositionBps == 0
+                || maxPositionBps > 10_000 || recenterEdgeTicks <= 0 || maxRecenterTickMove <= 0
+                || recenterCooldown == 0 || (source0 != address(0) && source0.code.length == 0)
                 || (source1 != address(0) && source1.code.length == 0)
         ) revert InvalidConfiguration();
 
@@ -105,32 +119,39 @@ contract DeployMarketEngine is Script {
         });
 
         vm.startBroadcast(deployerKey);
-        MintwareMarketEngineCore.MarketConfig memory marketConfig = MintwareMarketEngineCore.MarketConfig({
-            poolManager: poolManager,
-            poolKey: key,
-            quoteAsset: quoteAsset,
-            nonQuoteMark: mark,
-            lifecycleModule: lifecycleModule,
-            initialOwner: deployer,
-            tickLower: tickLower,
-            tickUpper: tickUpper,
-            maxMarkAge: maxMarkAge,
-            maxSpotMarkDeviationBps: maxSpotMarkDeviationBps,
-            minInitialContribution: minimumInitial,
-            principalCap: principalCap,
-            maxPositionBps: maxPositionBps,
-            recenterEdgeTicks: recenterEdgeTicks,
-            maxRecenterTickMove: maxRecenterTickMove,
-            recenterCooldown: recenterCooldown
-        });
+        MintwareMarketEngineCore.MarketConfig memory marketConfig =
+            MintwareMarketEngineCore.MarketConfig({
+                poolManager: poolManager,
+                poolKey: key,
+                quoteAsset: quoteAsset,
+                nonQuoteMark: mark,
+                lifecycleModule: lifecycleModule,
+                initialOwner: deployer,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                maxMarkAge: maxMarkAge,
+                maxSpotMarkDeviationBps: maxSpotMarkDeviationBps,
+                minInitialContribution: minimumInitial,
+                principalCap: principalCap,
+                maxPositionBps: maxPositionBps,
+                recenterEdgeTicks: recenterEdgeTicks,
+                maxRecenterTickMove: maxRecenterTickMove,
+                recenterCooldown: recenterCooldown
+            });
         MintwareMarketEngine engine = new MintwareMarketEngine(marketConfig);
 
         IMarketAdapterBinding adapter0 =
             MarketEngineAdapterDeployment.deploy(currency0, source0, address(engine), owner);
         IMarketAdapterBinding adapter1 =
             MarketEngineAdapterDeployment.deploy(currency1, source1, address(engine), owner);
-        require(adapter0.asset() == engine.token0() && adapter1.asset() == engine.token1(), "adapter asset mismatch");
-        require(adapter0.vault() == address(engine) && adapter1.vault() == address(engine), "adapter vault mismatch");
+        require(
+            adapter0.asset() == engine.token0() && adapter1.asset() == engine.token1(),
+            "adapter asset mismatch"
+        );
+        require(
+            adapter0.vault() == address(engine) && adapter1.vault() == address(engine),
+            "adapter vault mismatch"
+        );
 
         engine.configureAdapters(address(adapter0), address(adapter1));
         engine.setGuardian(guardian);
@@ -149,6 +170,8 @@ contract DeployMarketEngine is Script {
         console2.log("recenterCooldown", recenterCooldown);
         console2.log("owner", owner);
         console2.log("guardian", guardian);
-        console2.log("Engine is deployed inactive; verify the market, mark, adapters, and exit policy before activation.");
+        console2.log(
+            "Engine is deployed inactive; verify the market, mark, adapters, and exit policy before activation."
+        );
     }
 }

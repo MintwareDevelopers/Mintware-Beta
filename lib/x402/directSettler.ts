@@ -1,13 +1,11 @@
 // Direct x402 settler — the STANDARD x402 "exact" scheme: submit the payer's signed EIP-3009
 // `transferWithAuthorization` to the USDC contract so USDC moves straight from the payer to `payTo`
-// (the seller's wallet). No vault, no gateway, no `settleSpend`, no `RELAYER_ROLE`, no CCTP — a valid
+// (the seller's wallet). No vault, gateway, or on-chain role — a valid
 // EIP-3009 authorization can be submitted by ANYONE, so the submitter is a pure gas payer. We use
 // `getOracleSigner('root')` (the Privy wallet) as that gas payer to stay Privy-consistent, but it needs
 // NO on-chain role — only gas on the payment network.
 //
-// This is the right settle model when the seller just wants the fee in a wallet. The oracle/relayer
-// `settleSpend` paths (lib/x402/oracleSettler.ts / edgeHttp.httpSettler) are the heavier YPN-vault model,
-// meant for the *payer's* balance to keep earning — a different product. Select with X402_SETTLE_PROVIDER=direct.
+// This is the right settle model when the seller just wants the fee in a wallet. X402_SETTLE_PROVIDER=direct explicitly enables this payment flow.
 //
 // Self-guarding: before spending gas it re-checks the payload (recipient == payTo, amount, window) and the
 // EIP-3009 signature, so a bad request is rejected off-chain rather than reverting on-chain.

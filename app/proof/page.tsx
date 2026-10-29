@@ -5,7 +5,7 @@
 // tx hash links to a block explorer; a live read of the Arc vault's current NAV shows on-chain state now.
 // Testnet + unaudited throughout — real hashes, valueless test USDC.
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
 import { LATEST_RUN, STAGED_LIQUIDITY_RUN, LP_GATEWAY_RUN, CARD_RAIL, FORMAL_VERIFICATION, SECURITY_AUDIT, SECURITY_AUDIT_R2, SECURITY_AUDIT_R4, SECURITY_AUDIT_R5, EXPLOIT_REDTEAM, AUDIT_MATRIX, txUrl, addrUrl, shortHash, chainLabel, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
@@ -20,15 +20,7 @@ const chip = (cls: string) =>
 
 export default function ProofPage() {
   const run = LATEST_RUN
-  const [live, setLive] = useState<{ ok: boolean; totalAssetsUsdc?: string } | null>(null)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    fetch('/api/proof/vault')
-      .then((r) => r.json())
-      .then((d) => setLive(d))
-      .catch(() => setLive({ ok: false }))
-  }, [])
 
   const share = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -63,26 +55,11 @@ export default function ProofPage() {
           external audit remains the gate before real value. The hashes are real; the dollars are not.
         </div>
 
-        {/* run facts + live NAV + share */}
-        <div className="grid grid-cols-4 max-[760px]:grid-cols-2 gap-3 mt-6">
+        {/* run facts + share */}
+        <div className="grid grid-cols-3 max-[760px]:grid-cols-2 gap-3 mt-6">
           <Fact label="Run date" value={run.date} />
           <Fact label="Networks" value="Arc + Base Sepolia" />
           <Fact label="Signer" value={shortHashAddr(run.signer)} mono />
-          <div className="rounded-[16px] border border-hair bg-white shadow-card p-4">
-            <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Vault right now</div>
-            <div className="font-atx-display font-semibold text-[17px] mt-1 tabular-nums flex items-center gap-2">
-              {live == null ? (
-                <span className="text-ink-soft">reading…</span>
-              ) : live.ok ? (
-                <>
-                  <span>${live.totalAssetsUsdc}</span>
-                  <span className="live-chip"><span className="dot" aria-hidden />live</span>
-                </>
-              ) : (
-                <span className="text-ink-soft text-[13px]">unavailable</span>
-              )}
-            </div>
-          </div>
         </div>
 
         <div className="mt-4 flex items-center gap-3 flex-wrap">
@@ -126,7 +103,7 @@ export default function ProofPage() {
                     <td className="px-4 py-3">{c.name}</td>
                     <td className="px-4 py-3 text-ink-mid">Base Sepolia</td>
                     <td className="px-4 py-3">
-                      <a href={addrUrl(c.chain, c.address)} target="_blank" rel="noopener" className="font-mono text-[12px] text-peri-deep no-underline hover:underline">{c.short}</a>
+                      {c.chain === 'arc' ? <span className="font-mono text-[12px] text-ink-soft">{c.short}</span> : <a href={addrUrl(c.chain, c.address)} target="_blank" rel="noopener" className="font-mono text-[12px] text-peri-deep no-underline hover:underline">{c.short}</a>}
                     </td>
                   </tr>
                 ))}
@@ -137,7 +114,6 @@ export default function ProofPage() {
             The router is the real product bytecode; the yield source + pair vault here are an open-mint mock rig
             so the loop is self-contained. The real <span className="font-mono">AaveV3YieldAdapter</span> +{' '}
             <span className="font-mono">MintwareDeFiPairVault</span> implement the same interfaces (Forge-tested).{' '}
-            <Link href="/app/team/liquidity/staged" className="text-peri-deep no-underline hover:underline">Try it live →</Link>
           </p>
         </div>
 
@@ -170,7 +146,7 @@ export default function ProofPage() {
                     <td className="px-4 py-3">{c.name}</td>
                     <td className="px-4 py-3 text-ink-mid">{chainLabel(c.chain)}</td>
                     <td className="px-4 py-3">
-                      <a href={addrUrl(c.chain, c.address)} target="_blank" rel="noopener" className="font-mono text-[12px] text-peri-deep no-underline hover:underline">{c.short}</a>
+                      {c.chain === 'arc' ? <span className="font-mono text-[12px] text-ink-soft">{c.short}</span> : <a href={addrUrl(c.chain, c.address)} target="_blank" rel="noopener" className="font-mono text-[12px] text-peri-deep no-underline hover:underline">{c.short}</a>}
                     </td>
                   </tr>
                 ))}
@@ -210,7 +186,7 @@ export default function ProofPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[13.5px] text-ink-mid leading-[1.55]">{p.note}</p>
-                  {p.txHash && (
+                  {p.txHash && (p.chain ?? 'base-sepolia') !== 'arc' && (
                     <a href={txUrl(p.chain ?? 'base-sepolia', p.txHash)} target="_blank" rel="noopener"
                       className="inline-block mt-1.5 font-mono text-[12px] rounded-lg px-2.5 py-1 no-underline text-peri-deep bg-[rgba(108,108,240,0.10)] hover:bg-[rgba(108,108,240,0.18)]">
                       {shortHash(p.txHash)} · {(p.chain ?? 'base-sepolia') === 'arc' ? 'arcscan' : 'basescan'} ↗
@@ -515,7 +491,7 @@ export default function ProofPage() {
                   <td className="px-4 py-3">{c.name}</td>
                   <td className="px-4 py-3 text-ink-mid">{c.chain === 'arc' ? 'Arc' : 'Base Sepolia'}</td>
                   <td className="px-4 py-3">
-                    <a href={addrUrl(c.chain, c.address)} target="_blank" rel="noopener" className="font-mono text-[12px] text-peri-deep no-underline hover:underline">{c.short}</a>
+                    {c.chain === 'arc' ? <span className="font-mono text-[12px] text-ink-soft">{c.short}</span> : <a href={addrUrl(c.chain, c.address)} target="_blank" rel="noopener" className="font-mono text-[12px] text-peri-deep no-underline hover:underline">{c.short}</a>}
                   </td>
                 </tr>
               ))}
@@ -594,10 +570,12 @@ function LegCard({ leg }: { leg: ProofLeg }) {
           {leg.txs.map((t) => (
             <div key={t.hash} className="flex items-center gap-2.5 flex-wrap text-[12.5px]">
               <span className="font-atx-display font-semibold text-[11px] uppercase tracking-[0.06em] text-ink-soft min-w-[108px]">{t.label}</span>
-              <a href={txUrl(t.chain, t.hash)} target="_blank" rel="noopener"
-                className="font-mono text-[12px] rounded-lg px-2.5 py-1 no-underline text-peri-deep bg-[rgba(108,108,240,0.10)] hover:bg-[rgba(108,108,240,0.18)]">
-                {shortHash(t.hash)}
-              </a>
+              {t.chain === 'arc' ? <span className="font-mono text-[12px] rounded-lg px-2.5 py-1 text-ink-soft">{shortHash(t.hash)}</span> : (
+                <a href={txUrl(t.chain, t.hash)} target="_blank" rel="noopener"
+                  className="font-mono text-[12px] rounded-lg px-2.5 py-1 no-underline text-peri-deep bg-[rgba(108,108,240,0.10)] hover:bg-[rgba(108,108,240,0.18)]">
+                  {shortHash(t.hash)}
+                </a>
+              )}
               <span className="text-[11px] text-ink-soft">{t.chain === 'arc' ? 'arcscan' : t.chain === 'robinhood' ? 'blockscout' : 'basescan'} ↗{t.note ? ` · ${t.note}` : ''}</span>
             </div>
           ))}

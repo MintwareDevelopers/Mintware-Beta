@@ -4,7 +4,7 @@
 // Steady-state backstop for the card spend buffer (docs/developers/card-spend-buffer-spec.md §5.3):
 // scans every auto-refill-enabled buffer, reconciles its cached balance against on-chain, and tops it
 // back toward target through the shared refill core (lib/org/bufferRefill.refillCardBuffer, which runs
-// the refill-rate breaker + submits refillBuffer via the oracle signer). The FAST path is the reactive
+// the refill-rate breaker + submits a refill through the relayer signer). The FAST path is the reactive
 // capture-webhook; this cron catches anything the reactive path missed and does adaptive steady-state
 // top-ups.
 //

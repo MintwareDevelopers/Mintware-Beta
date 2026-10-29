@@ -18,22 +18,18 @@ import {Hooks}                 from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 import {IERC20}                from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {MintwareTreasuryVault}         from "../../src/payments/MintwareTreasuryVault.sol";
 import {MintwareRwaAppraisalHook}      from "../../src/rwa/MintwareRwaAppraisalHook.sol";
 import {MockRwaIdentityRegistry}       from "../../src/rwa/testnet/MockRwaIdentityRegistry.sol";
 import {MockPermissionedPropertyToken} from "../../src/rwa/testnet/MockPermissionedPropertyToken.sol";
 import {IRwaIdentityRegistry}          from "../../src/rwa/interfaces/IRwaIdentityRegistry.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
-import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
+import {MockRwaLiquidityVault} from "./MockRwaLiquidityVault.sol";
 
-/// @notice V2-RWAs — one RWA liquidity unit end to end against a real v4 PoolManager:
-///         issuer junior (permissioned property token) + community senior USDC in the UNCHANGED
-///         `MintwareTreasuryVault`, a dynamic-fee pool behind `MintwareRwaAppraisalHook`.
-///         Proves the three-role model on-chain: LPs only ever hold USDC; only verified wallets can receive
-///         the property token; trading is anchored to the appraisal band; a stale appraisal halts trading,
-///         opens an exit window, then fails closed. Every refusal is asserted by its EXACT inner error.
+/// @notice Exercise the RWA appraisal hook against a real v4 PoolManager and a test-only liquidity actor.
+///         Covers permissioned property transfers, appraisal bands/fees, stale-oracle behavior, timelocks,
+///         pause behavior, and pool binding. Treasury accounting is outside this retained hook suite.
 contract MintwareRwaLiquidityUnitTest is Test {
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
@@ -45,16 +41,13 @@ contract MintwareRwaLiquidityUnitTest is Test {
     MockPermissionedPropertyToken internal prop;
     MockRwaIdentityRegistry       internal registry;
     MintwareRwaAppraisalHook      internal hook;
-    MintwareTreasuryVault         internal vault;
-    MockYieldAdapter              internal adapter;
+    MockRwaLiquidityVault         internal vault;
     PoolKey                       internal key;
 
     address internal owner    = makeAddr("owner");
     address internal issuer   = makeAddr("issuer");
     address internal keeper   = makeAddr("keeper");
     address internal guardian = makeAddr("guardian");
-    address internal protocol = makeAddr("protocol");
-    address internal alice    = makeAddr("aliceLP");
     address internal bob      = makeAddr("bobVerified");
     address internal eve      = makeAddr("eveUnverified");
 
@@ -66,9 +59,7 @@ contract MintwareRwaLiquidityUnitTest is Test {
     bool    internal propIs0;
 
     uint256 internal constant COMMIT_TOKENS = 5_000e18;    // $500k of property inventory (junior)
-    uint256 internal constant JUNIOR_USDC   = 10e6;
-    uint256 internal constant SENIOR_USDC   = 100_000e6;
-    uint256 internal constant DEPLOY_USDC   = 20_000e6;    // idle-first: ≤20% of senior in the pool
+    uint128 internal constant POSITION_LIQUIDITY = 2e15;
 
     function _config() internal pure returns (MintwareRwaAppraisalHook.Config memory c) {
         c = MintwareRwaAppraisalHook.Config({
@@ -115,15 +106,10 @@ contract MintwareRwaLiquidityUnitTest is Test {
         hook = _deployHook(0xA11CE);
         key  = _keyFor(address(hook), LPFeeLibrary.DYNAMIC_FEE_FLAG);
 
-        adapter = new MockYieldAdapter(address(usdc));
-        vault   = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), owner, issuer);
+        vault = new MockRwaLiquidityVault(IPoolManager(address(pm)), key);
 
-        vm.startPrank(owner);
-        vault.setProtocolTreasury(protocol);
-        vault.setJitHook(address(hook)); // the appraisal hook IS the vault's oracle
-        vault.setMinCoverage(1);
-        hook.setVault(address(vault));   // also pins the one pool id the hook may ever serve
-        vm.stopPrank();
+        vm.prank(owner);
+        hook.setVault(address(vault)); // also pins the one pool id the hook may ever serve
 
         // Enroll infra as permitted holders (in production: the issuer enrolls Mintware's contracts once).
         vm.startPrank(issuer);
@@ -133,30 +119,16 @@ contract MintwareRwaLiquidityUnitTest is Test {
         registry.setVerified(bob, type(uint64).max);
         prop.mint(issuer, COMMIT_TOKENS);
         prop.mint(bob, 1_000e18);
+        prop.transfer(address(vault), COMMIT_TOKENS);
         vm.stopPrank();
 
         vm.prank(keeper);
         hook.initAppraisal(appraisal);
         pm.initialize(key, TickMath.getSqrtPriceAtTick(appraisal));
 
-        // Issuer commits the junior (property inventory + a small USDC first-loss buffer), 1-year lock.
-        usdc.mint(issuer, JUNIOR_USDC);
-        vm.startPrank(issuer);
-        IERC20(address(prop)).approve(address(vault), type(uint256).max);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.commitTeam(COMMIT_TOKENS, JUNIOR_USDC, 365 days);
-        vm.stopPrank();
-
-        // Alice (an open, unverified LP) supplies senior USDC.
-        usdc.mint(alice, SENIOR_USDC);
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.depositUSDC(SENIOR_USDC, 0, alice);
-        vm.stopPrank();
-
-        // A slice goes into the pool; the rest stays earning in the lending adapter.
-        vm.prank(owner);
-        vault.deployToLP(DEPLOY_USDC, 1_000e18);
+        // Seed a real pool position through the test-only actor; this suite does not model treasury shares.
+        usdc.mint(address(vault), 1_000_000e6);
+        vault.addPosition(-887_220, 887_220, POSITION_LIQUIDITY);
 
         usdc.mint(bob, 1_000_000e6);
         usdc.mint(eve, 1_000_000e6);
@@ -231,9 +203,7 @@ contract MintwareRwaLiquidityUnitTest is Test {
     // ── the three-role model ──────────────────────────────────────────────────
 
     function test_SetupIsLiveAndBalanced() public view {
-        assertGt(vault.positionLiquidity(), 0, "vault holds the pool position");
-        assertEq(vault.deployedFromSenior(), DEPLOY_USDC, "senior slice deployed at par");
-        assertApproxEqAbs(adapter.totalAssets(), SENIOR_USDC - DEPLOY_USDC, 1, "rest of senior earning in lending");
+        assertEq(vault.positionLiquidity(), POSITION_LIQUIDITY, "test actor holds the pool position");
         (int24 t, bool ready) = hook.oracleTick();
         assertEq(t, appraisal);
         assertTrue(ready, "fresh appraisal is ready");
@@ -268,18 +238,6 @@ contract MintwareRwaLiquidityUnitTest is Test {
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(MockPermissionedPropertyToken.NotPermitted.selector, bob));
         router.swap(key, propIs0, 1e18);
-    }
-
-    function test_LpNeverHoldsTheAssetAndExitsInUsdc() public {
-        _buy(bob, 500e6);
-        _sell(bob, 2e18);
-
-        uint256 shares = vault.seniorShares(alice);
-        vm.prank(alice);
-        uint256 out = vault.redeemSenior(shares / 2, 0);
-        assertApproxEqRel(out, SENIOR_USDC / 2, 0.01e18, "half the senior back in USDC");
-        assertEq(prop.balanceOf(alice), 0, "the LP never touched the property token");
-        assertFalse(prop.isPermitted(alice), "and isn't even eligible to hold it");
     }
 
     // ── the band + fee ────────────────────────────────────────────────────────
@@ -328,7 +286,7 @@ contract MintwareRwaLiquidityUnitTest is Test {
         (, , fee) = hook.beforeSwap(bob, key, p, "");
         assertEq(fee, c.specFeePips | LPFeeLibrary.OVERRIDE_FEE_FLAG, "spec band pays the spec fee");
 
-        // The vault's own unwind always pays the core fee.
+        // The bound liquidity actor's unwind always pays the core fee.
         vm.prank(address(pm));
         (, , fee) = hook.beforeSwap(address(vault), key, p, "");
         assertEq(fee, c.coreFeePips | LPFeeLibrary.OVERRIDE_FEE_FLAG, "vault unwind pays the core fee");
@@ -352,34 +310,26 @@ contract MintwareRwaLiquidityUnitTest is Test {
 
     // ── appraisal safety ──────────────────────────────────────────────────────
 
-    function test_StaleAppraisalHaltsTradingButOpensAnExitWindow() public {
+    function test_StaleAppraisalHaltsTradingButKeepsOracleReadyDuringExitWindow() public {
         uint256 t0 = block.timestamp;
         vm.warp(t0 + 31 days);
         assertFalse(hook.isFresh(), "trading is stale");
         (, bool ready) = hook.oracleTick();
-        assertTrue(ready, "exit window: the vault can still value its position");
+        assertTrue(ready, "oracle remains available during the exit window");
 
         _expectBuyRevert(bob, 100e6, address(hook), MintwareRwaAppraisalHook.AppraisalStale.selector);
-
-        // LPs can still leave during the exit window — in USDC.
-        uint256 shares = vault.seniorShares(alice);
-        vm.prank(alice);
-        uint256 out = vault.redeemSenior(shares / 4, 0);
-        assertApproxEqRel(out, SENIOR_USDC / 4, 0.01e18, "a senior exit is served during the exit window");
     }
 
-    function test_AfterTheExitWindowTheVaultFailsClosed() public {
+    function test_OracleFailsClosedAfterExitWindowAndRecoversWithFreshAppraisal() public {
         uint256 t0 = block.timestamp;
         vm.warp(t0 + 30 days + 7 days + 1);
         (, bool ready) = hook.oracleTick();
         assertFalse(ready, "past the exit window the oracle is not ready");
-        vm.expectRevert(MintwareTreasuryVault.OracleNotReady.selector);
-        vault.recoverableUSDC();
-
-        // A fresh appraisal restores everything.
+        // A fresh appraisal restores the oracle and permits trading again.
         vm.prank(keeper);
         hook.postAppraisal(appraisal + 10);
-        assertGt(vault.recoverableUSDC(), 0, "valuation back once a fresh appraisal lands");
+        (, ready) = hook.oracleTick();
+        assertTrue(ready, "oracle ready after a fresh appraisal");
         _buy(bob, 100e6);
     }
 
@@ -507,7 +457,7 @@ contract MintwareRwaLiquidityUnitTest is Test {
     function test_NobodyCanBindTheHookToAnotherPool() public {
         MintwareRwaAppraisalHook h = _deployHook(0xF00D);
         PoolKey memory real = _keyFor(address(h), LPFeeLibrary.DYNAMIC_FEE_FLAG);
-        MintwareTreasuryVault v = new MintwareTreasuryVault(address(pm), real, address(usdc), address(new MockYieldAdapter(address(usdc))), owner, issuer);
+        MockRwaLiquidityVault v = new MockRwaLiquidityVault(IPoolManager(address(pm)), real);
         vm.prank(owner);
         h.setVault(address(v));
         vm.prank(keeper);
@@ -538,7 +488,7 @@ contract MintwareRwaLiquidityUnitTest is Test {
     function test_PoolMustLaunchAtTheAppraisal() public {
         MintwareRwaAppraisalHook h = _deployHook(0xB0B);
         PoolKey memory k2 = _keyFor(address(h), LPFeeLibrary.DYNAMIC_FEE_FLAG);
-        MintwareTreasuryVault v = new MintwareTreasuryVault(address(pm), k2, address(usdc), address(new MockYieldAdapter(address(usdc))), owner, issuer);
+        MockRwaLiquidityVault v = new MockRwaLiquidityVault(IPoolManager(address(pm)), k2);
         vm.prank(owner);
         h.setVault(address(v));
         vm.prank(keeper);
@@ -551,7 +501,7 @@ contract MintwareRwaLiquidityUnitTest is Test {
     function test_PoolMustUseADynamicFee() public {
         MintwareRwaAppraisalHook h = _deployHook(0xFEE);
         PoolKey memory k2 = _keyFor(address(h), 3000); // static fee
-        MintwareTreasuryVault v = new MintwareTreasuryVault(address(pm), k2, address(usdc), address(new MockYieldAdapter(address(usdc))), owner, issuer);
+        MockRwaLiquidityVault v = new MockRwaLiquidityVault(IPoolManager(address(pm)), k2);
         vm.prank(owner);
         h.setVault(address(v));
         vm.prank(keeper);
@@ -565,26 +515,13 @@ contract MintwareRwaLiquidityUnitTest is Test {
 
     // ── emergency + redemptions ───────────────────────────────────────────────
 
-    function test_PauseStopsTradingButNotTheVault() public {
+    function test_PauseStopsTradingWithoutChangingThePoolPosition() public {
         _buy(bob, 500e6);
+        uint128 liquidityBefore = vault.positionLiquidity();
         vm.prank(guardian);
         hook.pauseTrading();
 
         _expectBuyRevert(bob, 10e6, address(hook), MintwareRwaAppraisalHook.TradingIsPaused.selector);
-
-        // The vault's own unwind (it sells its recovered property leg through the pool) still works.
-        vm.prank(owner);
-        vault.recoverFromLP(5_000e6);
-        assertLt(vault.deployedFromSenior(), DEPLOY_USDC, "senior pulled back out of the pool");
-        assertLe(vault.deployedFromSenior(), vault.recoverableUSDC(), "solvency invariant holds");
-    }
-
-    function test_SolvencyInvariantAcrossTrading() public {
-        for (uint256 i; i < 6; ++i) {
-            _buy(bob, 400e6);
-            _sell(bob, 3e18);
-        }
-        assertLe(vault.deployedFromSenior(), vault.recoverableUSDC(), "deployed senior covered");
-        assertGe(vault.totalSeniorAssets(), SENIOR_USDC, "senior NAV never below par");
+        assertEq(vault.positionLiquidity(), liquidityBefore, "paused trading leaves LP liquidity untouched");
     }
 }

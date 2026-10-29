@@ -102,7 +102,6 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
               </div>
             </section>
 
-            {/* Two ways to grow the treasury — Treasury yield (one asset) vs liquidity for your token (both sides). Kept distinct. */}
             <section className="mt-8">
               <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft mb-3">Grow the treasury — two ways</div>
               <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3">
@@ -114,14 +113,14 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
                   <p className="text-[12.5px] text-ink-mid mt-2 leading-[1.5]">Supply one asset (USDC) to a yield vault. Variable lending rate, withdraw any time. Testnet.</p>
                   <div className="text-[12.5px] font-semibold text-peri-deep mt-3">Open Treasury yield →</div>
                 </Link>
-                <Link href="/app/team/liquidity" className="soft-card p-5 no-underline group hover:shadow-card-hover transition-shadow block">
+                <div className="soft-card p-5 opacity-70">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-atx-display font-semibold text-[16px] text-ink group-hover:text-peri-deep transition-colors">Liquidity for your token</div>
+                    <div className="font-atx-display font-semibold text-[16px] text-ink">Liquidity for your token</div>
                     <span className="text-[9.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft rounded-full border border-hair px-2 py-0.5 shrink-0">Both assets</span>
                   </div>
                   <p className="text-[12.5px] text-ink-mid mt-2 leading-[1.5]">Pair your token with USDC in a two-sided pool — matched by the community, seeded yourself, or staged one side at a time. Earns trading fees; carries LP exposure.</p>
                   <div className="text-[12.5px] font-semibold text-peri-deep mt-3">Choose a model →</div>
-                </Link>
+                </div>
               </div>
             </section>
 

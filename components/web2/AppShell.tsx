@@ -168,7 +168,6 @@ export function PersonalShell({ children }: { children: ReactNode }) {
         {
           title: 'Earn',
           items: [
-            { href: '/app/vaults', label: 'Vaults', hint: 'Testnet' },
             { href: '/v1', label: 'LP Gateway', hint: 'Live ↗' },
           ],
         },

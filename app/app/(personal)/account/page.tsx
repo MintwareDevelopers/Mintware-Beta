@@ -13,7 +13,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Copy, Check, BarChart2, Droplets, Share2 } from 'lucide-react'
+import { Copy, Check, BarChart2, Share2 } from 'lucide-react'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { YourOrgs } from '@/components/web2/YourOrgs'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
@@ -27,7 +27,6 @@ import { ProfileEditPanel } from '@/components/rewards/profile/ProfileEditPanel'
 import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
 import { InviteTab } from '@/components/rewards/referral/InviteTab'
 import { PortfolioTab } from '../profile/tabs/PortfolioTab'
-import { LiquidityTab } from '../profile/tabs/LiquidityTab'
 import type { ScoreResponse, Tab } from '../profile/types'
 
 const WRAP = 'max-w-[1040px] mx-auto px-6 max-sm:px-4'
@@ -87,7 +86,6 @@ function AccountContent() {
 
   const TABS: { id: Tab; icon: React.ReactNode; label: string }[] = [
     { id: 'portfolio', icon: <BarChart2 size={13} />, label: 'Portfolio' },
-    { id: 'liquidity', icon: <Droplets size={13} />,  label: 'Liquidity' },
     { id: 'invite',    icon: <Share2 size={13} />,    label: 'Invite' },
   ]
 
@@ -151,7 +149,7 @@ function AccountContent() {
           </div>
 
           <div className="flex items-center gap-3 mt-6 flex-wrap">
-            <Link href="/app/vaults" className="glass-pill-primary glass-pill-sm">Add liquidity →</Link>
+            <Link href="/v1" className="glass-pill-primary glass-pill-sm">Add liquidity →</Link>
             <Link href="/app/swap" className="glass-pill glass-pill-sm">Swap</Link>
             <button disabled title="Coming soon" className="text-[11px] font-semibold text-ink-soft uppercase tracking-[0.06em]">Move money · coming</button>
           </div>
@@ -286,7 +284,6 @@ function AccountContent() {
             <AnimatePresence mode="wait">
               <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
                 {activeTab === 'portfolio' && <PortfolioTab data={data} loading={loading} hasWallet={!!wallet} />}
-                {activeTab === 'liquidity' && <LiquidityTab wallet={wallet} />}
                 {activeTab === 'invite'    && (
                   <InviteTab wallet={wallet} refCode={refCode} stats={refStats} referralRecords={referralRecords} isLoading={refLoading} />
                 )}
