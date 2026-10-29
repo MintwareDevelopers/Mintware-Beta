@@ -14,7 +14,7 @@ export type FakeDb = {
   /** optional UNIQUE keys per table → insert conflicts return { code: '23505' } */
   uniques?: Record<string, string[][]>
   calls: { table: string; op: string; payload?: unknown; filters: Filter[] }[]
-  /** optional Postgres-function emulation for `supabase.rpc(fn, args)` (e.g. record_gateway_harvest) */
+  /** optional Postgres-function emulation for `supabase.rpc(fn, args)` */
   rpc?: (fn: string, args: Record<string, unknown>, db: FakeDb) => Promise<{ data: unknown; error: { message: string } | null }>
 }
 
