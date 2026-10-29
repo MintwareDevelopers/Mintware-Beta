@@ -3,7 +3,7 @@ import { fakeSupabase } from '@/lib/gateway/__audit__/fakeSupabase'
 
 const state = vi.hoisted(() => ({ instance: null as unknown, reads: vi.fn() }))
 vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => ({ chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }), resolveMarketEngine: async () => state.instance }))
-vi.mock('@/lib/gateway/chain', () => ({ gatewayPublicClient: () => ({ readContract: state.reads }) }))
+vi.mock('@/lib/gateway/chain', () => ({ marketEnginePublicClient: () => ({ readContract: state.reads }) }))
 vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => fakeSupabase().client }))
 
 const ENGINE = '0x' + '11'.repeat(20)

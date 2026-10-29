@@ -1,6 +1,6 @@
 import { decodeEventLog } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
-import { gatewayPublicClient } from '@/lib/gateway/chain'
+import { marketEnginePublicClient } from '@/lib/gateway/chain'
 import { marketEngineConfig, resolveMarketEngine, verifyMarketEngine } from '@/lib/gateway/marketEngine'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { bindSignedRecord } from '@/lib/gateway/recordAuth'
@@ -16,7 +16,7 @@ export const POST = createHandler(async (req, ctx) => {
   const { txHash, pool } = bound.bound
   const inst = await resolveMarketEngine(ctx.supabase, cfg, pool)
   if (!inst || !inst.verified || !inst.live) return ctx.json({ success: false, error: 'pool_not_live' }, 404)
-  const client = gatewayPublicClient(cfg)
+  const client = marketEnginePublicClient(cfg)
   const identity = await verifyMarketEngine({ client, address: inst.engineAddress, expectedPool: inst.poolAddress, chainId: cfg.chainId })
   if (!identity.ok) return ctx.json({ success: false, error: 'engine_verification_failed' }, 503)
   let receipt

@@ -10,7 +10,6 @@ const state = vi.hoisted(() => ({
   hotCalls: 0,
 }))
 
-vi.mock('@/lib/gateway/chain', () => ({ gatewayConfig: () => ({ chainId: 46630, rpcUrl: 'https://rpc.test' }) }))
 vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => ({ chainId: 46630, rpcUrl: 'https://rpc.test', defaultEngine: null }) }))
 vi.mock('@/lib/web2/supabase', () => ({
   getServiceClient: () => ({

@@ -1,7 +1,7 @@
 import { keccak256, isAddress } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
-import { computePoolId, type ReadClient, type GatewayPoolKey } from '@/lib/gateway/registry'
+import { computePoolId, type ReadClient, type MarketPoolKey } from '@/lib/gateway/registry'
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
 export const BASE_SEPOLIA_MARKET_ENGINE = '0x18c22836c71ae2dc6f483ab9ac41b4503e18c384' as const
@@ -19,7 +19,7 @@ export function marketEngineConfig(env: Record<string, string | undefined> = pro
   return { chainId, rpcUrl, defaultEngine: addr && isAddress(addr) ? addr.toLowerCase() as `0x${string}` : null }
 }
 
-export type EngineVerification = { ok: true; codeHash: string; owner: string; quoteAsset: `0x${string}`; token0: `0x${string}`; token1: `0x${string}`; poolKey: GatewayPoolKey } | { ok: false; error: string }
+export type EngineVerification = { ok: true; codeHash: string; owner: string; quoteAsset: `0x${string}`; token0: `0x${string}`; token1: `0x${string}`; poolKey: MarketPoolKey } | { ok: false; error: string }
 export async function verifyMarketEngine(opts: { client: ReadClient; address: `0x${string}`; expectedPool?: string | null; expectedOwner?: string | null; allowedCodeHashes?: string[]; chainId?: number }): Promise<EngineVerification> {
   const { client, address } = opts
   const suffix = opts.chainId == null ? '' : `_${opts.chainId}`
@@ -41,7 +41,7 @@ export async function verifyMarketEngine(opts: { client: ReadClient; address: `0
       client.readContract({ address, abi: MARKET_ENGINE_ABI, functionName: 'activated' }),
       client.readContract({ address, abi: MARKET_ENGINE_ABI, functionName: 'poolKey' }),
     ])
-    const key = rawKey as GatewayPoolKey
+    const key = rawKey as MarketPoolKey
     const normalized = { currency0: key.currency0.toLowerCase() as `0x${string}`, currency1: key.currency1.toLowerCase() as `0x${string}`, fee: Number(key.fee), tickSpacing: Number(key.tickSpacing), hooks: key.hooks.toLowerCase() as `0x${string}` }
     if (!activated) return { ok: false, error: 'engine_inactive' }
     if (!expectedOwner) return { ok: false, error: 'engine_owner_unconfigured' }
@@ -79,7 +79,7 @@ export async function resolveMarketEngine(db: SupabaseClient, cfg: MarketEngineC
     return hit ? { ...hit, source: 'registry', live: hit.status === 'active' } : null
   }
   if (!cfg.defaultEngine) return null
-  const client = (await import('@/lib/gateway/chain')).gatewayPublicClient({ chainId: cfg.chainId, rpcUrl: cfg.rpcUrl })
+  const client = (await import('@/lib/gateway/chain')).marketEnginePublicClient({ chainId: cfg.chainId, rpcUrl: cfg.rpcUrl })
   const verified = await verifyMarketEngine({ client, address: cfg.defaultEngine, expectedPool: pool, chainId: cfg.chainId })
   if (!verified.ok) return null
   const poolAddress = computePoolId(verified.poolKey).toLowerCase()

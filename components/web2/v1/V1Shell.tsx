@@ -3,7 +3,7 @@
 // V1 app shell — the dark "app mode" chrome for the live LP Gateway, sharply separate from the light
 // marketing site (you KNOW you're inside the product). Meteora-style: product nav (Discover · Portfolio),
 // Connect Wallet as the top-right primary, a testnet chip — NO marketing links, NO "Launch app" button.
-// Every V1 surface (/v1, /v1/portfolio) wraps its content in this shell.
+// Every V1 surface wraps its content in this shell.
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -17,8 +17,6 @@ import { V1DisclaimerGate } from './V1DisclaimerGate'
 const NAV = [
   { label: 'Discover', href: '/v1' },
   { label: 'Swap', href: '/v1/swap' },
-  { label: 'Portfolio', href: '/v1/portfolio' },
-  { label: 'Leaderboard', href: '/v1/leaderboard' },
   { label: 'Referrals', href: '/v1/referrals' },
 ]
 

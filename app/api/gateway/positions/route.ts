@@ -1,6 +1,6 @@
 import { isAddress } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
-import { gatewayPublicClient } from '@/lib/gateway/chain'
+import { marketEnginePublicClient } from '@/lib/gateway/chain'
 import { listMarketEngines, marketEngineConfig, resolveMarketEngine } from '@/lib/gateway/marketEngine'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
@@ -19,7 +19,7 @@ export const GET = createHandler(async (req, ctx) => {
   const instances = fallback ? [fallback] : rows
   const { data: recordedEvents } = await ctx.supabase.from('market_engine_tx_events').select('pool_address,market_engine_address').eq('user_wallet', address).eq('chain_id', cfg.chainId)
   const recordedKeys = new Set((recordedEvents ?? []).map((e: { pool_address: string; market_engine_address: string }) => `${e.pool_address.toLowerCase()}:${e.market_engine_address.toLowerCase()}`))
-  const client = gatewayPublicClient(cfg)
+  const client = marketEnginePublicClient(cfg)
   const outcomes = await Promise.all(instances.filter((x) => x.verified).map(async (inst) => {
     try {
       const [shares, supply, nav] = await Promise.all([

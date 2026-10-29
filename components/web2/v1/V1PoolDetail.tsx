@@ -32,9 +32,8 @@ import { useMintwarePrivy } from '@/components/web2/providers'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { buildGatewayDepositMessage, buildGatewayWithdrawMessage } from '@/lib/web3/signedActionMessages'
-import type { SerializedPoolState } from '@/lib/gateway/positionReader'
-import { applyToleranceBps } from '@/lib/gateway/v4Math'
-import { sanitizeAmountInput } from '@/lib/gateway/amountInput'
+import { applyToleranceBps } from '@/lib/marketEngine/math'
+import { sanitizeAmountInput } from '@/lib/marketEngine/amountInput'
 
 // C-6 slippage tolerance applied to every dry quote before it becomes an on-chain floor (bps).
 export const SLIPPAGE_TOLERANCE_BPS = 100
@@ -52,7 +51,7 @@ type Meta = {
 type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; live: boolean }
 type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
 type Position = { shares: string; positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; recorded?: boolean; costBasisComplete?: boolean; history?: Snapshot[] }
-type PositionResponse = { position: Position; poolState: SerializedPoolState | null; totalNav?: string; totalSupply?: string }
+type PositionResponse = { position: Position; poolState: null; totalNav?: string; totalSupply?: string }
 type Status = 'idle' | 'quote' | 'review' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'recorded' | 'record_failed'
 type Review =
   | { kind: 'deposit'; amountAtomic: bigint; estShares: bigint; minShares: bigint; withMin: boolean }
@@ -96,7 +95,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const [review, setReview] = useState<Review | null>(null)
   const [pending, setPending] = useState<PendingRecord | null>(null)
   const [err, setErr] = useState('')
-  const [alert, setAlert] = useState<{ sinceIso: string } | null>(null)
 
   // The route param is the pool's registry key (poolId). Legacy label slugs still render metrics but
   // can never resolve a deposit target (meta 404s) — the page says so instead of guessing.
@@ -115,7 +113,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   }, [pairLabel])
 
   useEffect(() => {
-    setMetaState('loading')
     fetch(`/api/gateway/meta?pool=${encodeURIComponent(slug)}${pmQuery}`).then(async (r) => {
       const d = await r.json().catch(() => null)
       if (r.ok && d?.success) { setMeta(d.meta); setMetaState('ok') }
@@ -124,10 +121,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     fetch('/api/gateway/discover').then((r) => r.json()).then((d) => {
       const list: Metrics[] = d?.success && Array.isArray(d.pools) ? d.pools : []
       setM(list.find((p) => p.poolAddress?.toLowerCase() === decoded) ?? list.find((p) => norm(p.pairLabel) === decoded) ?? null)
-    }).catch(() => {})
-    fetch(`/api/gateway/alerts?pool=${encodeURIComponent(slug)}`).then((r) => r.json()).then((d) => {
-      const oor = (d?.alerts ?? []).find((a: { kind: string; firing: boolean; sinceIso: string }) => a.kind === 'out_of_range' && a.firing)
-      setAlert(oor ? { sinceIso: oor.sinceIso } : null)
     }).catch(() => {})
   }, [slug, decoded, pmQuery])
 
@@ -143,7 +136,11 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       return { position: d.position, poolState: d.poolState ?? null, totalNav: d.totalNav, totalSupply: d.totalSupply }
     } catch { setPos(null); return null }
   }, [address, slug, pmQuery])
-  useEffect(() => { void fetchPosition() }, [fetchPosition])
+  useEffect(() => {
+    if (!address) return
+    const timer = window.setTimeout(() => { void fetchPosition() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchPosition, address])
 
   // Real trailing yield, Meteora-style: 24h fees ÷ TVL, annualized. 24h fees = 24h volume × fee tier.
   const feeRate = meta?.feePips != null ? meta.feePips / 1e6 : null
@@ -201,8 +198,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   async function ensureChain(eth: Awaited<ReturnType<typeof getSignerProvider>>, mm: Meta) {
     const hex = `0x${mm.chainId.toString(16)}`
     try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] }) }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    catch (e) { if ((e as any)?.code === 4902) await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: 'Robinhood Chain Testnet', rpcUrls: [mm.rpcUrl], nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 } }] }); else throw e }
+    catch (e) { if ((e as { code?: number })?.code === 4902) await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: 'Robinhood Chain Testnet', rpcUrls: [mm.rpcUrl], nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 } }] }); else throw e }
   }
   async function clients(mm: Meta) {
     const eth = await getSignerProvider()
@@ -214,8 +210,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     }
   }
   function fail(e: unknown, fallback: string) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setErr((e as any)?.shortMessage ?? (e as Error)?.message ?? fallback)
+    setErr((e as (Error & { shortMessage?: string }))?.shortMessage ?? (e as Error)?.message ?? fallback)
     setStatus('idle'); setReview(null)
   }
   function requireWallet(): boolean {
@@ -241,8 +236,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       if (!res.ok || !d?.success) throw new Error(d?.error ?? `record_failed_${res.status}`)
       setStatus('recorded'); setPending(null)
     } catch (e) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setErr(`Recording failed (${(e as any)?.shortMessage ?? (e as Error)?.message ?? 'unknown'}). Your ${kind} is confirmed on-chain and your funds are safe — retry to record it.`)
+      setErr(`Recording failed (${(e as (Error & { shortMessage?: string }))?.shortMessage ?? (e as Error)?.message ?? 'unknown'}). Your ${kind} is confirmed on-chain and your funds are safe — retry to record it.`)
       setStatus('record_failed')
     } finally {
       void fetchPosition()
@@ -390,16 +384,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#9B9BAD' }}>
           This pool has no live gateway — nothing here accepts funds.{' '}
           <Link href="/v1" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Pick a live pool from Discover →</Link>
-        </div>
-      )}
-
-      {alert && (
-        <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px] flex items-start gap-2.5" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
-          <span>⚠</span>
-          <span>
-            <span style={{ fontWeight: 600 }}>Out of range ~{Math.max(1, Math.round((Date.now() - Date.parse(alert.sinceIso)) / 36e5))}h — LP fees paused.</span>{' '}
-            <span style={{ color: '#9B9BAD' }}>Your position is still fully deployed (no yield accrues while out of range); fees resume automatically when price re-enters the range.</span>
-          </span>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { decodeEventLog } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
-import { gatewayPublicClient } from '@/lib/gateway/chain'
+import { marketEnginePublicClient } from '@/lib/gateway/chain'
 import { listMarketEngines, marketEngineConfig, resolveMarketEngine, type MarketEngineInstance } from '@/lib/gateway/marketEngine'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { bindSignedRecord } from '@/lib/gateway/recordAuth'
@@ -14,7 +14,7 @@ export const POST = createHandler(async (req, ctx) => {
   const bound = bindSignedRecord(body)
   if (!bound.ok) return ctx.json({ success: false, error: bound.error }, bound.error === 'auth_replayed' ? 409 : bound.error === 'txHash_required' ? 400 : 401)
   const { txHash, pool } = bound.bound
-  const client = gatewayPublicClient(cfg)
+  const client = marketEnginePublicClient(cfg)
   let receipt
   try { receipt = await client.getTransactionReceipt({ hash: txHash }) } catch { return ctx.json({ success: false, error: 'tx_not_found' }, 404) }
   if (receipt.status !== 'success') return ctx.json({ success: false, error: 'tx_reverted' }, 400)

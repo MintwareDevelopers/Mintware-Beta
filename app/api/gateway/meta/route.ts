@@ -1,5 +1,5 @@
 import { createHandler } from '@/lib/web2/routeHandler'
-import { gatewayPublicClient } from '@/lib/gateway/chain'
+import { marketEnginePublicClient } from '@/lib/gateway/chain'
 import { marketEngineConfig, resolveMarketEngine, verifyMarketEngine } from '@/lib/gateway/marketEngine'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
@@ -16,7 +16,7 @@ export const GET = createHandler(async (req, ctx) => {
   const pm = req.nextUrl.searchParams.get('pm')
   const inst = await resolveMarketEngine(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), Boolean(pm), pm)
   if (!inst || !inst.verified) return ctx.json({ success: false, error: 'pool_not_live' }, 404)
-  const client = gatewayPublicClient(cfg)
+  const client = marketEnginePublicClient(cfg)
   const verified = await verifyMarketEngine({ client, address: inst.engineAddress, expectedPool: inst.poolAddress, chainId: cfg.chainId })
   if (!verified.ok) return ctx.json({ success: false, error: 'engine_verification_failed' }, 503)
   try {

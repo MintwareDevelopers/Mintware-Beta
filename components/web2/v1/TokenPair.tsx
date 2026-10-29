@@ -3,7 +3,7 @@
 // Overlapping paired token logos (Meteora/Krystal standard). Real logos come from GeckoTerminal
 // (already https-guarded server-side in lib/gateway/discovery.ts#safeImg). When a token has no logo —
 // or the image 404s at runtime — it falls back to the token's initials in a tinted circle, never the
-// old one-size-fits-all gradient blob. Used in the Discover rows and the /earn/[pool] header.
+// old one-size-fits-all gradient blob. Used in the Discover rows.
 
 import { useState } from 'react'
 

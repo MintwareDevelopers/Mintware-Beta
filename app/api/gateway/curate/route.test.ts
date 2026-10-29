@@ -6,7 +6,7 @@ const verify = vi.hoisted(() => vi.fn())
 const saved: Record<string, Record<string, unknown>[]> = { gateway_pool_requests: [], gateway_instances: [], gateway_instance_history: [] }
 vi.mock('@/lib/gateway/registry', () => ({ deactivateInstance: vi.fn(async () => ({ ok: true })) }))
 vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => ({ chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }), verifyMarketEngine: (...args: unknown[]) => verify(...args) }))
-vi.mock('@/lib/gateway/chain', () => ({ gatewayPublicClient: () => ({ readContract: vi.fn() }) }))
+vi.mock('@/lib/gateway/chain', () => ({ marketEnginePublicClient: () => ({ readContract: vi.fn() }) }))
 vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => ({ from(table: string) {
   const filters: [string, unknown][] = []
   let mode = 'select'; let payload: Record<string, unknown> = {}

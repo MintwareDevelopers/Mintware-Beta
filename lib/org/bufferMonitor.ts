@@ -15,7 +15,7 @@ type Logger = { warn: (t: string, m: string, c?: Record<string, unknown>) => voi
 
 export type SyncResult =
   | { ok: true; balanceAtomic: bigint }
-  | { ok: false; reason: 'config' | 'no_buffer' | 'chain' | 'read' | 'db' | 'gateway_funded' | 'binding_mismatch' }
+  | { ok: false; reason: 'config' | 'no_buffer' | 'chain' | 'read' | 'db' | 'binding_mismatch' }
 
 /**
  * Reconcile the cached buffer balance from chain. The buffer address is derived from ON-CHAIN
@@ -46,7 +46,7 @@ export async function syncBufferBalance(opts: {
 
   const { data: buf, error: bufferError } = await supabase
     .from('card_spend_buffers')
-    .select('id, member_wallet, gateway_position_id')
+    .select('id, member_wallet')
     .eq('org_card_id', orgCardId)
     .maybeSingle()
   if (bufferError) {
@@ -54,15 +54,6 @@ export async function syncBufferBalance(opts: {
     return { ok: false, reason: 'db' }
   }
   if (!buf?.member_wallet) return { ok: false, reason: 'no_buffer' }
-  // Historical Gateway-to-card linkage has no current writer in V1. Keep this fail-closed guard
-  // until deployed rows are reconciled, because such rows may represent another funding lifecycle.
-  // Keep this fail-closed guard until deployed rows are reconciled, because syncing such a legacy row
-  // through the current card-funding path could overwrite a balance from a different funding lifecycle.
-  if ((buf as { gateway_position_id?: string | null }).gateway_position_id) {
-    log?.warn('cards.buffer', 'legacy Gateway-linked buffer sync skipped pending row reconciliation', { orgCardId })
-    return { ok: false, reason: 'gateway_funded' }
-  }
-
   const rpcUrl = rpcForChain(org.card_funding_chain_id)
   const chain = viemChainFor(org.card_funding_chain_id)
   if (!rpcUrl || !chain) return { ok: false, reason: 'chain' }

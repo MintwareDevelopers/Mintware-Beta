@@ -39,10 +39,9 @@ const ROLE_PRIVY_ENV: Record<OracleRole, PrivyEnv> = {
   weight: { walletId: 'WEIGHT_ORACLE_PRIVY_WALLET_ID', address: 'WEIGHT_ORACLE_PRIVY_ADDRESS' },
   range:  { walletId: 'RANGE_ORACLE_PRIVY_WALLET_ID',  address: 'RANGE_ORACLE_PRIVY_ADDRESS' },
   agent:  { walletId: 'AGENT_ORACLE_PRIVY_WALLET_ID',  address: 'AGENT_ORACLE_PRIVY_ADDRESS' },
-  gateway: { walletId: 'GATEWAY_ORACLE_PRIVY_WALLET_ID', address: 'GATEWAY_ORACLE_PRIVY_ADDRESS' },
 }
 
-function usePrivy(): boolean {
+function privyMode(): boolean {
   // Round-3 audit F-6: a TYPO in ORACLE_SIGNER_PROVIDER ("privvy", "Privy " …) used to fall through to env-key
   // mode silently — the `gateway` seat then failed closed (no raw key) but `range`/`agent` would sign with the
   // shared, git-exposed ORACLE_PRIVATE_KEY. Only the two documented values are accepted; anything else throws
@@ -59,7 +58,7 @@ function usePrivy(): boolean {
  * resolves synchronously but is awaited uniformly for a single call shape.
  */
 export async function getOracleSigner(role: OracleRole): Promise<LocalAccount> {
-  if (usePrivy()) return getPrivyOracleSigner(role)
+  if (privyMode()) return getPrivyOracleSigner(role)
   return privateKeyToAccount(getOracleSignerKey(role))
 }
 

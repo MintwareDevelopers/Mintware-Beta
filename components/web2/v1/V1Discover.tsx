@@ -3,7 +3,7 @@
 // Discover — the V1 app home (Meteora × Krystal parity): a scannable table of the hottest Robinhood-Chain
 // pools that pass our screen, live from /api/gateway/discover (real GeckoTerminal metrics + our risk score).
 // Real paired token icons, 24h price-trend sparklines, est. fee APR, sortable columns, and a curated
-// "screened picks" spotlight. Every row → /earn/[pool]; live pools are depositable, the rest are "Curating".
+// "screened picks" spotlight. Live pools are depositable, the rest are "Curating".
 // Honest: real metrics only, est. APR labeled an estimate, no APY/guaranteed framing; the score ranks,
 // humans curate.
 
@@ -36,16 +36,12 @@ type SortKey = 'vol' | 'apr' | 'tvl' | 'activity' | 'trust'
 const usd = (n: number) =>
   n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}k` : `$${n.toFixed(0)}`
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`
-// Audit O-2 / HO-2: /earn/[pool] is keyed by the pool's registry id (the 20-/32-byte v4 poolId from
-// GeckoTerminal), NEVER the pair label — a label slug could not match the registry and every page fell
-// back to the single env gateway. The label is display-only.
 const slug = (p: Pool) => encodeURIComponent(p.poolAddress.toLowerCase())
 // est. fee APR: big meme-pool numbers read like Krystal/Meteora (9,307%); small ones keep a decimal.
 const aprFmt = (n: number | null) => (n == null ? '—' : n >= 1000 ? `${Math.round(n).toLocaleString('en-US')}%` : `${n.toFixed(1)}%`)
 // strip the trailing fee off the GeckoTerminal name so the row shows a clean pair; the fee gets its own chip.
 const pairName = (p: Pool) => (p.baseSymbol && p.quoteSymbol ? `${p.baseSymbol} / ${p.quoteSymbol}` : (p.pairLabel || short(p.poolAddress)).replace(/\s*\d[\d.]*\s*%\s*$/, ''))
-// Earnings simulator: est. fees/yr on a deposit = amount × pool fee-APR (earn-vs-lp decision: 100% of a
-// deposit is deployed as liquidity — no held-back reserve). Matches the /earn/[pool] page math. An estimate
+// Earnings simulator: est. fees/yr on a deposit = amount × pool fee-APR. An estimate
 // off the trailing-24h fee rate, gross of impermanent loss — never a promise.
 const projFeesYr = (p: Pool, amount: number) => (p.estFeeAprPct != null && amount > 0 ? amount * (p.estFeeAprPct / 100) : null)
 const projFmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(0)}`)

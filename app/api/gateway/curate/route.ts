@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { createHandler, type RouteContext } from '@/lib/web2/routeHandler'
 import { deactivateInstance } from '@/lib/gateway/registry'
 import { marketEngineConfig, verifyMarketEngine } from '@/lib/gateway/marketEngine'
-import { gatewayPublicClient } from '@/lib/gateway/chain'
+import { marketEnginePublicClient } from '@/lib/gateway/chain'
 import {
   GATEWAY_CURATE_ACTION,
   buildGatewayCurateMessage,
@@ -123,7 +123,7 @@ async function curate(b: Body, ctx: RouteContext, actor: Actor) {
       return ctx.json({ success: false, error: 'chain_not_verifiable' }, 400)
     }
     const engineAddress = inst.marketEngineAddress.toLowerCase() as `0x${string}`
-    const verified = await verifyMarketEngine({ client: gatewayPublicClient(cfg), address: engineAddress, expectedPool: poolAddress, chainId: cfg.chainId })
+    const verified = await verifyMarketEngine({ client: marketEnginePublicClient(cfg), address: engineAddress, expectedPool: poolAddress, chainId: cfg.chainId })
     if (!verified.ok) {
       ctx.log.warn('gateway.curate', 'instance registration REFUSED', {
         pool: poolAddress, chainId, marketEngine: engineAddress, curator: actor.address, reason: verified.error,

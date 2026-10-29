@@ -1,6 +1,6 @@
 import { isAddress } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
-import { gatewayPublicClient } from '@/lib/gateway/chain'
+import { marketEnginePublicClient } from '@/lib/gateway/chain'
 import { marketEngineConfig, resolveMarketEngine } from '@/lib/gateway/marketEngine'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
@@ -18,7 +18,7 @@ export const GET = createHandler(async (req, ctx) => {
   const inst = await resolveMarketEngine(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), true, req.nextUrl.searchParams.get('pm'))
   if (!inst || !inst.verified) return ctx.json({ success: false, error: 'pool_not_live' }, 404)
   try {
-    const client = gatewayPublicClient(cfg)
+    const client = marketEnginePublicClient(cfg)
     const [shares, totalSupply, totalNav] = await Promise.all([
       client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'balanceOf', args: [address as `0x${string}`] }),
       client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalSupply' }),
