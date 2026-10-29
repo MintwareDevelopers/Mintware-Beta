@@ -117,16 +117,11 @@ describe('HO-2 _FIXED · an unknown /earn/[pool] slug is a 404 on the money path
     expect(body.meta).toBeUndefined()
   })
 
-  it('defense holds: registry EMPTY → unknown pool is still 404; the env rig is served only for its own pool, tagged env-fallback with live:false', async () => {
+  it('defense holds: registry EMPTY → the Base Sepolia default is not depositable until its code hash and owner trust roots are configured', async () => {
     state.supabase = fluent({ data: null, error: null }).client
     const { GET } = await import('@/app/api/gateway/meta/route')
     expect((await GET(req('https://mintware.test/api/gateway/meta?pool=not-a-registered-pool'))).status).toBe(404)
-    const res = await GET(req('https://mintware.test/api/gateway/meta?pool=pons-usdg'))
-    expect(res.status).toBe(200)
-    const { meta } = await res.json()
-    expect(meta.positionManager).toBe(FALLBACK_PM)
-    expect(meta.source).toBe('env-fallback')
-    expect(meta.live).toBe(false) // derived from an ACTIVE registry row — never the literal `true` the old route.ts:63 carried
+    expect((await GET(req('https://mintware.test/api/gateway/meta?pool=pons-usdg'))).status).toBe(404)
   })
 })
 
@@ -287,9 +282,11 @@ describe('HO-6 _FIXED · /api/gateway/request rejects free-text pool_address / f
 describe('HO-7 _FIXED · Discover marks a pool live ONLY from ACTIVE gateway_instances (HO-11)', () => {
   it('defense holds: an inactive (deactivated) instance renders live:false; the read filters status=active', async () => {
     const POOL = '0x' + 'ab'.repeat(32)
-    const { db, client } = fakeSupabase({ tables: { gateway_instances: [{ pool_address: POOL, chain_id: 46630, status: 'inactive' }] } })
+    const { db, client } = fakeSupabase({ tables: { gateway_instances: [{ pool_address: POOL, chain_id: 46630, status: 'inactive', market_engine_address: '0x' + '11'.repeat(20), engine_verified_at: new Date().toISOString() }] } })
     state.supabase = client
     state.cfg = { chainId: 46630, rpcUrl: 'http://rpc.test', positionManager: null, staging: null, poolAddress: null }
+    process.env.MARKET_ENGINE_CHAIN_ID = '46630'
+    process.env.MARKET_ENGINE_RPC_URL = 'http://rpc.test'
     state.fetchHotPools = async () => [{ poolAddress: POOL, pairLabel: 'X / USDG', tvlUsd: 1, vol24Usd: 1, priceQuotePerBase: null, signals: { volTvlRatio: null, poolAgeDays: null, txCount24: null }, score: 0, verdict: 'review', reasons: [], baseSymbol: 'X', quoteSymbol: 'USDG', baseLogo: null, quoteLogo: null, feePct: null, estFeeAprPct: null }]
     vi.resetModules() // fresh module-level 3-min cache
     const { GET } = await import('@/app/api/gateway/discover/route')
@@ -297,7 +294,7 @@ describe('HO-7 _FIXED · Discover marks a pool live ONLY from ACTIVE gateway_ins
     const body = await res.json()
     expect(body.pools[0].live).toBe(false)
     const read = db.calls.find((c) => c.table === 'gateway_instances' && c.op === 'select')!
-    expect(read.filters.map((f) => [(f as { col: string }).col, (f as { val: unknown }).val])).toEqual(expect.arrayContaining([['chain_id', 46630], ['status', 'active']])) // was chain_id only
+    expect(read.filters.map((f) => [(f as { col: string }).col, (f as { val: unknown }).val])).toEqual(expect.arrayContaining([['chain_id', 46630], ['status', 'active'], ['market_engine_address', null], ['engine_verified_at', null]]))
     // flip the row to active → live:true (the instances read is per-request; only the upstream feed is cached)
     db.tables.gateway_instances[0].status = 'active'
     expect((await (await GET(req('https://mintware.test/api/gateway/discover'))).json()).pools[0].live).toBe(true)

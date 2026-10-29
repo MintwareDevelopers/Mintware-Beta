@@ -5,20 +5,22 @@ import { NextRequest } from 'next/server'
 
 const POOL = '0x' + 'ab'.repeat(32)
 const state = vi.hoisted(() => ({
-  instances: [] as Array<{ pool_address: string; status: string }>,
+  instances: [] as Array<{ pool_address: string; status: string; market_engine_address?: string | null; engine_verified_at?: string | null }>,
   filters: [] as Array<[string, unknown]>,
   hotCalls: 0,
 }))
 
 vi.mock('@/lib/gateway/chain', () => ({ gatewayConfig: () => ({ chainId: 46630, rpcUrl: 'https://rpc.test' }) }))
+vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => ({ chainId: 46630, rpcUrl: 'https://rpc.test', defaultEngine: null }) }))
 vi.mock('@/lib/web2/supabase', () => ({
   getServiceClient: () => ({
     from: () => {
       const b = {
         select: () => b,
         eq: (col: string, val: unknown) => { state.filters.push([col, val]); return b },
+        not: (col: string, _op: string, val: unknown) => { state.filters.push([col, val]); return b },
         then: (res: (v: unknown) => unknown) => Promise.resolve({
-          data: state.instances.filter((r) => state.filters.every(([c, v]) => c !== 'status' || r.status === v)),
+          data: state.instances.filter((r) => state.filters.every(([c, v]) => c === 'status' ? r.status === v : c === 'market_engine_address' ? (v === null ? r.market_engine_address != null : r.market_engine_address === v) : c === 'engine_verified_at' ? (v === null ? r.engine_verified_at != null : r.engine_verified_at === v) : true)),
           error: null,
         }).then(res),
       }
@@ -48,7 +50,7 @@ afterEach(() => { delete process.env.LP_GATEWAY_USDG; delete process.env.LP_GATE
 
 describe('/api/gateway/discover', () => {
   it('HO-11: a DEACTIVATED instance is not "live"; an active one is; usdgConfigured reflects the env', async () => {
-    state.instances = [{ pool_address: POOL, status: 'inactive' }]
+    state.instances = [{ pool_address: POOL, status: 'inactive', market_engine_address: '0x' + '11'.repeat(20), engine_verified_at: 'verified' }]
     const { GET } = await import('./route')
     const b1 = await (await GET(req('192.0.2.1'))).json()
     expect(b1.success).toBe(true)
@@ -57,7 +59,7 @@ describe('/api/gateway/discover', () => {
     expect(state.filters).toContainEqual(['status', 'active'])
 
     process.env.LP_GATEWAY_USDG = '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168'
-    state.instances = [{ pool_address: POOL, status: 'active' }]
+    state.instances = [{ pool_address: POOL, status: 'active', market_engine_address: '0x' + '11'.repeat(20), engine_verified_at: 'verified' }]
     const b2 = await (await GET(req('192.0.2.1'))).json()
     expect(b2.pools[0].live).toBe(true)
     expect(b2.usdgConfigured).toBe(true)

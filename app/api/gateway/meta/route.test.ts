@@ -1,173 +1,46 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { toFunctionSelector } from 'viem'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeSupabase } from '@/lib/gateway/__audit__/fakeSupabase'
 
-// O-2 / HO-2 / R-1 closeout: /api/gateway/meta must never advertise the env rig for an unknown pool
-// while the registry is populated, must derive `live`, must tag `source`, and must return the
-// INSTANCE's quote asset (not a global env). C-6: feature-detects depositWithMin/withdrawWithMin.
+const state = vi.hoisted(() => ({ config: { chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }, instance: null as unknown, verify: null as unknown, read: vi.fn() }))
+vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => state.config, resolveMarketEngine: async () => state.instance, verifyMarketEngine: async () => state.verify }))
+vi.mock('@/lib/gateway/chain', () => ({ gatewayPublicClient: () => ({ readContract: state.read }) }))
+vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => fakeSupabase().client }))
 
-const state = vi.hoisted(() => ({
-  supabase: null as unknown,
-  cfg: null as unknown,
-  readContract: (async (_a: unknown): Promise<unknown> => { throw new Error('rpc') }),
-  getCode: (async (_a: unknown): Promise<string> => '0x'),
-}))
-vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => state.supabase }))
-vi.mock('@/lib/gateway/chain', () => ({
-  gatewayConfig: () => state.cfg,
-  gatewayPublicClient: () => ({ readContract: (a: unknown) => state.readContract(a), getCode: (a: unknown) => state.getCode(a) }),
-}))
-
-const ENV_PM = '0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11'
-const REG_PM = '0x00000000000000000000000000000000000000aa'
-const POOL_ID = '0x' + 'ab'.repeat(32)
-const ENV_POOL = '0x' + 'ee'.repeat(32)
-const QUOTE = '0x' + '22'.repeat(20)
-const cfg = { chainId: 46630, rpcUrl: 'http://rpc.test', positionManager: ENV_PM, staging: null, poolAddress: ENV_POOL }
-const registryRow = { pool_address: POOL_ID, chain_id: 46630, position_manager: REG_PM, staging: '0x' + '11'.repeat(20), quote_asset: QUOTE, status: 'active', pair_label: 'PONS / USDG' }
-
-function req(url: string, ip = '203.0.113.1') {
-  const r = new Request(url, { headers: { 'x-forwarded-for': ip } })
-  ;(r as unknown as { nextUrl: URL }).nextUrl = new URL(url)
-  return r as never
-}
-const SELS = toFunctionSelector('depositWithMin(uint256,uint256)').slice(2) + 'ff' + toFunctionSelector('withdrawWithMin(uint256,uint256,uint256)').slice(2)
+const ENGINE = '0x' + '11'.repeat(20)
+const TOKEN0 = '0x' + '22'.repeat(20)
+const TOKEN1 = '0x' + '33'.repeat(20)
+const POOL = '0x' + 'ab'.repeat(32)
+const instance = { id: 'engine-1', poolAddress: POOL, chainId: 84532, pairLabel: 'A / USDG', engineAddress: ENGINE, quoteAsset: TOKEN1, token0: TOKEN0, token1: TOKEN1, status: 'active', verified: true, source: 'registry', live: true }
+const verified = { ok: true, codeHash: '0x' + '44'.repeat(32), owner: '0x' + '55'.repeat(20), quoteAsset: TOKEN1, token0: TOKEN0, token1: TOKEN1, poolKey: { currency0: TOKEN0, currency1: TOKEN1, fee: 3000, tickSpacing: 60, hooks: '0x' + '00'.repeat(20) } }
+const req = (url: string) => { const r = new Request(url); (r as unknown as { nextUrl: URL }).nextUrl = new URL(url); return r as never }
 
 beforeEach(() => {
-  state.cfg = cfg
-  state.readContract = async (a: unknown) => {
-    const { functionName } = a as { functionName: string }
-    if (functionName === 'quoteAsset') return QUOTE
-    throw new Error('rpc') // poolKey etc. unreadable ⇒ fee/range fields null (never a false claim)
-  }
-  state.getCode = async () => '0x6080' + SELS + '00'
+  state.config = { chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }
+  state.instance = instance
+  state.verify = verified
+  state.read = vi.fn(async (arg: { functionName: string }) => ({ decimals: 6, tickLower: -100, tickUpper: 100, activated: true } as Record<string, unknown>)[arg.functionName] ?? 6)
 })
 
-describe('GET /api/gateway/meta — strict resolution', () => {
-  it('registry populated + unknown slug → 404 pool_not_live (no env rig, no live:true)', async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
+describe('GET /api/gateway/meta — MarketEngine target', () => {
+  it('returns the verified active engine, quote token, token pair, and chain config', async () => {
     const { GET } = await import('./route')
-    const res = await GET(req('https://mw.test/api/gateway/meta?pool=not-a-registered-pool'))
-    expect(res.status).toBe(404)
-    expect((await res.json()).error).toBe('pool_not_live')
-  })
-  it('registry hit → source registry, live true, the INSTANCE quote asset, supportsMin detected', async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
-    const { GET } = await import('./route')
-    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID.toUpperCase()}`))
+    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL}`))
     expect(res.status).toBe(200)
-    const { meta } = await res.json()
-    expect(meta.positionManager).toBe(REG_PM)
-    expect(meta.poolAddress).toBe(POOL_ID)
-    expect(meta.source).toBe('registry')
-    expect(meta.live).toBe(true)
-    expect(meta.usdg).toBe(QUOTE)
-    expect(meta.pairLabel).toBe('PONS / USDG')
-    expect(meta.supportsMin).toBe(true)
-    expect(meta.feePips).toBeNull()
+    expect((await res.json()).meta).toMatchObject({ engineAddress: ENGINE, positionManager: ENGINE, poolAddress: POOL, usdg: TOKEN1, token0: TOKEN0, token1: TOKEN1, source: 'registry', live: true, supportsMin: true })
   })
-  it('registry empty + the env pool → env rig tagged env-fallback, live FALSE', async () => {
-    state.supabase = fakeSupabase().client
+  it('refuses an unmapped pool', async () => {
+    state.instance = null
     const { GET } = await import('./route')
-    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${ENV_POOL}`))
-    expect(res.status).toBe(200)
-    const { meta } = await res.json()
-    expect(meta.positionManager).toBe(ENV_PM)
-    expect(meta.source).toBe('env-fallback')
-    expect(meta.live).toBe(false)
-    expect(meta.usdg).toBe(QUOTE) // from the contract's own quoteAsset() when no registry row
+    expect((await GET(req('https://mw.test/api/gateway/meta?pool=0x' + 'ff'.repeat(32)))).status).toBe(404)
   })
-  it('registry empty + a different pool → 404 (no silent re-route to the rig)', async () => {
-    state.supabase = fakeSupabase().client
+  it('fails closed when MarketEngine config is missing', async () => {
+    state.config = null as never
     const { GET } = await import('./route')
-    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
-    expect(res.status).toBe(404)
+    expect((await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL}`))).status).toBe(503)
   })
-  it('supportsMin is false on a legacy PM without the *WithMin selectors, null when bytecode is unreadable', async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
+  it('does not advertise an engine that fails current on-chain identity checks', async () => {
+    state.verify = { ok: false, error: 'engine_owner_mismatch' }
     const { GET } = await import('./route')
-    state.getCode = async () => '0x6080604052'
-    expect((await (await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))).json()).meta.supportsMin).toBe(false)
-    state.getCode = async () => { throw new Error('rpc') }
-    expect((await (await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))).json()).meta.supportsMin).toBeNull()
-  })
-  it('D-4: staging.adapter() exposes depositCap() → adapterKind idle, cap surfaced', async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
-    const IDLE_ADAPTER = '0x' + '77'.repeat(20)
-    state.readContract = async (a: unknown) => {
-      const { address, functionName } = a as { address: string; functionName: string }
-      if (functionName === 'quoteAsset') return QUOTE
-      if (functionName === 'adapter') return IDLE_ADAPTER
-      if (functionName === 'depositCap' && address === IDLE_ADAPTER) return 5_000_000n
-      throw new Error('rpc')
-    }
-    const { GET } = await import('./route')
-    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
-    const { meta } = await res.json()
-    expect(meta.adapterKind).toBe('idle')
-    expect(meta.idleDepositCapAtomic).toBe('5000000')
-  })
-  it("D-4 audit fix (round-4): depositCap() fails AND perBlockWithdrawCap() answers (real adapter's own shape, positively confirmed) → adapterKind real", async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
-    const REAL_ADAPTER = '0x' + '88'.repeat(20)
-    state.readContract = async (a: unknown) => {
-      const { address, functionName } = a as { address: string; functionName: string }
-      if (functionName === 'quoteAsset') return QUOTE
-      if (functionName === 'adapter') return REAL_ADAPTER
-      if (functionName === 'depositCap') throw new Error('execution reverted (unknown selector)')
-      if (functionName === 'perBlockWithdrawCap' && address === REAL_ADAPTER) return 10_000_000n
-      throw new Error('rpc')
-    }
-    const { GET } = await import('./route')
-    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
-    const { meta } = await res.json()
-    expect(meta.adapterKind).toBe('real')
-    expect(meta.idleDepositCapAtomic).toBeNull()
-  })
-  it("D-4 audit fix (round-4): depositCap() fails for a TRANSIENT reason (RPC timeout, not an ABI mismatch) and perBlockWithdrawCap() ALSO fails → adapterKind unknown, never a guessed 'real' (was the bug: used to default to 'real' here)", async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
-    const SOME_ADAPTER = '0x' + '99'.repeat(20)
-    state.readContract = async (a: unknown) => {
-      const { functionName } = a as { functionName: string }
-      if (functionName === 'quoteAsset') return QUOTE
-      if (functionName === 'adapter') return SOME_ADAPTER
-      if (functionName === 'depositCap') throw new Error('HttpRequestError: timeout of 10000ms exceeded')
-      if (functionName === 'perBlockWithdrawCap') throw new Error('HttpRequestError: timeout of 10000ms exceeded')
-      throw new Error('rpc')
-    }
-    const { GET } = await import('./route')
-    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
-    const { meta } = await res.json()
-    expect(meta.adapterKind).toBe('unknown')
-    expect(meta.idleDepositCapAtomic).toBeNull()
-  })
-  it('D-4: staging.adapter() itself unreadable → adapterKind unknown (never a guessed claim)', async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
-    // default beforeEach readContract already throws for everything but quoteAsset
-    const { GET } = await import('./route')
-    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
-    const { meta } = await res.json()
-    expect(meta.adapterKind).toBe('unknown')
-  })
-  it('registry quote_asset ≠ contract quoteAsset() → 409, no deposit target advertised', async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [{ ...registryRow, quote_asset: '0x' + '99'.repeat(20) }] } }).client
-    const { GET } = await import('./route')
-    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
-    expect(res.status).toBe(409)
-    expect((await res.json()).error).toBe('instance_quote_mismatch')
-  })
-  // V1-09 fix (independent Codex audit, 2026-09-09): this route runs several RPC reads per call and had
-  // no rate limit at all — createHandler's declarative option fails open without Upstash. Now has the
-  // same in-memory per-IP floor as discover/sparklines (O-8).
-  it('V1-09 fix: per-IP floor returns a 429-shaped JSON without Upstash', async () => {
-    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
-    const { GET } = await import('./route')
-    let saw429 = false
-    for (let i = 0; i < 60; i++) {
-      const r = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`, '198.51.100.7'))
-      if (r.status === 429) { saw429 = true; expect((await r.json()).code).toBe('RATE_LIMITED'); break }
-    }
-    expect(saw429).toBe(true)
-    expect((await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`, '198.51.100.8'))).status).toBe(200)
+    expect((await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL}`))).status).toBe(503)
   })
 })

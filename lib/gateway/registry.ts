@@ -340,7 +340,7 @@ export async function listActiveInstances(supabase: SupabaseClient, chainId?: nu
   if (chainId != null) q = q.eq('chain_id', chainId)
   const { data, error } = await q
   if (error) throw new Error(`listActiveInstances: ${error.message ?? 'query failed'}`)
-  return (data ?? []).map(map)
+  return (data ?? []).filter((r: Record<string, unknown>) => r.market_engine_address == null).map(map)
 }
 
 /** Every instance incl. inactive (withdraw-only resolution + curator views). */
@@ -349,7 +349,7 @@ export async function listAllInstances(supabase: SupabaseClient, chainId?: numbe
   if (chainId != null) q = q.eq('chain_id', chainId)
   const { data, error } = await q
   if (error) throw new Error(`listAllInstances: ${error.message ?? 'query failed'}`)
-  return (data ?? []).map(map)
+  return (data ?? []).filter((r: Record<string, unknown>) => r.market_engine_address == null).map(map)
 }
 
 export async function resolveGatewayByPool(
@@ -364,7 +364,7 @@ export async function resolveGatewayByPool(
     .eq('chain_id', chainId)
     .eq('status', 'active')
     .maybeSingle()
-  return data ? map(data as Record<string, unknown>) : null
+  return data && (data as Record<string, unknown>).market_engine_address == null ? map(data as Record<string, unknown>) : null
 }
 
 // ── write side ────────────────────────────────────────────────────────────────────────────────
