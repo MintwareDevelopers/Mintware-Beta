@@ -1,27 +1,34 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Script, console2} from "forge-std/Script.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
-import {PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import {IMarketAssetMark} from "../src/vaults/IMarketAssetMark.sol";
+import { Script, console2 } from "forge-std/Script.sol";
+import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import { IHooks } from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
+import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
+import { PoolIdLibrary } from "@uniswap/v4-core/src/types/PoolId.sol";
+import { PoolId } from "@uniswap/v4-core/src/types/PoolId.sol";
+import { StateLibrary } from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { TickMath } from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import { IMarketAssetMark } from "../src/vaults/IMarketAssetMark.sol";
 
-/// @notice Initialize the valueless Base Sepolia rehearsal pool at the existing fresh mark.
+/// @notice Initialize a supported testnet rehearsal pool at the configured fresh test mark.
 contract InitializeMarketTestPool is Script {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
     uint256 constant Q96 = 1 << 96;
-    address constant PM = 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408;
+    address constant BASE_SEPOLIA_PM = 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408;
+    address constant ROBINHOOD_TESTNET_PM = 0x8366a39CC670B4001A1121B8F6A443A643e40951;
 
     function run() external {
-        require(block.chainid == 84532 && vm.envBool("MARKET_TEST_ONLY"), "testnet only");
+        address configuredPm = vm.envAddress("MARKET_POOL_MANAGER");
+        require(
+            (block.chainid == 84532 && configuredPm == BASE_SEPOLIA_PM)
+                || (block.chainid == 46630 && configuredPm == ROBINHOOD_TESTNET_PM),
+            "unsupported testnet"
+        );
+        require(vm.envBool("MARKET_TEST_ONLY"), "testnet only");
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address token0 = vm.envAddress("MARKET_CURRENCY0");
         address token1 = vm.envAddress("MARKET_CURRENCY1");
@@ -41,8 +48,14 @@ contract InitializeMarketTestPool is Script {
             : Math.mulDiv(1e36, 1, markWad * 10 ** (d0 - d1));
         uint160 sqrtPrice = uint160(Math.mulDiv(Math.sqrt(ratioWad), Q96, 1e9));
         int24 markTick = TickMath.getTickAtSqrtPrice(sqrtPrice);
-        PoolKey memory poolKey = PoolKey(Currency.wrap(token0), Currency.wrap(token1), uint24(fee), int24(spacing), IHooks(address(0)));
-        IPoolManager pm = IPoolManager(PM);
+        PoolKey memory poolKey = PoolKey(
+            Currency.wrap(token0),
+            Currency.wrap(token1),
+            uint24(fee),
+            int24(spacing),
+            IHooks(address(0))
+        );
+        IPoolManager pm = IPoolManager(configuredPm);
         (uint160 current,,,) = pm.getSlot0(poolKey.toId());
         if (current == 0) {
             vm.startBroadcast(key);
@@ -58,9 +71,12 @@ contract InitializeMarketTestPool is Script {
             require(tickDistance <= maxTickDistance, "initialized pool spot is outside mark band");
             console2.log("Pool already initialized; spot sqrt", uint256(current));
         }
-        console2.log("PoolId"); console2.logBytes32(PoolId.unwrap(poolKey.toId()));
+        console2.log("PoolId");
+        console2.logBytes32(PoolId.unwrap(poolKey.toId()));
         console2.log("MarkWad", markWad);
     }
 }
 
-interface IERC20Metadata { function decimals() external view returns (uint8); }
+interface IERC20Metadata {
+    function decimals() external view returns (uint8);
+}
