@@ -25,7 +25,7 @@ export function PositionCard() {
   const s = STATES[step]
   const leaving = step === 2
   return (
-    <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-6 max-w-[460px] w-full">
+    <div className="glass-card p-7 max-w-[440px] w-full">
       <div className="flex items-center justify-between">
         <span className="text-[13px] font-semibold">Your $5,000 · stock token / USDG</span>
         <span className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-ink-soft">Simulated</span>
@@ -38,8 +38,8 @@ export function PositionCard() {
         <p className="text-[13.5px] text-ink-mid leading-[1.55] mt-1.5">{s.note}</p>
         {leaving ? (
           <div className="mt-4 grid grid-cols-2 gap-3 text-[13px]">
-            <div className="rounded-lg bg-ground-cool p-3"><div className="text-ink-mid">You receive</div><div className="font-mono font-semibold mt-1">2,531.40 USDG</div></div>
-            <div className="rounded-lg bg-ground-cool p-3"><div className="text-ink-mid">and</div><div className="font-mono font-semibold mt-1">13.92 stock tokens</div></div>
+            <div className="rounded-2xl bg-white/70 p-3"><div className="text-ink-mid">You receive</div><div className="font-mono font-semibold mt-1">2,531.40 USDG</div></div>
+            <div className="rounded-2xl bg-white/70 p-3"><div className="text-ink-mid">and</div><div className="font-mono font-semibold mt-1">13.92 stock tokens</div></div>
           </div>
         ) : (
           <div className="mt-4 space-y-2.5 text-[13px]">
@@ -60,7 +60,7 @@ function Bar({ label, pct }: { label: string; pct: number }) {
   return (
     <div>
       <div className="flex justify-between text-ink-mid"><span>{label}</span><span className="font-mono">${fmt(5000 * pct / 100)}</span></div>
-      <div className="mt-1 h-2 rounded-full bg-ground-cool overflow-hidden"><div className="h-full rounded-full bg-peri-deep transition-[width] duration-700" style={{ width: `${pct}%` }} /></div>
+      <div className="mt-1 h-2 rounded-full bg-white/70 overflow-hidden"><div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${pct}%`, backgroundImage: 'linear-gradient(90deg, var(--color-peri), var(--color-peri-deep))' }} /></div>
     </div>
   )
 }
