@@ -107,7 +107,7 @@ contract MintwarePaymentGateway is AccessControl, ReentrancyGuard, Pausable, MWT
         if (userUsed >= userLimit || globalUsed >= globalLimit) revert RefillLimitExceeded();
         uint256 remaining = userLimit - userUsed;
         if (globalLimit - globalUsed < remaining) remaining = globalLimit - globalUsed;
-        uint256 maxShares = vault.previewWithdraw(remaining);
+        uint256 maxShares = vault.convertToShares(remaining);
         if (shares > maxShares) shares = maxShares;
         if (shares == 0) revert RefillLimitExceeded();
 

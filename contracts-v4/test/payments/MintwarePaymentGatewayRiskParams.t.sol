@@ -165,6 +165,17 @@ contract MintwarePaymentGatewayRiskParamsTest is Test {
         assertEq(gateway.userRefilled(alice, day), 100e6);
     }
 
+    function test_yield_accrued_refill_at_cap_clips_without_reverting() public {
+        uint256 cap = 100_000_002;
+        gateway.setUserCap(alice, cap);
+        token.mint(address(adapter), 3_000_000e6); // accrue substantial yield without minting shares
+        uint256 requested = vault.previewWithdraw(cap);
+        assertGt(vault.previewRedeem(requested), cap, "must exercise non-1:1 rounding edge");
+        uint256 delivered = gateway.refill(keccak256("yield-cap-edge"), alice, requested);
+        assertGt(delivered, 0);
+        assertLe(delivered, cap);
+    }
+
     function _pendingEta(bytes32 param) internal view returns (uint256 eta) {
         (,, eta) = gateway.pendingRiskParam(param);
     }
