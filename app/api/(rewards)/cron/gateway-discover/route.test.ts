@@ -6,7 +6,7 @@ import { fakeSupabase } from '@/lib/gateway/__audit__/fakeSupabase'
 
 const state = vi.hoisted(() => ({ client: null as unknown }))
 vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => state.client }))
-vi.mock('@/lib/gateway/chain', () => ({ gatewayConfig: () => ({ chainId: 4663, rpcUrl: 'https://rpc.test' }) }))
+vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => ({ chainId: 4663, rpcUrl: 'https://rpc.test', defaultEngine: null }) }))
 
 const CHAIN = 4663
 const req = (auth?: string) => new NextRequest('https://mintware.test/api/cron/gateway-discover', { method: 'POST', headers: auth ? { authorization: auth } : {} })

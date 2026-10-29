@@ -1,15 +1,17 @@
 import { createHandler } from '@/lib/web2/routeHandler'
-import { listActiveInstances, listAllInstances } from '@/lib/gateway/registry'
+import { listMarketEngines, marketEngineConfig } from '@/lib/gateway/marketEngine'
 
 export const dynamic = 'force-dynamic'
-
-// Public: every live curated gateway (one per pool). Powers the /earn discovery list + is the set the
-// harvest/deploy crons iterate. `?all=1` also returns deactivated rows (with `status`) — the curator
-// view needs them (withdraw-only pools; audit closeout O-3 / HO-7). Addresses only — nothing secret.
 export const GET = createHandler(async (req, ctx) => {
-  const c = req.nextUrl.searchParams.get('chainId')
-  const all = req.nextUrl.searchParams.get('all') === '1'
-  const chainId = c ? Number(c) : undefined
-  const instances = all ? await listAllInstances(ctx.supabase, chainId) : await listActiveInstances(ctx.supabase, chainId)
-  return ctx.json({ success: true, instances })
+  const cfg = marketEngineConfig()
+  if (!cfg) return ctx.json({ success: true, instances: [] })
+  const requested = req.nextUrl.searchParams.get('chainId')
+  const chainId = requested ? Number(requested) : cfg.chainId
+  let instances
+  try { instances = await listMarketEngines(ctx.supabase, chainId, req.nextUrl.searchParams.get('all') !== '1') }
+  catch (e) {
+    ctx.log.warn('market-engine.instances', 'engine registry unavailable', { error: String(e) })
+    return ctx.json({ success: false, error: 'engine_registry_unavailable' }, 503)
+  }
+  return ctx.json({ success: true, instances: instances.map((x) => ({ ...x, positionManager: x.engineAddress, verification: x.verified ? 'codehash' : null })) })
 })

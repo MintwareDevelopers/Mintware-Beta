@@ -1,6 +1,6 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { fetchHotPools, discoverUsdgEnv, type PoolCandidate } from '@/lib/gateway/discovery'
-import { gatewayConfig } from '@/lib/gateway/chain'
+import { marketEngineConfig } from '@/lib/gateway/marketEngine'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
 
 export const dynamic = 'force-dynamic'
@@ -27,7 +27,7 @@ export const GET = createHandler(async (req, ctx) => {
   const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0]?.trim() || 'unknown'
   if (!ipBucket.take(ip)) return ctx.json({ success: false, error: 'Too many requests', code: 'RATE_LIMITED' }, 429)
 
-  const cfg = gatewayConfig()
+  const cfg = marketEngineConfig()
   const usdgConfigured = /^0x[0-9a-fA-F]{40}$/.test(discoverUsdgEnv() ?? '')
 
   if (!cache || Date.now() - cache.at > TTL_MS) {
@@ -52,6 +52,8 @@ export const GET = createHandler(async (req, ctx) => {
       .select('pool_address')
       .eq('chain_id', cfg.chainId)
       .eq('status', 'active')
+      .not('market_engine_address', 'is', null)
+      .not('engine_verified_at', 'is', null)
     liveSet = new Set((data ?? []).map((r: { pool_address: string }) => String(r.pool_address).toLowerCase()))
   }
 

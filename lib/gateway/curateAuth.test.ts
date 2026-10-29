@@ -10,7 +10,7 @@ describe('buildGatewayCurateMessage', () => {
     const p = JSON.parse(m)
     expect(p).toEqual({
       action: GATEWAY_CURATE_ACTION, address: A.toLowerCase(), curateAction: 'approve', requestId: 'r1',
-      poolAddress: '0xpool', chainId: null, positionManager: '0xABCD'.padEnd(42, '0').toLowerCase(), staging: null, issuedAt: 123,
+      poolAddress: '0xpool', chainId: null, positionManager: '0xABCD'.padEnd(42, '0').toLowerCase(), staging: null, marketEngineAddress: null, issuedAt: 123,
     })
     expect(GATEWAY_CURATE_ACTION).toBe('mintware-gateway-curate')
   })
@@ -20,6 +20,7 @@ describe('buildGatewayCurateMessage', () => {
     expect(buildGatewayCurateMessage({ ...base, curateAction: 'reject' })).not.toBe(m)
     expect(buildGatewayCurateMessage({ ...base, requestId: 'r2' })).not.toBe(m)
     expect(buildGatewayCurateMessage({ ...base, positionManager: A })).not.toBe(m)
+    expect(buildGatewayCurateMessage({ ...base, marketEngineAddress: A })).not.toBe(m)
     expect(buildGatewayCurateMessage({ ...base, issuedAt: 2 })).not.toBe(m)
     expect(buildGatewayCurateMessage({ ...base, address: A.toUpperCase().replace('0X', '0x') })).toBe(m) // case-insensitive address
   })

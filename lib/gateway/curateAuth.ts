@@ -22,6 +22,7 @@ export type CurateMessageInput = {
   /** candidate instance addresses when an approve also registers */
   positionManager?: string | null
   staging?: string | null
+  marketEngineAddress?: string | null
 }
 
 const lower = (v?: string | null) => (v ? v.toLowerCase() : null)
@@ -38,6 +39,7 @@ export function buildGatewayCurateMessage(input: CurateMessageInput): string {
       chainId: input.chainId ?? null,
       positionManager: lower(input.positionManager),
       staging: lower(input.staging),
+      marketEngineAddress: lower(input.marketEngineAddress),
       issuedAt: input.issuedAt,
     },
     null,

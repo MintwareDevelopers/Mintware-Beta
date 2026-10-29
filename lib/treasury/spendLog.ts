@@ -1,7 +1,7 @@
 // Recorder for the unified org-treasury spend ledger (`treasury_spend_events`, migration
 // 20260829000001). Every spend rail writes here so a team can see + report on every dollar that
 // moved. Mirrors the two proven patterns:
-//   • card_swipe_events (lib/org/settleSwipe.ts) — an AWAITED lifecycle row whose `settled` flag is
+//   • card_swipe_events (the retired card settlement path) — an AWAITED lifecycle row whose `settled` flag is
 //     durable and gated on receipt.status === 'success'; and
 //   • settleLog.ts — a fire-and-forget mirror that must never block a settle path.
 //
@@ -79,7 +79,7 @@ export async function recordSpendEvents(rows: SpendRow[]): Promise<string[]> {
 }
 
 /** Mark a recorded spend settled — call ONLY after the tx mined with receipt.status === 'success'
- *  (mirrors the settleSwipe.ts reconciliation rule; a reverted tx must never be recorded settled). */
+ *  (mirrors the retired card settlement reconciliation rule; a reverted tx must never be recorded settled). */
 export async function markSpendSettled(
   id: string,
   fields: { settleTx: string; sharesBurned?: string | null },

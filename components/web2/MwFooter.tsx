@@ -42,7 +42,7 @@ export function MwFooter() {
   const pathname = usePathname()
   if (isAppShellPath(pathname)) return null   // every /app workspace renders inside AppShell (its own chrome)
   // The V1 app (LP Gateway) is a dark surface with its own <V1Footer> in V1Shell — the light marketing
-  // footer must not render under it. Covers /v1, /v1/*, and the /earn/[pool] deposit pages.
+  // footer must not render under it. Covers /v1 and /v1/*.
   if (pathname?.startsWith('/v1') || pathname?.startsWith('/earn')) return null
   return (
     <footer className="bg-ground-cool border-t border-hair-soft">

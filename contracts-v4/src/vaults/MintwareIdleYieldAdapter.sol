@@ -13,11 +13,8 @@ import {IYieldAdapter} from "./IYieldAdapter.sol";
 /// @notice A ZERO-YIELD `IYieldAdapter`: it just custodies the underlying, fully liquid, and never deploys it
 ///         anywhere. Exists for the case where NO real yield source is available yet -- on Robinhood Chain
 ///         mainnet today every USDG ERC-4626 vault (Morpho Vault V2 -- the only yield rail that exists on that
-///         chain at all) reports `maxDeposit == 0` for the LP Gateway seat; see
-///         docs/developers/audits/closeout/mainnet-yield-sources.md. Swapping this in behind
-///         `MintwareLpGatewayStaging` lets the gateway accept deposits and hold them safely with no external-
-///         protocol dependency, at the cost of the "earns immediately" promise -- depositors are held ready,
-///         not earning, until the owner points staging at a real adapter once one exists.
+///         chain at all) reports `maxDeposit == 0` for some deployments. This adapter holds assets safely
+///         without an external-protocol dependency, at the cost of yield until a real source becomes available.
 /// @dev    This is deliberately the simplest possible `IYieldAdapter`: no external call in the hot path at
 ///         all (`deposit`/`withdraw` are plain ERC-20 transfers), so there is no yield-source solvency risk,
 ///         no share-price manipulation surface, no revert-on-preview class (C-10) -- the whole reason those
@@ -131,10 +128,8 @@ contract MintwareIdleYieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyGuar
     /// @inheritdoc IYieldAdapter
     /// @dev Never reverts for ANY reason (per the interface contract), matching `MintwareERC4626YieldAdapter`
     ///      exactly. Round-3 adversarial pass (IA-10): the quote asset here is USDG, whose issuer can freeze an
-    ///      address (M-07) -- a bare `safeTransfer` would then revert this call, and since neither
-    ///      `MintwareLpGatewayStaging.unstage` nor the position manager's idle leg wrap that call in try/catch,
-    ///      an availability failure here used to brick the WHOLE exit including the unrelated, unfrozen LP leg
-    ///      (defeating the A-1 / M-01 "withdrawals never brick" design the rest of the stack was built around).
+    ///      address (M-07) -- a bare `safeTransfer` would then revert this call and could brick an exit that
+    ///      also depends on another unfrozen asset being delivered.
     ///      `SafeERC20.safeTransfer` cannot itself be wrapped in `try/catch` -- it is an internal library call
     ///      inlined here, with no external-call boundary -- so this uses a raw low-level call instead, tolerant
     ///      of both bool-returning and void-returning ERC-20s, and serves 0 on ANY failure so the PM re-credits

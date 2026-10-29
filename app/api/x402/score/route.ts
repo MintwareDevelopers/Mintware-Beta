@@ -50,7 +50,7 @@ export const GET = createHandler(async (req, ctx) => {
   // Paid + verified (hold placed). Serve the resource, then settle best-effort (deferred-friendly).
   const score = await getServerLegacyScore(address)
   facilitator
-    .settle(decision.requirements, decision.payload, decision.holdId)
+    .settle(decision.requirements, decision.payload)
     .catch((e) => ctx.log.warn('x402', 'settle failed (deferred)', { err: String(e) }))
 
   return ctx.json({ paid: true, payer: decision.payer, holdId: decision.holdId, address, score })
