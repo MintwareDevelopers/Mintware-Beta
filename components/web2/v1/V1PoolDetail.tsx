@@ -60,6 +60,7 @@ type PendingRecord = { kind: 'deposit' | 'withdraw'; txHash: `0x${string}` }
 
 const ERC20_ABI = [
   { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 's', type: 'address' }, { name: 'v', type: 'uint256' }], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }] },
 ] as const
 
 const usd = (n: number) => (n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(2)}`)
@@ -193,12 +194,14 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     return (await connector.getProvider()) as import('viem').EIP1193Provider
   }
   function chainObj(mm: Meta) {
-    return { id: mm.chainId, name: mm.chainId === 84532 ? 'Base Sepolia' : 'Robinhood Chain Testnet', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [mm.rpcUrl] } } } as const
+    const name = mm.chainId === 84532 ? 'Base Sepolia' : mm.chainId === 46630 ? 'Robinhood Chain Testnet' : `Chain ${mm.chainId}`
+    return { id: mm.chainId, name, nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [mm.rpcUrl] } } } as const
   }
   async function ensureChain(eth: Awaited<ReturnType<typeof getSignerProvider>>, mm: Meta) {
     const hex = `0x${mm.chainId.toString(16)}`
+    const chain = chainObj(mm)
     try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] }) }
-    catch (e) { if ((e as { code?: number })?.code === 4902) await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: 'Robinhood Chain Testnet', rpcUrls: [mm.rpcUrl], nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 } }] }); else throw e }
+    catch (e) { if ((e as { code?: number })?.code === 4902) await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: chain.name, rpcUrls: [mm.rpcUrl], nativeCurrency: chain.nativeCurrency }] }); else throw e }
   }
   async function clients(mm: Meta) {
     const eth = await getSignerProvider()
@@ -256,16 +259,27 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     if (atomic <= 0n) { setErr('Enter an amount.'); return }
     setStatus('quote')
     try {
-      const fresh = await fetchPosition()
-      const supply = BigInt(fresh?.totalSupply ?? '0')
-      const nav = BigInt(fresh?.totalNav ?? '0')
-      const quoteDecimals = meta.quoteAsset?.toLowerCase() === meta.token0?.toLowerCase() ? (meta.token0Decimals ?? 6) : (meta.token1Decimals ?? 6)
-      const estShares = supply === 0n ? (nav + atomic) * (10n ** BigInt(18 - quoteDecimals)) : atomic * supply / nav
+      const { eth, wallet, pub } = await clients(meta)
+      const target = meta.engineAddress ?? meta.positionManager
+      setStatus('switch'); await ensureChain(eth, meta)
+      const allowance = await pub.readContract({ address: meta.usdg!, abi: ERC20_ABI, functionName: 'allowance', args: [address as `0x${string}`, target] })
+      if (BigInt(allowance) < atomic) {
+        setStatus('approve')
+        const approval = await wallet.writeContract({ address: meta.usdg!, abi: ERC20_ABI, functionName: 'approve', args: [target, atomic] })
+        const receipt = await pub.waitForTransactionReceipt({ hash: approval })
+        if (receipt.status !== 'success') throw new Error('Token approval failed. No deposit was made.')
+      }
+      const quoteIs0 = meta.quoteAsset?.toLowerCase() === meta.token0?.toLowerCase()
+      const simulation = await pub.simulateContract({ address: target, abi: MARKET_ENGINE_ABI, functionName: 'deposit', account: address as `0x${string}`, args: [quoteIs0 ? atomic : 0n, quoteIs0 ? 0n : atomic, 0n] })
+      const estShares = BigInt(simulation.result)
       if (estShares <= 0n) throw new Error('Amount is too small to mint any shares at the current NAV.')
       const minShares = applyToleranceBps(estShares, SLIPPAGE_TOLERANCE_BPS)
       setReview({ kind: 'deposit', amountAtomic: atomic, estShares, minShares, withMin: withMinAvailable })
       setStatus('review')
-    } catch (e) { fail(e, 'Could not price the deposit') }
+    } catch (e) {
+      const message = (e as (Error & { shortMessage?: string }))?.shortMessage ?? (e as Error)?.message
+      fail(new Error(message ? `Could not quote this deposit from the MarketEngine: ${message}` : 'The MarketEngine could not quote this amount. Check the amount and try again.'), 'Could not quote this amount from the MarketEngine.')
+    }
   }
   async function confirmDeposit() {
     if (!meta || !review || review.kind !== 'deposit' || !meta.usdg) return
@@ -273,9 +287,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     try {
       const { eth, wallet, pub } = await clients(meta)
       setStatus('switch'); await ensureChain(eth, meta)
-      setStatus('approve')
-      const ah = await wallet.writeContract({ address: meta.usdg, abi: ERC20_ABI, functionName: 'approve', args: [meta.engineAddress ?? meta.positionManager, review.amountAtomic] })
-      await pub.waitForTransactionReceipt({ hash: ah })
       setStatus('deposit')
       const quoteIs0 = meta.quoteAsset?.toLowerCase() === meta.token0?.toLowerCase()
       const dh = await wallet.writeContract({ address: meta.engineAddress ?? meta.positionManager, abi: MARKET_ENGINE_ABI, functionName: 'deposit', args: [quoteIs0 ? review.amountAtomic : 0n, quoteIs0 ? 0n : review.amountAtomic, review.minShares] })
@@ -438,9 +449,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           {/* explorers */}
           {(meta || m) && (() => {
             const id = meta?.poolAddress ?? m!.poolAddress
+            const explorerBase = meta?.chainId === 84532 ? 'https://sepolia.basescan.org' : meta?.chainId === 46630 ? 'https://robinhoodchain.blockscout.com' : null
             return (
               <div className="flex gap-3 mt-5 flex-wrap text-[12.5px]">
-                {meta && <a href={`https://robinhoodchain.blockscout.com/address/${meta.positionManager}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Gateway on Explorer ↗</a>}
+                {meta && explorerBase && <a href={`${explorerBase}/address/${meta.positionManager}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Gateway on Explorer ↗</a>}
                 <a href={`https://www.geckoterminal.com/robinhood/pools/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>GeckoTerminal ↗</a>
                 <a href={`https://dexscreener.com/robinhood/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>DEXScreener ↗</a>
               </div>

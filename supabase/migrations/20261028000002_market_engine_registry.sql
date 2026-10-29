@@ -8,11 +8,17 @@ alter table public.gateway_instances
   add column if not exists engine_verified_at timestamptz;
 
 alter table public.gateway_instances alter column staging drop not null;
-alter table public.gateway_instances
-  add constraint gateway_instances_engine_address_format
-    check (market_engine_address is null or market_engine_address ~ '^0x[0-9a-fA-F]{40}$'),
-  add constraint gateway_instances_engine_code_hash_format
-    check (market_engine_code_hash is null or market_engine_code_hash ~ '^0x[0-9a-fA-F]{64}$');
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'gateway_instances_engine_address_format' and conrelid = 'public.gateway_instances'::regclass) then
+    alter table public.gateway_instances add constraint gateway_instances_engine_address_format
+      check (market_engine_address is null or market_engine_address ~ '^0x[0-9a-fA-F]{40}$');
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'gateway_instances_engine_code_hash_format' and conrelid = 'public.gateway_instances'::regclass) then
+    alter table public.gateway_instances add constraint gateway_instances_engine_code_hash_format
+      check (market_engine_code_hash is null or market_engine_code_hash ~ '^0x[0-9a-fA-F]{64}$');
+  end if;
+end $$;
 
 comment on column public.gateway_instances.market_engine_address is 'Verified MarketEngine instance used by V1; null rows are legacy Gateway instances disconnected from V1.';
 comment on column public.gateway_instances.engine_verified_at is 'Last successful on-chain MarketEngine trust-root verification.';

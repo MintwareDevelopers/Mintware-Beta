@@ -15,7 +15,12 @@ export const GET = createHandler(async (req, ctx) => {
   if (!cfg) return ctx.json({ success: false, error: 'market_engine_not_configured' }, 503)
   const address = req.nextUrl.searchParams.get('address')?.toLowerCase()
   if (!address || !isAddress(address)) return ctx.json({ success: false, error: 'address_required' }, 400)
-  const inst = await resolveMarketEngine(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), true, req.nextUrl.searchParams.get('pm'))
+  let inst
+  try { inst = await resolveMarketEngine(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), true, req.nextUrl.searchParams.get('pm')) }
+  catch (e) {
+    ctx.log.warn('market-engine.position', 'engine registry unavailable', { error: String(e) })
+    return ctx.json({ success: false, error: 'engine_registry_unavailable' }, 503)
+  }
   if (!inst || !inst.verified) return ctx.json({ success: false, error: 'pool_not_live' }, 404)
   try {
     const client = marketEnginePublicClient(cfg)

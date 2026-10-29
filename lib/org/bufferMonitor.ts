@@ -15,7 +15,7 @@ type Logger = { warn: (t: string, m: string, c?: Record<string, unknown>) => voi
 
 export type SyncResult =
   | { ok: true; balanceAtomic: bigint }
-  | { ok: false; reason: 'config' | 'no_buffer' | 'chain' | 'read' | 'db' | 'binding_mismatch' }
+  | { ok: false; reason: 'config' | 'no_buffer' | 'chain' | 'read' | 'db' | 'binding_mismatch' | 'gateway_funded' }
 
 /**
  * Reconcile the cached buffer balance from chain. The buffer address is derived from ON-CHAIN
@@ -44,16 +44,26 @@ export async function syncBufferBalance(opts: {
   if (!org?.card_funding_vault_address || !org.card_funding_chain_id ||
       org.card_funding_vault_address.toLowerCase() === org.treasury_vault_address?.toLowerCase()) return { ok: false, reason: 'config' }
 
-  const { data: buf, error: bufferError } = await supabase
+  let bufferResult = await supabase
     .from('card_spend_buffers')
-    .select('id, member_wallet')
+    .select('id, member_wallet, gateway_position_id')
     .eq('org_card_id', orgCardId)
     .maybeSingle()
+  // This safety column is dropped by a later migration. Read it while present, then retry with
+  // the stable projection after the column has been removed.
+  if (bufferResult.error && (bufferResult.error.code === '42703' || bufferResult.error.code === 'PGRST204')) {
+    bufferResult = await supabase.from('card_spend_buffers').select('id, member_wallet').eq('org_card_id', orgCardId).maybeSingle()
+  }
+  const { data: buf, error: bufferError } = bufferResult
   if (bufferError) {
     log?.warn('cards.buffer', 'buffer lookup failed', { orgCardId, error: bufferError.message })
     return { ok: false, reason: 'db' }
   }
   if (!buf?.member_wallet) return { ok: false, reason: 'no_buffer' }
+  if ('gateway_position_id' in buf && buf.gateway_position_id) {
+    log?.warn('cards.buffer', 'legacy gateway-linked buffer is excluded from card balance sync', { orgCardId })
+    return { ok: false, reason: 'gateway_funded' }
+  }
   const rpcUrl = rpcForChain(org.card_funding_chain_id)
   const chain = viemChainFor(org.card_funding_chain_id)
   if (!rpcUrl || !chain) return { ok: false, reason: 'chain' }

@@ -18,28 +18,28 @@ export const POST = createHandler(async (req, ctx) => {
   let receipt
   try { receipt = await client.getTransactionReceipt({ hash: txHash }) } catch { return ctx.json({ success: false, error: 'tx_not_found' }, 404) }
   if (receipt.status !== 'success') return ctx.json({ success: false, error: 'tx_reverted' }, 400)
-  if (!receipt.to) return ctx.json({ success: false, error: 'wrong_contract' }, 400)
+  if (!receipt.logs.length) return ctx.json({ success: false, error: 'no_withdraw_event' }, 400)
   let inst: MarketEngineInstance | null = null
+  let rows: MarketEngineInstance[]
   try {
-    const rows = await listMarketEngines(ctx.supabase, cfg.chainId, false)
-    inst = rows.find((x) => x.poolAddress === pool?.toLowerCase() && x.engineAddress === receipt.to!.toLowerCase()) ?? null
-    if (!inst && rows.length === 0) {
+    rows = await listMarketEngines(ctx.supabase, cfg.chainId, false)
+    if (rows.length === 0) {
       const fallback = await resolveMarketEngine(ctx.supabase, cfg, pool, true)
-      if (fallback?.engineAddress === receipt.to.toLowerCase()) inst = fallback
+      if (fallback) rows = [fallback]
     }
   } catch { return ctx.json({ success: false, error: 'registry_unavailable' }, 503) }
-  if (!inst?.verified) return ctx.json({ success: false, error: 'pool_not_live' }, 404)
   let sharesBurned = 0n; let amount0 = 0n; let amount1 = 0n; let found = false
   for (const log of receipt.logs) {
-    if (log.address.toLowerCase() !== inst.engineAddress.toLowerCase()) continue
+    const candidate = rows.find((x) => x.verified && x.poolAddress === pool?.toLowerCase() && x.engineAddress === log.address.toLowerCase())
+    if (!candidate) continue
     try {
       const event = decodeEventLog({ abi: MARKET_ENGINE_ABI, data: log.data, topics: log.topics })
       if (event.eventName === 'Withdrawn' && String(event.args.account).toLowerCase() === address && String(event.args.recipient).toLowerCase() === address) {
-        sharesBurned = event.args.sharesBurned; amount0 = event.args.amount0; amount1 = event.args.amount1; found = true; break
+        inst = candidate; sharesBurned = event.args.sharesBurned; amount0 = event.args.amount0; amount1 = event.args.amount1; found = true; break
       }
     } catch { /* unrelated engine log */ }
   }
-  if (!found) return ctx.json({ success: false, error: 'no_withdraw_event' }, 400)
+  if (!found || !inst) return ctx.json({ success: false, error: 'no_withdraw_event' }, 400)
   const onChainShares = await client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'balanceOf', args: [address as `0x${string}`], blockNumber: receipt.blockNumber })
   const { error } = await ctx.supabase.from('market_engine_tx_events').insert({ tx_hash: txHash, user_wallet: address, pool_address: inst.poolAddress, chain_id: inst.chainId, market_engine_address: inst.engineAddress, action: 'withdraw', shares_atomic: sharesBurned.toString(), amount0_atomic: amount0.toString(), amount1_atomic: amount1.toString(), block_number: receipt.blockNumber.toString(), transaction_index: receipt.transactionIndex })
   if (error && error.code !== '23505') { ctx.log.error('market-engine.withdraw', 'position record failed', { error: error.message }); return ctx.json({ success: false, error: 'record_failed' }, 500) }

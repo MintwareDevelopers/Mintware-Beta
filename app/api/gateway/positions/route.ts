@@ -14,7 +14,12 @@ export const GET = createHandler(async (req, ctx) => {
   if (!cfg) return ctx.json({ success: false, error: 'market_engine_not_configured' }, 503)
   const address = req.nextUrl.searchParams.get('address')?.toLowerCase()
   if (!address || !isAddress(address)) return ctx.json({ success: false, error: 'address_required' }, 400)
-  const rows = await listMarketEngines(ctx.supabase, cfg.chainId, false)
+  let rows
+  try { rows = await listMarketEngines(ctx.supabase, cfg.chainId, false) }
+  catch (e) {
+    ctx.log.warn('market-engine.positions', 'engine registry unavailable', { error: String(e) })
+    return ctx.json({ success: false, error: 'engine_registry_unavailable' }, 503)
+  }
   const fallback = rows.length === 0 ? await resolveMarketEngine(ctx.supabase, cfg, null) : null
   const instances = fallback ? [fallback] : rows
   const { data: recordedEvents } = await ctx.supabase.from('market_engine_tx_events').select('pool_address,market_engine_address').eq('user_wallet', address).eq('chain_id', cfg.chainId)

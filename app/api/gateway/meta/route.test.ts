@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeSupabase } from '@/lib/gateway/__audit__/fakeSupabase'
 
-const state = vi.hoisted(() => ({ config: { chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }, instance: null as unknown, verify: null as unknown, read: vi.fn() }))
-vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => state.config, resolveMarketEngine: async () => state.instance, verifyMarketEngine: async () => state.verify }))
+const state = vi.hoisted(() => ({ config: { chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }, instance: null as unknown, registryError: false, read: vi.fn() }))
+vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => state.config, resolveMarketEngine: async () => { if (state.registryError) throw new Error('missing column'); return state.instance } }))
 vi.mock('@/lib/gateway/chain', () => ({ marketEnginePublicClient: () => ({ readContract: state.read }) }))
 vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => fakeSupabase().client }))
 
@@ -11,14 +11,13 @@ const TOKEN0 = '0x' + '22'.repeat(20)
 const TOKEN1 = '0x' + '33'.repeat(20)
 const POOL = '0x' + 'ab'.repeat(32)
 const instance = { id: 'engine-1', poolAddress: POOL, chainId: 84532, pairLabel: 'A / USDG', engineAddress: ENGINE, quoteAsset: TOKEN1, token0: TOKEN0, token1: TOKEN1, status: 'active', verified: true, source: 'registry', live: true }
-const verified = { ok: true, codeHash: '0x' + '44'.repeat(32), owner: '0x' + '55'.repeat(20), quoteAsset: TOKEN1, token0: TOKEN0, token1: TOKEN1, poolKey: { currency0: TOKEN0, currency1: TOKEN1, fee: 3000, tickSpacing: 60, hooks: '0x' + '00'.repeat(20) } }
 const req = (url: string) => { const r = new Request(url); (r as unknown as { nextUrl: URL }).nextUrl = new URL(url); return r as never }
 
 beforeEach(() => {
   state.config = { chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }
   state.instance = instance
-  state.verify = verified
-  state.read = vi.fn(async (arg: { functionName: string }) => ({ decimals: 6, tickLower: -100, tickUpper: 100, activated: true } as Record<string, unknown>)[arg.functionName] ?? 6)
+  state.registryError = false
+  state.read = vi.fn(async (arg: { functionName: string }) => ({ decimals: 6, tickLower: -100, tickUpper: 100, poolKey: { fee: 3000 } } as Record<string, unknown>)[arg.functionName] ?? 6)
 })
 
 describe('GET /api/gateway/meta — MarketEngine target', () => {
@@ -38,9 +37,19 @@ describe('GET /api/gateway/meta — MarketEngine target', () => {
     const { GET } = await import('./route')
     expect((await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL}`))).status).toBe(503)
   })
-  it('does not advertise an engine that fails current on-chain identity checks', async () => {
-    state.verify = { ok: false, error: 'engine_owner_mismatch' }
+  it('serves a verified-once retired registry engine without current deposit verification', async () => {
+    state.instance = { ...instance, status: 'inactive', live: false }
     const { GET } = await import('./route')
-    expect((await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL}`))).status).toBe(503)
+    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL}`))
+    expect(res.status).toBe(200)
+    expect((await res.json()).meta).toMatchObject({ engineAddress: ENGINE, live: false, source: 'registry' })
+    expect(state.read).not.toHaveBeenCalledWith(expect.objectContaining({ functionName: 'activated' }))
+  })
+  it('degrades registry schema errors to a clear 503', async () => {
+    state.registryError = true
+    const { GET } = await import('./route')
+    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL}`))
+    expect(res.status).toBe(503)
+    expect(await res.json()).toMatchObject({ error: 'engine_registry_unavailable' })
   })
 })

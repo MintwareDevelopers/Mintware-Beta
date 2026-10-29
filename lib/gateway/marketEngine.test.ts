@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { keccak256 } from 'viem'
 import { computePoolId } from '@/lib/gateway/registry'
-import { marketEngineConfig, verifyMarketEngine, BASE_SEPOLIA_MARKET_ENGINE } from '@/lib/gateway/marketEngine'
+import { marketEngineConfig, verifyMarketEngine, BASE_SEPOLIA_MARKET_ENGINE, resolveMarketEngine } from '@/lib/gateway/marketEngine'
+import { fakeSupabase } from '@/lib/gateway/__audit__/fakeSupabase'
 
 const ENGINE = '0x' + 'aa'.repeat(20) as `0x${string}`
 const OWNER = '0x' + 'bb'.repeat(20)
@@ -30,5 +31,48 @@ describe('verifyMarketEngine', () => {
     expect((await verifyMarketEngine({ client, address: ENGINE, expectedPool: computePoolId(KEY), expectedOwner: OWNER, allowedCodeHashes: [keccak256(CODE)] })).ok).toBe(false)
     process.env.MARKET_ENGINE_QUOTE_ASSET = TOKEN1
     expect(await verifyMarketEngine({ client, address: ENGINE, expectedPool: computePoolId(KEY), expectedOwner: OWNER, allowedCodeHashes: [] })).toMatchObject({ ok: false, error: 'engine_codehash_not_allowlisted' })
+  })
+})
+
+const poolA = '0x' + 'aa'.repeat(32)
+const poolB = '0x' + 'bb'.repeat(32)
+const engineA = '0x' + '11'.repeat(20)
+const engineB = '0x' + '22'.repeat(20)
+const row = (pool_address: string, market_engine_address: string, status: 'active' | 'inactive') => ({
+  id: market_engine_address, pool_address, chain_id: 84532, pair_label: null,
+  market_engine_address, quote_asset: '0x' + '33'.repeat(20), market_engine_token0: '0x' + '44'.repeat(20),
+  market_engine_token1: '0x' + '33'.repeat(20), status, engine_verified_at: 'verified',
+  market_engine_code_hash: '0x' + '55'.repeat(32), market_engine_owner: '0x' + '66'.repeat(20),
+})
+const cfg = { chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }
+
+describe('resolveMarketEngine inactive resolution', () => {
+  it('resolves an explicitly named retired engine while another pool remains active', async () => {
+    const { client: db } = fakeSupabase({ tables: { gateway_instances: [row(poolA, engineA, 'inactive'), row(poolB, engineB, 'active')] } })
+    const resolved = await resolveMarketEngine(db, cfg, poolA, true, engineA)
+    expect(resolved).toMatchObject({ engineAddress: engineA, status: 'inactive', live: false })
+  })
+
+  it('uses inactive rows only when no active engine exists anywhere on chain', async () => {
+    const { client: db } = fakeSupabase({ tables: { gateway_instances: [row(poolA, engineA, 'inactive'), row(poolB, engineB, 'inactive')] } })
+    expect(await resolveMarketEngine(db, cfg, poolA, true)).toMatchObject({ engineAddress: engineA, live: false })
+    expect(await resolveMarketEngine(db, cfg, null, true)).toBeNull()
+  })
+
+  it('resolves a retired pool by pool alone while another pool remains active (exits stay reachable)', async () => {
+    const { client: db } = fakeSupabase({ tables: { gateway_instances: [row(poolA, engineA, 'inactive'), row(poolB, engineB, 'active')] } })
+    expect((await resolveMarketEngine(db, cfg, poolA, true))?.engineAddress).toBe(engineA)
+    expect(await resolveMarketEngine(db, cfg, poolA, false)).toBeNull()
+  })
+
+  it('returns null when a retired pool has several inactive generations and none is named', async () => {
+    const engineC = '0x' + 'c'.repeat(40)
+    const { client: db } = fakeSupabase({ tables: { gateway_instances: [row(poolA, engineA, 'inactive'), row(poolA, engineC, 'inactive'), row(poolB, engineB, 'active')] } })
+    expect(await resolveMarketEngine(db, cfg, poolA, true)).toBeNull()
+  })
+
+  it('returns null for ambiguous active engines when no pool is specified', async () => {
+    const { client: db } = fakeSupabase({ tables: { gateway_instances: [row(poolA, engineA, 'active'), row(poolB, engineB, 'active')] } })
+    expect(await resolveMarketEngine(db, cfg, null)).toBeNull()
   })
 })

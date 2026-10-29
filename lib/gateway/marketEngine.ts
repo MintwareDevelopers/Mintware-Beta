@@ -69,10 +69,17 @@ export async function listMarketEngines(db: SupabaseClient, chainId: number, act
 export async function resolveMarketEngine(db: SupabaseClient, cfg: MarketEngineConfig, pool: string | null, includeInactive = false, engineAddress?: string | null): Promise<(MarketEngineInstance & { source: 'registry' | 'env-fallback'; live: boolean }) | null> {
   const all = await listMarketEngines(db, cfg.chainId, false)
   if (all.length) {
-    let eligible = all.filter((x) => (!engineAddress || x.engineAddress === engineAddress.toLowerCase()) && x.status === 'active')
-    if (engineAddress && includeInactive) eligible = all.filter((x) => x.engineAddress === engineAddress.toLowerCase())
-    if (eligible.length === 0 && includeInactive && !engineAddress) eligible = all.filter((x) => x.status === 'inactive' && (!pool || x.poolAddress === pool.toLowerCase()))
-    if (pool && !engineAddress) eligible = eligible.filter((x) => x.poolAddress === pool.toLowerCase())
+    const address = engineAddress?.toLowerCase()
+    // An explicit generation is an unambiguous registry lookup and must remain resolvable for exits.
+    // Without one, a retired pool's inactive engine is the fallback when that pool has no active engine
+    // (other pools being live must not hide it); without a pool, only when the chain has no active engine.
+    let eligible = address && includeInactive
+      ? all.filter((x) => x.engineAddress === address)
+      : all.filter((x) => x.status === 'active')
+    if (pool) eligible = eligible.filter((x) => x.poolAddress === pool.toLowerCase())
+    if (eligible.length === 0 && includeInactive && !address && (pool || !all.some((x) => x.status === 'active'))) {
+      eligible = all.filter((x) => x.status === 'inactive' && (!pool || x.poolAddress === pool.toLowerCase()))
+    }
     if (!pool && eligible.length !== 1) return null
     if (pool && eligible.length !== 1) return null
     const hit = eligible.find((x) => !pool || x.poolAddress === pool.toLowerCase())
