@@ -107,3 +107,6 @@ SOLID periwinkle (`.mw-btn`, white text) or white (`.mw-btn-quiet`) — never gr
 hero object and soft background light. Fonts: Geist (`font-geist`) for UI/display, Geist Mono (`font-geist-mono`,
 and every `.font-mono` inside `.v1-app`) for figures. V1 primitives: `PLAIN` (raised), `INSET`, `GlassFrame`
 (raised data card). Landing: `app/page.tsx` + `components/marketing/mineral/*`; mark: `components/ui2/MineralMark`.
+Custom icons: `components/ui2/MineralIcons.tsx` (disc/layer line icons — use these, not generic icon packs, on
+Mineral surfaces). Status textures: `.mw-tex-dots` (building) and `.mw-tex-hatch` (planned) — plain global rules in
+`globals.css`, deliberately NOT inside `@layer utilities` (Tailwind v4 did not emit them from there).

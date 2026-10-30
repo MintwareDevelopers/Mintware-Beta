@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { MineralNav } from '@/components/marketing/mineral/MineralNav'
 import { EngineHero } from '@/components/marketing/mineral/EngineHero'
+import { IconIsolated, IconOwned, IconHours, IconFailClosed, IconExit, IconAudited } from '@/components/ui2/MineralIcons'
 
 // Landing (Mineral, 2026-10 redesign). Light and tactile: raised for things you act on, inset for places
 // you put something, solid periwinkle buttons, the pastel sheen only on the hero object and soft light.
@@ -10,15 +11,15 @@ const wrap = 'mx-auto max-w-[1200px] px-[clamp(16px,4vw,40px)]'
 const h2 = 'font-semibold tracking-[-0.04em] leading-[1.04] text-[clamp(34px,4.4vw,54px)] mt-3'
 
 const FEATURES: [string, string, ReactNode][] = [
-  ['Isolated per asset', 'One market’s trouble stays in that market.', <><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></>],
-  ['Non‑custodial core', 'Your position is yours, on-chain, the whole time.', <><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></>],
-  ['Market‑hours aware', 'Marks follow the real asset, including when it’s closed.', <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>],
+  ['Isolated per asset', 'One market’s trouble stays in that market.', <IconIsolated key="i" size={24} />],
+  ['Non‑custodial core', 'Your position is yours, on-chain, the whole time.', <IconOwned key="o" size={24} />],
+  ['Market‑hours aware', 'Marks follow the real asset, including when it’s closed.', <IconHours key="h" size={24} />],
 ]
 
 const JOBS = [
   { name: 'Liquidity', body: 'Provide to an asset’s market. The engine pairs it into that asset’s pool and fees build on your position.', pill: 'Testnet', pillCls: 'bg-[#E3F4EA] text-[#0F7A43]', side: '#6B69E6', top: '#C3C2FD', dot: true },
-  { name: 'Collateral', body: 'Use a position as collateral without pulling it out of the market. It keeps providing depth while it backs a loan.', pill: 'In development', pillCls: 'bg-[#EDE9FB] text-[#4B2FA0]', side: '#9C8EE6', top: '#E1DBFA' },
-  { name: 'Credit', body: 'Borrowing that unwinds gradually inside the pool, on fresh marks only. No outside liquidator racing a closed market.', pill: 'Roadmap', pillCls: 'bg-[#F2F2F5] text-[#454552]', side: '#E08A62', top: '#FAD3C1' },
+  { name: 'Collateral', body: 'Use a position as collateral without pulling it out of the market. It keeps providing depth while it backs a loan.', pill: 'In development', pillCls: 'bg-[#EDE9FB] text-[#4B2FA0] mw-tex-dots', side: '#9C8EE6', top: '#E1DBFA', tex: 'dots' },
+  { name: 'Credit', body: 'Borrowing that unwinds gradually inside the pool, on fresh marks only. No outside liquidator racing a closed market.', pill: 'Roadmap', pillCls: 'bg-[#F2F2F5] text-[#454552] mw-tex-hatch', side: '#E08A62', top: '#FAD3C1', tex: 'hatch' },
 ]
 
 const FLOW: [string, string, string][] = [
@@ -38,15 +39,15 @@ const WHY: [string, string, string][] = [
 const ROADMAP = [
   { when: 'Now', name: 'Stocks', body: 'Tokenized equities on Robinhood Chain and Base.', status: 'Testnet', lead: true, h: 'min-h-[260px]' },
   { when: 'Now', name: 'Property', body: 'A real-property market with issuer-checked ownership.', status: 'Testnet demo', h: 'min-h-[230px]' },
-  { when: 'Next', name: 'Gold', body: 'A gold engine, with first credit through an integrated lending market.', h: 'min-h-[200px]' },
-  { when: 'Later', name: 'Credit & vaults', body: 'Curated credit modules on top of proven engines.', h: 'min-h-[170px]', well: true },
+  { when: 'Next', name: 'Gold', body: 'A gold engine, with first credit through an integrated lending market.', h: 'min-h-[200px]', tex: 'mw-tex-dots' },
+  { when: 'Later', name: 'Credit & vaults', body: 'Curated credit modules on top of proven engines.', h: 'min-h-[170px]', well: true, tex: 'mw-tex-hatch' },
 ]
 
-const TRUST: [string, string][] = [
-  ['Fail closed by default', 'Anything unset or unreadable stops, rather than guessing.'],
-  ['Exits stay open', 'Pausing blocks new liquidity, never withdrawals.'],
-  ['Contained per asset', 'Each market has its own caps, marks and controls.'],
-  ['Audited before real value', 'An external audit gates mainnet. Until then: testnet only.'],
+const TRUST: [string, string, ReactNode][] = [
+  ['Fail closed by default', 'Anything unset or unreadable stops, rather than guessing.', <IconFailClosed key="f" />],
+  ['Exits stay open', 'Pausing blocks new liquidity, never withdrawals.', <IconExit key="e" />],
+  ['Contained per asset', 'Each market has its own caps, marks and controls.', <IconIsolated key="c" />],
+  ['Audited before real value', 'An external audit gates mainnet. Until then: testnet only.', <IconAudited key="a" />],
 ]
 
 const FAQ: [string, string][] = [
@@ -64,6 +65,15 @@ function Eyebrow({ children }: { children: ReactNode }) {
 
 function Arrow({ size = 18 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+}
+
+function StatusLegend() {
+  const chip = 'inline-block w-3.5 h-3.5 rounded-[4px] align-[-2px] mr-2'
+  return <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px]" style={{ color: 'var(--mw-ink-3)' }} aria-label="Status key">
+    <span><span className={chip} style={{ background: '#7C7AF0' }} />Solid: live</span>
+    <span><span className={`${chip} mw-tex-dots`} style={{ backgroundColor: '#E1DBFA' }} />Dotted: building</span>
+    <span><span className={`${chip} mw-tex-hatch`} style={{ backgroundColor: '#ECECF2' }} />Hatched: planned</span>
+  </div>
 }
 
 function Badge({ n }: { n: number }) {
@@ -114,7 +124,7 @@ export default function HomePage() {
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
           {FEATURES.map(([t, b, icon]) => (
             <div key={t} className="mw-raise-sm rounded-[18px] px-[22px] py-5 flex gap-3.5 items-start">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4643D1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none mt-0.5">{icon}</svg>
+              <span className="flex-none w-11 h-11 rounded-[12px] grid place-items-center" style={{ color: 'var(--mw-peri-deep)', background: 'var(--mw-band)', boxShadow: 'var(--mw-inset)' }}>{icon}</span>
               <div><div className="font-semibold">{t}</div><div className="text-[14px] mt-1 leading-[1.45]" style={{ color: 'var(--mw-ink-3)' }}>{b}</div></div>
             </div>
           ))}
@@ -133,18 +143,27 @@ export default function HomePage() {
           {JOBS.map((j) => (
             <div key={j.name} className="mw-lift rounded-[24px] p-8 flex flex-col gap-5" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-raise)' }}>
               <div className="flex justify-between items-center">
-                <svg width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><path d="M4,16 A28 9 0 0 0 60,16 L60,24 A28 9 0 0 1 4,24 Z" fill={j.side} /><ellipse cx="32" cy="16" rx="28" ry="9" fill={j.top} /></svg>
+                <svg width="64" height="40" viewBox="0 0 64 40" aria-hidden="true">
+                  <defs>
+                    <pattern id={`jt-${j.name}`} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform={j.tex === 'hatch' ? 'rotate(45)' : undefined}>
+                      {j.tex === 'hatch' ? <line x1="0" y1="0" x2="0" y2="5" stroke="#15151D" strokeOpacity=".22" strokeWidth="1.4" /> : <circle cx="2.5" cy="2.5" r=".9" fill="#2E1F7A" fillOpacity=".35" />}
+                    </pattern>
+                  </defs>
+                  <path d="M4,16 A28 9 0 0 0 60,16 L60,24 A28 9 0 0 1 4,24 Z" fill={j.side} />
+                  <ellipse cx="32" cy="16" rx="28" ry="9" fill={j.top} />
+                  {j.tex && <><path d="M4,16 A28 9 0 0 0 60,16 L60,24 A28 9 0 0 1 4,24 Z" fill={`url(#jt-${j.name})`} /><ellipse cx="32" cy="16" rx="28" ry="9" fill={`url(#jt-${j.name})`} /></>}
+                </svg>
                 <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-[5px] rounded-full ${j.pillCls}`}>{j.dot && <span className="w-1.5 h-1.5 rounded-full bg-[#22A45D]" />}{j.pill}</span>
               </div>
               <div><h3 className="m-0 text-[22px] font-semibold tracking-[-0.02em]">{j.name}</h3><p className="mt-2.5 mb-0 text-[15px] leading-[1.55]" style={{ color: 'var(--mw-ink-2)' }}>{j.body}</p></div>
             </div>
           ))}
         </div>
-        <div className="mw-inset rounded-[24px] p-[clamp(20px,3vw,36px)] flex flex-wrap items-center gap-4">
+        <div className="mw-inset rounded-[24px] p-[clamp(20px,3vw,36px)] grid items-center gap-4 grid-cols-1 min-[560px]:grid-cols-2 min-[1100px]:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr]">
           {FLOW.map(([n, t, b], i) => (
             <div key={n} className="contents">
-              {i > 0 && <span className="max-[700px]:hidden" style={{ color: 'var(--mw-ink-3)' }}><Arrow size={24} /></span>}
-              <div className="mw-raise-sm flex-[1_1_200px] rounded-2xl px-5 py-[18px]">
+              {i > 0 && <span className="hidden min-[1100px]:block" style={{ color: 'var(--mw-ink-3)' }}><Arrow size={24} /></span>}
+              <div className="mw-raise-sm h-full rounded-2xl px-5 py-[18px]">
                 <div className="font-geist-mono text-[12px]" style={{ color: 'var(--mw-ink-3)' }}>{n}</div>
                 <div className="font-semibold mt-1.5">{t}</div>
                 <div className="text-[14px] mt-1" style={{ color: 'var(--mw-ink-3)' }}>{b}</div>
@@ -240,13 +259,16 @@ export default function HomePage() {
     {/* Roadmap */}
     <section>
       <div className={`${wrap} py-[clamp(64px,8vw,120px)] flex flex-col gap-11`}>
-        <div className="max-w-[640px]">
-          <Eyebrow>Roadmap</Eyebrow><h2 className={h2}>Asset by asset.</h2>
-          <p className="mt-4 mb-0 text-[17px] leading-[1.55]" style={{ color: 'var(--mw-ink-2)' }}>Each asset class gets its own engine, tuned to how that asset actually trades and settles.</p>
+        <div className="flex flex-wrap justify-between items-end gap-6">
+          <div className="max-w-[640px]">
+            <Eyebrow>Roadmap</Eyebrow><h2 className={h2}>Asset by asset.</h2>
+            <p className="mt-4 mb-0 text-[17px] leading-[1.55]" style={{ color: 'var(--mw-ink-2)' }}>Each asset class gets its own engine, tuned to how that asset actually trades and settles.</p>
+          </div>
+          <StatusLegend />
         </div>
         <div className="grid gap-4 items-end [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">
           {ROADMAP.map((r) => (
-            <div key={r.name} className={`${r.well ? 'mw-inset' : r.lead ? 'mw-raise-lg' : 'mw-raise-sm'} rounded-[22px] p-[26px] ${r.h} flex flex-col justify-between`} style={r.lead ? { outline: '2px solid rgba(91,91,230,.3)', outlineOffset: -2 } : undefined}>
+            <div key={r.name} className={`${r.well ? 'mw-inset' : r.lead ? 'mw-raise-lg' : 'mw-raise-sm'} rounded-[22px] p-[26px] ${r.h} ${r.tex ?? ''} flex flex-col justify-between`} style={r.lead ? { outline: '2px solid rgba(91,91,230,.3)', outlineOffset: -2 } : undefined}>
               <div className="flex justify-between items-center">
                 <span className="font-geist-mono text-[13px]" style={{ color: 'var(--mw-ink-3)' }}>{r.when}</span>
                 {r.status && <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#0F7A43]"><span className="w-[7px] h-[7px] rounded-full bg-[#22A45D]" />{r.status}</span>}
@@ -287,7 +309,7 @@ export default function HomePage() {
           <Link href="/proof" className="inline-block mt-6 text-[15px] font-semibold no-underline hover:underline" style={{ color: 'var(--mw-peri-deep)' }}>See it on-chain →</Link>
         </div>
         <div className="mw-raise-sm flex-[2_1_520px] min-w-0 grid gap-px rounded-[22px] overflow-hidden [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]" style={{ background: 'var(--mw-line)' }}>
-          {TRUST.map(([t, b]) => <div key={t} className="bg-white p-[26px]"><div className="font-semibold">{t}</div><div className="text-[14px] mt-1.5 leading-[1.5]" style={{ color: 'var(--mw-ink-3)' }}>{b}</div></div>)}
+          {TRUST.map(([t, b, icon]) => <div key={t} className="bg-white p-[26px]"><div className="mb-4 w-11 h-11 rounded-[12px] grid place-items-center" style={{ color: 'var(--mw-peri-deep)', background: 'var(--mw-band)', boxShadow: 'var(--mw-inset)' }}>{icon}</div><div className="font-semibold">{t}</div><div className="text-[14px] mt-1.5 leading-[1.5]" style={{ color: 'var(--mw-ink-3)' }}>{b}</div></div>)}
         </div>
       </div>
     </section>

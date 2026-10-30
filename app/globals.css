@@ -675,3 +675,8 @@
 .v1-app { font-family: var(--font-geist), 'Geist', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 .v1-app .font-mono { font-family: var(--font-geist-mono), 'Geist Mono', ui-monospace, Menlo, monospace; }
 @media (prefers-reduced-motion: reduce) { .mw-btn, .mw-btn-quiet, .mw-lift { transition: none; } }
+
+/* Mineral status textures — status lives in the material: solid = live, dotted = building, hatched = planned.
+   Background-image only, so they sit on top of whatever background-color the element already has. */
+.mw-tex-dots  { background-image: radial-gradient(rgba(75,47,160,.30) 1px, transparent 1.3px); background-size: 6px 6px; }
+.mw-tex-hatch { background-image: repeating-linear-gradient(135deg, rgba(21,21,29,.16) 0 1px, transparent 1px 6px); }

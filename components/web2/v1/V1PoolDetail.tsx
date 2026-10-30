@@ -426,11 +426,18 @@ export function V1PoolDetail({ slug }: { slug: string }) {
 
           {/* allocation */}
           <div className="text-[12px] uppercase tracking-[0.08em] font-semibold mt-6" style={{ color: '#62626F' }}>How your {quoteSym} is put to work</div>
-          <div className="flex h-4 rounded-full overflow-hidden mt-3">
-            <span style={{ width: '100%', background: 'linear-gradient(90deg,#8A82F4,#6C6CF0)' }} />
+          {/* layered: the capital sits in the engine today; the collateral and credit layers are drawn by status, not share */}
+          <div className="mt-3 rounded-[14px] p-1.5 flex flex-col gap-1" style={INNER}>
+            <div className="h-5 rounded-[9px] flex items-center px-2.5 text-[11px] font-semibold text-white" style={{ background: '#6B69E6', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.35)' }}>Liquidity · 100%</div>
+            <div className="h-3 rounded-[7px] mw-tex-dots" style={{ backgroundColor: '#E1DBFA' }} title="Collateral layer · in development" />
+            <div className="h-2 rounded-[6px] mw-tex-hatch" style={{ backgroundColor: '#ECECF2' }} title="Credit layer · planned" />
           </div>
           <div className="flex flex-col gap-2 mt-3 text-[13px]">
-            <AllocRow color="#4643D1" label={`MarketEngine portfolio · ${base}/${quote}`} sub="resting v4 liquidity plus token adapters" pct="100%" />
+            <AllocRow color="#6B69E6" label={`MarketEngine portfolio · ${base}/${quote}`} sub="resting v4 liquidity plus token adapters" pct="100%" />
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px]" style={{ color: '#62626F' }}>
+            <span><span className="inline-block w-3 h-3 rounded-[3px] align-[-2px] mr-1.5 mw-tex-dots" style={{ backgroundColor: '#E1DBFA' }} />Collateral layer · in development</span>
+            <span><span className="inline-block w-3 h-3 rounded-[3px] align-[-2px] mr-1.5 mw-tex-hatch" style={{ backgroundColor: '#ECECF2' }} />Credit layer · planned</span>
           </div>
           <div className="relative h-9 mt-4 rounded-[10px] overflow-hidden" style={INNER}>
             <div className="absolute inset-y-0" style={{ left: '12%', right: '12%', background: 'linear-gradient(180deg,rgba(138,130,244,0.28),rgba(138,130,244,0.08))', borderLeft: '2px solid rgba(138,130,244,0.5)', borderRight: '2px solid rgba(138,130,244,0.5)' }} />
