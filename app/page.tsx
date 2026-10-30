@@ -109,7 +109,7 @@ export default function HomePage() {
           <div className="grid lg:grid-cols-[1.1fr_1fr] gap-10 items-center">
             <div>
               <Eyebrow>For issuers</Eyebrow>
-              <h2 className={`${display} text-[clamp(2.2rem,4.6vw,3.6rem)] mt-4`}>Your token. <span className="text-ink-soft">Our liquidity.</span></h2>
+              <h2 className={`${display} text-[clamp(2.2rem,4.6vw,3.6rem)] mt-4`}>Your token. <span className="text-ink-soft">Real liquidity.</span></h2>
               <p className="text-ink-mid text-[17px] leading-[1.6] mt-5 max-w-[44ch]">Deep, fair markets from day one — funded by your holders, not a rented market maker.</p>
               <div className="flex flex-wrap gap-3 mt-8"><Link href="/issuers#talk" className="glass-pill-primary">Bring your asset to market</Link></div>
             </div>
