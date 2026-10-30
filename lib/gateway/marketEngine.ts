@@ -4,7 +4,7 @@ import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { computePoolId, type ReadClient, type MarketPoolKey } from '@/lib/gateway/registry'
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
-export const BASE_SEPOLIA_MARKET_ENGINE = '0x18c22836c71ae2dc6f483ab9ac41b4503e18c384' as const
+export const BASE_SEPOLIA_MARKET_ENGINE = '0x961534db8c0ebb7ceb729e74cab698a83a9c827e' as const
 export type MarketEngineConfig = { chainId: number; rpcUrl: string; defaultEngine: `0x${string}` | null }
 export type MarketEngineInstance = { id: string; poolAddress: string; chainId: number; pairLabel: string | null; engineAddress: `0x${string}`; quoteAsset: `0x${string}`; token0: `0x${string}`; token1: `0x${string}`; status: 'active' | 'inactive'; verified: boolean }
 

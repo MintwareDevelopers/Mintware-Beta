@@ -19,8 +19,9 @@ Automated zapping, JIT liquidity, and a staged-buffer flow are not implemented.
 
 Live deployments are testnet-only and unaudited; external audit gates real value. The Robinhood Chain testnet
 instance is `0x38E426D6671FB2c07C07a468e59f954Dcd0eDeb8`, registered for pool
-`0x07340da7…0dfa2` (tUSDG/tPONS); its mark is fixed with a one-year maximum age. Base Sepolia engine:
-`0x18c22836c71ae2dc6f483ab9ac41b4503e18c384`. Robinhood lifecycle module:
+`0x07340da7…0dfa2` (tUSDG/tPONS); its mark is fixed with a one-year maximum age. Base Sepolia engine (USDC/WETH, relaunched
+2026-10-30 because the first one's immutable fixed mark went stale — `StaleMark()`): `0x961534db8C0EbB7cEb729E74CaB698A83A9c827e`,
+same one-year-max-age fixed-mark shape; registering it needs `MARKET_ENGINE_{CODEHASHES,OWNER,QUOTE_ASSET}_84532`. Robinhood lifecycle module:
 `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421`. Full addresses belong in [`config/deployments.json`](../../config/deployments.json).
 
 ## Discovery, curation, registry
