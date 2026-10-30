@@ -27,7 +27,7 @@ export type LiveMarket = {
   /** marked NAV in quote units (decimals applied); null when the chain read failed */
   navQuote: number | null
   feePct: number | null
-  /** deposits route through the deployment's configured chain only */
+  /** every registry market accepts deposits; reads + receipts route to its own chain (marketEngineConfigForPool) */
   depositable: boolean
 }
 
@@ -68,7 +68,7 @@ export const GET = createHandler(async (req, ctx) => {
     try {
       const rows = (await listMarketEngines(ctx.supabase, chain.id, true)).filter((x) => x.verified)
       const rpcUrl = cfg?.chainId === chain.id ? cfg.rpcUrl : chain.rpc
-      return await Promise.all(rows.map((inst) => readMarket(inst, rpcUrl, cfg?.chainId === chain.id)))
+      return await Promise.all(rows.map((inst) => readMarket(inst, rpcUrl, true)))
     } catch (e) {
       ctx.log.warn('market-engine.markets', 'chain registry read failed', { chainId: chain.id, error: String(e) })
       return []

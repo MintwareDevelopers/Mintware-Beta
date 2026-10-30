@@ -1,5 +1,5 @@
 // /api/gateway/markets — lists verified, active MarketEngine markets on every market chain; a failed NAV read
-// keeps the market listed with navQuote:null; only the deployment's configured chain is depositable.
+// keeps the market listed with navQuote:null; every listed market is depositable on its own chain.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
@@ -41,7 +41,7 @@ describe('/api/gateway/markets', () => {
     expect(b.markets).toHaveLength(2)
     const rh = b.markets.find((m: { chainId: number }) => m.chainId === 46630)
     expect(rh).toMatchObject({ poolAddress: RH_POOL, navQuote: 755, quoteSymbol: 'tUSDG', feePct: 0.3, depositable: true })
-    expect(b.markets.find((m: { chainId: number }) => m.chainId === 84532).depositable).toBe(false)
+    expect(b.markets.find((m: { chainId: number }) => m.chainId === 84532).depositable).toBe(true)
   })
 
   it('keeps a market listed when its NAV read reverts', async () => {

@@ -353,8 +353,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   }
   function cancelReview() { setReview(null); setStatus('idle'); setErr('') }
 
+  // The quote token's symbol (USDG on Robinhood, USDC on Base) — never assume USDG.
+  const quoteSym = live?.quoteSymbol ?? (quote && quote !== 'TOKEN' ? quote : 'USDG')
   const stepLabel: Record<Status, string> = {
-    idle: '', quote: 'Pricing…', review: 'Confirm', switch: 'Confirm network…', approve: 'Approve USDG…', deposit: 'Depositing…', withdraw: 'Withdrawing…',
+    idle: '', quote: 'Pricing…', review: 'Confirm', switch: 'Confirm network…', approve: `Approve ${quoteSym}…`, deposit: 'Depositing…', withdraw: 'Withdrawing…',
     record: 'Confirmed on-chain · recording…', recorded: 'Recorded ✓', record_failed: 'Retry recording',
   }
   const depBtn = !isConnected ? 'Connect Wallet' : status === 'idle' ? 'Review deposit' : status === 'review' ? 'Confirm deposit' : status === 'recorded' ? 'Deposited · recorded ✓' : stepLabel[status]
@@ -423,7 +425,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="text-[12.5px] mt-1" style={{ color: '#5A57DE' }}>Curated + spun up by Mintware</div>
 
           {/* allocation */}
-          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold mt-6" style={{ color: '#8A8A9E' }}>How your USDG is put to work</div>
+          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold mt-6" style={{ color: '#8A8A9E' }}>How your {quoteSym} is put to work</div>
           <div className="flex h-4 rounded-full overflow-hidden mt-3">
             <span style={{ width: '100%', background: 'linear-gradient(90deg,#8A82F4,#6C6CF0)' }} />
           </div>
@@ -554,7 +556,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             {tab === 'deposit' ? (
               <>
                 <div className="rounded-[14px] p-4" style={INNER}>
-                  <div className="flex justify-between text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}><span>Enter amount</span><span>USDG</span></div>
+                  <div className="flex justify-between text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}><span>Enter amount</span><span>{quoteSym}</span></div>
                   <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => { setAmount(sanitizeAmountInput(e.target.value)); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="bg-transparent outline-none font-mono font-bold text-[26px] w-full mt-2" style={{ color: '#191923' }} />
                 </div>
                 {Number(amount) > 0 && estAprPct != null && status !== 'review' && (
@@ -579,7 +581,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                       <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#B7791F' }}>This deployment has no slippage-bounded deposit — the transaction has no floor. Proceed only if you accept that.</div>
                     )}
                     <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#8A8A9E' }}>
-                      Shares are an estimate off the current block. {review.withMin ? 'If fewer than the floor would be minted, the transaction reverts and nothing moves.' : ''} Approve USDG, then deposit.
+                      Shares are an estimate off the current block. {review.withMin ? 'If fewer than the floor would be minted, the transaction reverts and nothing moves.' : ''} Approve {quoteSym}, then deposit.
                     </div>
                   </div>
                 )}
@@ -613,8 +615,8 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                     <Row k="Shares to burn" v={fmtShares(review.sharesToBurn)} />
                     {review.withMin ? (
                       <>
-                        <Row k="Est. USDG out" v={usdg(review.estQuote)} />
-                        <Row k={`Min. USDG floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={usdg(review.minQuote)} accent />
+                        <Row k={`Est. ${quoteSym} out`} v={usdg(review.estQuote)} />
+                        <Row k={`Min. ${quoteSym} floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={usdg(review.minQuote)} accent />
                         <Row k={`Est. ${pairedSym} out`} v={review.lpQuotable ? fmtUnits(review.estPaired, meta?.pairedDecimals ?? null, pairedSym) : 'unquotable (spot unreadable)'} />
                         <Row k={`Min. ${pairedSym} floor`} v={review.lpQuotable ? fmtUnits(review.minPaired, meta?.pairedDecimals ?? null, pairedSym) : 'none set'} accent />
                         <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#8A8A9E' }}>
@@ -648,7 +650,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#8A8A9E' }}>The loop</div>
             <div className="flex flex-col gap-3 mt-3">
               <Loop n="01" t="Deposit into the engine" d="Deposit one or both pool tokens with a minimum-shares floor; shares are valued in the quote asset." />
-              <Loop n="02" t="Liquidity plus adapters" d="The portfolio is held across a resting v4 band and per-token adapters. Robinhood testnet adapters hold assets ready without earning yield." />
+              <Loop n="02" t="Liquidity plus adapters" d="The portfolio is held across a resting v4 band and per-token adapters. On testnet the adapters hold assets ready without earning yield." />
               <Loop n="03" t="Withdraw in kind" d="Withdraw pro-rata in both pool tokens, with minimum-output limits." />
             </div>
           </div>
@@ -657,7 +659,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       </div>
 
       <p className="text-[12px] mt-6" style={{ color: '#8A8A9E' }}>
-        Robinhood Chain testnet · unaudited · metrics from GeckoTerminal · every figure above is an estimate, not a projection ·{' '}
+        {chainId != null ? chainLabel(chainId) : 'Robinhood Chain mainnet'} · unaudited · {m ? 'metrics from GeckoTerminal' : 'values read from chain'} · every figure above is an estimate, not a projection ·{' '}
         <Link href="/legal" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>
