@@ -24,8 +24,10 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
   const ex = explorer(unit)
   const D = unit.demo
   const status = rwaStatus(live)
-  const lockDays = live ? Math.max(0, Math.round((live.vault.lockExpiry - now) / 86400)) : null
-  const cover = live && live.vault.deployedUsd > 0 ? live.vault.juniorUsd / live.vault.deployedUsd : null
+  // The recorded snapshot carries no issuer-side state (inventory, lock, buffer): only a chain read fills those.
+  const chain = live && live.source !== 'recorded' ? live : null
+  const lockDays = chain ? Math.max(0, Math.round((chain.vault.lockExpiry - now) / 86400)) : null
+  const cover = chain && chain.vault.deployedUsd > 0 ? chain.vault.juniorUsd / chain.vault.deployedUsd : null
   const nextUpdate = live && live.appraisal.minUpdateSecs ? Math.max(0, live.appraisal.at + live.appraisal.minUpdateSecs - now) : null
   const ageLeft = live && live.appraisal.maxAgeSecs ? live.appraisal.at + live.appraisal.maxAgeSecs - now : null
 
@@ -43,7 +45,7 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
       </div>
 
       <div className="mt-5 grid grid-cols-4 gap-3 max-[820px]:grid-cols-2">
-        <Tile k="Your inventory backing it" v={live ? `${Math.round(live.vault.juniorUnits).toLocaleString()} ${D.property.symbol}` : '—'} s={live ? `+ ${usd(live.vault.juniorUsd)} USD buffer` : ''} />
+        <Tile k="Your inventory backing it" v={chain ? `${Math.round(chain.vault.juniorUnits).toLocaleString()} ${D.property.symbol}` : '—'} s={chain ? `+ ${usd(chain.vault.juniorUsd)} USD buffer` : ''} />
         <Tile k="Locked for" v={lockDays === null ? '—' : `${lockDays} days`} s="redeemable after the lock, once LPs are covered" />
         <Tile k="Open liquidity on top" v={live ? usd(live.vault.seniorUsd) : '—'} s={live ? `${usd(live.vault.deployedUsd)} of it in the pool` : ''} />
         <Tile k="USD cover of the pool slice" v={cover === null ? '—' : `${Math.round(cover * 100)}%`} s="your USD buffer ÷ LP dollars in the pool" tone={cover !== null && cover < 0.1 ? 'warn' : undefined} />

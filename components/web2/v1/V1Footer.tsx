@@ -1,4 +1,4 @@
-// V1Footer — the dark footer for the LP Gateway app (mounted in V1Shell, so it covers /v1, /v1/swap,
+// V1Footer — the footer for the Mintware app (mounted in V1Shell, so it covers every /v1 lane,
 // Two clearly-separated sections: "V1 · The product" (the app you're in) and
 // "V2 · Mintware" (the marketing site — the wider vision). Dark inline-hex palette to match the rest of V1
 // (never the light marketing-footer tokens). Honest: testnet line + the "never idle" throughline.
@@ -7,10 +7,13 @@ import Link from 'next/link'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 
 // The product surfaces the user is inside (in-app absolute routes).
+// Swap and Referrals stay routable but unlinked until swap execution and rewards ship.
 const V1_LINKS = [
-  { href: '/v1', label: 'Discover' },
-  { href: '/v1/swap', label: 'Swap' },
-  { href: '/v1/referrals', label: 'Referrals' },
+  { href: '/v1', label: 'Markets' },
+  { href: '/v1/rwas', label: 'RWAs' },
+  { href: '/v1/issuers', label: 'Issuers' },
+  { href: '/v1/card', label: 'Card' },
+  { href: '/v1/agents', label: 'Agents' },
   { href: '/legal', label: 'Legal & disclosures' },
 ]
 

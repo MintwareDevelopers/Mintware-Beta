@@ -141,7 +141,7 @@ export function V1Discover() {
               return (
                 <Link
                   key={p.poolAddress}
-                  href={`/markets/${slug(p)}`}
+                  href={`/markets/${slug(p)}?pair=${encodeURIComponent(p.pairLabel)}`}
                   className="rounded-[14px] p-4 no-underline transition-transform hover:-translate-y-0.5"
                   style={{ background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)', color: '#191923', display: 'block' }}
                 >
@@ -154,8 +154,9 @@ export function V1Discover() {
                   </div>
                   <div className="flex items-end justify-between mt-3">
                     <div>
-                      <div className="font-mono font-bold text-[19px]" style={{ color: p.estFeeAprPct != null ? '#16A34A' : '#191923' }}>{aprFmt(p.estFeeAprPct)}</div>
-                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>Est. Fee APR</div>
+                      {/* No fee field upstream ⇒ lead with real 24h volume instead of an empty APR. */}
+                      <div className="font-mono font-bold text-[19px]" style={{ color: p.estFeeAprPct != null ? '#16A34A' : '#191923' }}>{p.estFeeAprPct != null ? aprFmt(p.estFeeAprPct) : usd(p.vol24Usd)}</div>
+                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>{p.estFeeAprPct != null ? 'Est. Fee APR' : '24h Volume'}</div>
                       {(() => { const y = projFeesYr(p, sim); return y != null ? <div className="font-mono text-[11px] mt-1" style={{ color: '#6E6E80' }}>≈ {projFmt(y)}/yr on ${simStr}</div> : null })()}
                     </div>
                     <div className="text-right">
@@ -266,7 +267,7 @@ export function V1Discover() {
             return (
               <Link
                 key={p.poolAddress}
-                href={`/markets/${slug(p)}`}
+                href={`/markets/${slug(p)}?pair=${encodeURIComponent(p.pairLabel)}`}
                 className="grid items-center px-5 py-4 no-underline transition-colors min-w-[840px]"
                 style={{ gridTemplateColumns: COLS, color: '#191923', borderBottom: '1px solid rgba(22,22,44,0.05)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(22,22,44,0.03)')}
@@ -296,7 +297,7 @@ export function V1Discover() {
                 </span>
                 <span className="flex justify-center">
                   <span className="text-[11.5px] font-semibold px-2 py-0.5 rounded-full" style={{ color: r.color, background: `${r.color}1A` }}>
-                    {r.label} · {p.riskScore}
+                    {r.label}{p.riskScore > 0 ? ` · ${p.riskScore}` : ''}
                   </span>
                 </span>
                 <span className="text-right whitespace-nowrap">

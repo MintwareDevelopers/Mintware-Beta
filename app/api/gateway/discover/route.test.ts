@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   instances: [] as Array<{ pool_address: string; status: string; market_engine_address?: string | null; engine_verified_at?: string | null }>,
   filters: [] as Array<[string, unknown]>,
   hotCalls: 0,
+  tvl: 50_000,
 }))
 
 vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => ({ chainId: 46630, rpcUrl: 'https://rpc.test', defaultEngine: null }) }))
@@ -32,7 +33,7 @@ vi.mock('@/lib/gateway/discovery', () => ({
     state.hotCalls++
     await new Promise((r) => setTimeout(r, 5))
     return [{
-      poolAddress: POOL, pairLabel: 'X / USDG', tvlUsd: 1, vol24Usd: 1, priceQuotePerBase: null,
+      poolAddress: POOL, pairLabel: 'X / USDG', tvlUsd: state.tvl, vol24Usd: 1, priceQuotePerBase: null,
       signals: { volTvlRatio: null, poolAgeDays: null, txCount24: null }, score: 0, verdict: 'review', reasons: [],
       baseSymbol: 'X', quoteSymbol: 'USDG', baseLogo: null, quoteLogo: null, feePct: null, estFeeAprPct: null,
     }]
@@ -44,7 +45,7 @@ vi.mock('@/lib/gateway/discovery', () => ({
 
 const req = (ip: string) => new NextRequest('https://mintware.test/api/gateway/discover', { headers: { 'x-forwarded-for': ip } })
 
-beforeEach(() => { state.instances = []; state.filters = []; state.hotCalls = 0; vi.resetModules() })
+beforeEach(() => { state.instances = []; state.filters = []; state.hotCalls = 0; state.tvl = 50_000; vi.resetModules() })
 afterEach(() => { delete process.env.LP_GATEWAY_USDG; delete process.env.LP_GATEWAY_DISCOVER_USDG })
 
 describe('/api/gateway/discover', () => {
@@ -81,5 +82,12 @@ describe('/api/gateway/discover', () => {
     }
     expect(saw429).toBe(true)
     expect((await GET(req('192.0.2.10'))).status).toBe(200)
+  })
+
+  it('hides sub-$10k pools from the browse feed unless they are live', async () => {
+    state.tvl = 1
+    const { GET } = await import('./route')
+    const b = await (await GET(req('192.0.2.50'))).json()
+    expect(b.pools).toEqual([])
   })
 })

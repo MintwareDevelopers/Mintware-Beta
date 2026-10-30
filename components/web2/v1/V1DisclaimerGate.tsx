@@ -50,7 +50,7 @@ export function V1DisclaimerGate() {
         <div className="px-7 pb-7 pt-1">
           <h2 className="font-semibold text-[19px] tracking-[-0.01em]" style={{ color: '#191923' }}>Welcome — this is a testnet preview</h2>
           <p className="text-[13.5px] leading-[1.6] mt-2.5" style={{ color: '#494957' }}>
-            The LP Gateway runs on Robinhood Chain testnet — <span style={{ color: '#191923' }}>unaudited, with no real value.</span> A
+            Mintware runs on Base and Robinhood Chain testnets — <span style={{ color: '#191923' }}>unaudited, with no real value.</span> A
             liquidity position is not a deposit, a savings product, or a guaranteed or fixed return; its value
             moves with the pool price and is subject to impermanent loss. By clicking Enter you confirm you
             understand and accept the{' '}

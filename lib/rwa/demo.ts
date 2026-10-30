@@ -1,11 +1,10 @@
 // V2-RWAs — the one home for the demo liquidity units' recorded facts (addresses + every proof hash), one
-// unit per chain. Sources of truth (written by scripts/rwa-demo-lifecycle.mjs after a real run; never hand-edit):
-//   Base Sepolia      → config/rwaDemo.json
-//   XRPL EVM testnet  → config/rwaDemo.xrpl.json   (RWA_NETWORK=xrpl-evm-testnet)
+// unit per chain. Source of truth (written by the lifecycle script after a real run; never hand-edit):
+//   Base Sepolia → config/rwaDemo.json
+// The platform shows Base + Robinhood only; the earlier XRPL EVM run (config/rwaDemo.xrpl.json) is retired.
 // Testnet + unaudited: the hashes are real, the property is fictional, every token is valueless.
 
 import baseDemo from '@/config/rwaDemo.json'
-import xrplDemo from '@/config/rwaDemo.xrpl.json'
 
 export type RwaRevertReason = { error: string; target: string | null; args: string[] }
 export type RwaProofTx = { label: string; hash: string; status: 'success' | 'reverted'; from?: string; block?: number; reason?: RwaRevertReason }
@@ -39,14 +38,14 @@ export type RwaChain = {
   name: string
   short: string
   explorer: string
-  /** where contract source is verified: BaseScan for most of Base, Blockscout for the hook + all of XRPL EVM */
+  /** where contract source is verified: BaseScan for most of Base, Blockscout for the factory-CREATE2'd hook */
   blockscout: string
   nativeSymbol: string
 }
 
 export type RwaUnit = {
   slug: string
-  network: 'base-sepolia' | 'xrpl-evm-testnet'
+  network: 'base-sepolia'
   chain: RwaChain
   demo: RwaDemo
   /** the "run a live trade" button + background activity run on this unit */
@@ -60,13 +59,6 @@ export const RWA_UNITS: RwaUnit[] = [
     chain: { id: 84532, name: 'Base Sepolia', short: 'Base', explorer: 'https://sepolia.basescan.org', blockscout: 'https://base-sepolia.blockscout.com', nativeSymbol: 'ETH' },
     demo: baseDemo as unknown as RwaDemo,
     liveTrade: true,
-  },
-  {
-    slug: 'wcp7-xrpl',
-    network: 'xrpl-evm-testnet',
-    chain: { id: 1449000, name: 'XRPL EVM Testnet', short: 'XRPL EVM', explorer: 'https://explorer.testnet.xrplevm.org', blockscout: 'https://explorer.testnet.xrplevm.org', nativeSymbol: 'XRP' },
-    demo: xrplDemo as unknown as RwaDemo,
-    liveTrade: false,
   },
 ]
 
@@ -93,13 +85,12 @@ export const shortHash = (h: string) => (h.length > 14 ? `${h.slice(0, 8)}…${h
 
 /** Explorer links for one unit's chain. */
 export function explorer(u: RwaUnit) {
-  const isXrpl = u.network === 'xrpl-evm-testnet'
   return {
     tx: (hash: string) => `${u.chain.explorer}/tx/${hash}`,
     addr: (addr: string) => `${u.chain.explorer}/address/${addr}`,
     /** BaseScan rejects the factory-CREATE2'd hook although its metadata matches the source; Blockscout verifies it. */
     source: (key: string, addr: string) =>
-      isXrpl || key === 'hook' ? `${u.chain.blockscout}/address/${addr}?tab=contract` : `${u.chain.explorer}/address/${addr}#code`,
+      key === 'hook' ? `${u.chain.blockscout}/address/${addr}?tab=contract` : `${u.chain.explorer}/address/${addr}#code`,
   }
 }
 

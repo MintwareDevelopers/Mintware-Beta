@@ -14,7 +14,7 @@ import { V1Footer } from '@/components/web2/v1/V1Footer'
 import { shortAddr } from '@/lib/web2/api'
 import { V1DisclaimerGate } from './V1DisclaimerGate'
 
-// The platform's five lanes, mirroring the public site. Swap and Referrals stay reachable from the footer.
+// The platform's five lanes, mirroring the public site. Swap and Referrals stay routable, unlinked until they ship.
 const NAV = [
   { label: 'Markets', href: '/v1', match: (p: string) => p === '/v1' || p.startsWith('/markets') },
   { label: 'RWAs', href: '/v1/rwas' },

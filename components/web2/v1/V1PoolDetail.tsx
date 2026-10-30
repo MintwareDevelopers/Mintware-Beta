@@ -108,10 +108,12 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const searchParams = useSearchParams()
   const pmParam = searchParams.get('pm')
   const pmQuery = pmParam ? `&pm=${encodeURIComponent(pmParam)}` : ''
-  const pairLabel = m?.pairLabel ?? meta?.pairLabel ?? (decoded.startsWith('0x') ? 'Pool' : decoded.replace(/-/g, ' / ').toUpperCase())
+  // Discover passes the pair in the link (`?pair=`) so the header never falls back to a raw id.
+  const pairParam = searchParams.get('pair')
+  const pairLabel = m?.pairLabel ?? meta?.pairLabel ?? pairParam ?? (decoded.startsWith('0x') ? 'Unlisted pool' : decoded.replace(/-/g, ' / ').toUpperCase())
   const [base, quote] = useMemo(() => {
     const parts = pairLabel.split('/').map((s) => s.trim().replace(/\s*\d[\d.]*\s*%\s*$/, ''))
-    return [parts[0] || 'TOKEN', parts[1] || 'USDG']
+    return pairLabel.includes('/') ? [parts[0] || 'TOKEN', parts[1] || 'USDG'] : ['TOKEN', 'USDG']
   }, [pairLabel])
 
   useEffect(() => {
@@ -367,7 +369,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <TokenPair baseLogo={m?.baseLogo ?? null} quoteLogo={m?.quoteLogo ?? null} baseSymbol={m?.baseSymbol ?? base} quoteSymbol={m?.quoteSymbol ?? quote} size={36} ring="#0B0B14" />
+            <TokenPair baseLogo={m?.baseLogo ?? null} quoteLogo={m?.quoteLogo ?? null} baseSymbol={m?.baseSymbol ?? base} quoteSymbol={m?.quoteSymbol ?? quote} size={36} ring="#FFFFFF" />
             <h1 className="font-atx-display font-semibold tracking-[-0.03em] text-[28px]">{pairLabel}</h1>
           </div>
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
@@ -394,7 +396,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       )}
       {metaState === 'not_live' && (
         <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(22,22,44,0.04)', border: '1px solid rgba(22,22,44,0.08)', color: '#494957' }}>
-          This pool has no active MarketEngine — nothing here accepts funds.{' '}
+          This pool is still in curation — no market is open on it yet.{' '}
           <Link href="/v1" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Pick a live pool from Discover →</Link>
         </div>
       )}
@@ -462,6 +464,17 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         </GlassFrame>
 
         {/* RIGHT: action panel */}
+        {metaState === 'not_live' && !hasPos ? (
+          <div className="rounded-[16px] p-6 min-[900px]:order-2 order-1 self-start" style={PANEL}>
+            <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>Status</div>
+            <div className="font-atx-display font-semibold text-[20px] mt-1.5">In curation</div>
+            <p className="text-[13px] leading-[1.6] mt-2" style={{ color: '#494957' }}>
+              Mintware screens a pool on depth, age and real trading before a market opens on it. This one is on the
+              watchlist; deposits open once its market is live.
+            </p>
+            <Link href="/v1" className="inline-flex mt-4 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#5A57DE' }}>Browse live markets →</Link>
+          </div>
+        ) : (
         <div className="flex flex-col gap-5 min-[900px]:order-2 order-1">
           {/* position summary */}
           <div className="rounded-[16px] p-5" style={PANEL}>
@@ -621,6 +634,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       <p className="text-[12px] mt-6" style={{ color: '#8A8A9E' }}>

@@ -4,7 +4,7 @@
 // appraisal band + where the liquidity sits), then the chain's own refusals as the headline proof. Light-only.
 
 import Link from 'next/link'
-import { RWA_UNITS, explorer, shortHash } from '@/lib/rwa/demo'
+import { RWA_UNITS } from '@/lib/rwa/demo'
 import { useRwaUnit, usd, ago, rwaStatus, STATUS_CLS } from './useRwaUnit'
 import { BandGauge, LiquidityMap, RefusalCards, LiveDot, Disclosure, EY, H2 } from './RwaVisuals'
 
@@ -109,36 +109,6 @@ export function RwaOverview() {
             <RoleCard n="02" tag="Enrolled once" title="Vault + pool" body="The vault puts a slice into a standard Uniswap v4 pool and lends the rest. The issuer's own inventory sits underneath as first-loss." tone="peri" />
             <Arrow />
             <RoleCard n="03" tag="Verified" title="Traders" body="Checked by the issuer's token at the moment they receive it. An unverified wallet is refused by the token itself." tone="coral" />
-          </div>
-        </div>
-      </section>
-
-      {/* CHAINS */}
-      <section className="border-b border-hair-soft bg-[#FAFAFD]">
-        <div className={`${WRAP} py-12`}>
-          <div className={EY}>One liquidity unit, any EVM chain</div>
-          <h2 className={`${H2} mt-1.5`}>Live on {RWA_UNITS.length} chains</h2>
-          <div className="mt-7 grid grid-cols-2 gap-4 max-[760px]:grid-cols-1">
-            {RWA_UNITS.map((u) => {
-              const first = u.demo.deployTxs[0]?.hash ?? ''
-              const n = u.demo.deployTxs.length + u.demo.legs.reduce((m, l) => m + l.txs.length, 0)
-              return (
-                <Link key={u.slug} href={`/v1/rwas/${u.slug}`} className="group rounded-[20px] border border-hair bg-white p-6 no-underline transition-shadow hover:shadow-[0_14px_40px_-22px_rgba(59,58,143,0.45)]">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-ink-mid"><span className="h-2 w-2 rounded-full bg-mw-live" />{u.chain.name}</span>
-                    <span className="text-[12px] text-ink-soft">{n} transactions</span>
-                  </div>
-                  <div className="mt-3 font-atx-display text-[20px] font-semibold text-ink">{u.demo.property.name.replace(' (demo)', '')}</div>
-                  <div className="mt-1 text-[13px] text-ink-mid">
-                    {u.demo.poolManagerDeployedByUs ? 'Our own v4-core deployment — no Uniswap v4 on this chain yet' : 'Canonical Uniswap v4'} · gas in {u.chain.nativeSymbol}
-                  </div>
-                  <div className="mt-5 flex items-center justify-between text-[12.5px]">
-                    <span className="font-atx-mono text-ink-soft" title={explorer(u).tx(first)}>first tx {shortHash(first)}</span>
-                    <span className="font-semibold text-peri-deep group-hover:underline">Open market →</span>
-                  </div>
-                </Link>
-              )
-            })}
           </div>
         </div>
       </section>
