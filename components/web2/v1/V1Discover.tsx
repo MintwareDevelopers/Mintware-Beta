@@ -1,9 +1,11 @@
 'use client'
 
-// Discover — the V1 app home (Meteora × Krystal parity): a scannable table of the hottest Robinhood-Chain
-// pools that pass our screen, live from /api/gateway/discover (real GeckoTerminal metrics + our risk score).
-// Real paired token icons, 24h price-trend sparklines, est. fee APR, sortable columns, and a curated
-// "screened picks" spotlight. Live pools are depositable, the rest are "Curating".
+// Markets — the V1 app home, in two clearly separated parts:
+//   1. Live markets: our MarketEngine markets (Base + Robinhood testnets), from the on-chain-verified
+//      registry via /api/gateway/markets. These accept deposits.
+//   2. Watchlist: the real Robinhood-mainnet pools we screen (live GeckoTerminal metrics + our risk score
+//      via /api/gateway/discover), with sparklines, est. fee APR, sortable columns and screened picks.
+//      Markets open on these after the audited mainnet launch.
 // Honest: real metrics only, est. APR labeled an estimate, no APY/guaranteed framing; the score ranks,
 // humans curate.
 
@@ -12,6 +14,8 @@ import Link from 'next/link'
 import { GlassFrame } from './GlassFrame'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { Sparkline } from '@/components/web2/v1/Sparkline'
+import { marketChain } from '@/lib/chains/marketChains'
+import type { LiveMarket } from '@/app/api/gateway/markets/route'
 
 type Pool = {
   poolAddress: string
@@ -31,7 +35,7 @@ type Pool = {
   live: boolean
 }
 
-type Tab = 'all' | 'live' | 'new'
+type Tab = 'all' | 'new'
 type SortKey = 'vol' | 'apr' | 'tvl' | 'activity' | 'trust'
 
 const usd = (n: number) =>
@@ -66,12 +70,20 @@ const COLS = '1.9fr 0.85fr 0.85fr 0.85fr 0.85fr 0.7fr 0.9fr 0.9fr'
 
 export function V1Discover() {
   const [pools, setPools] = useState<Pool[]>([])
+  const [markets, setMarkets] = useState<LiveMarket[] | null>(null)
   const [series, setSeries] = useState<Record<string, number[]>>({})
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('all')
   const [sortKey, setSortKey] = useState<SortKey>('vol')
   const [simStr, setSimStr] = useState('1,000') // earnings-simulator deposit amount (USDG)
   const sim = Number(simStr.replace(/[^0-9.]/g, '')) || 0
+
+  useEffect(() => {
+    fetch('/api/gateway/markets')
+      .then((r) => r.json())
+      .then((d) => setMarkets(d?.success && Array.isArray(d.markets) ? (d.markets as LiveMarket[]) : []))
+      .catch(() => setMarkets([]))
+  }, [])
 
   useEffect(() => {
     fetch('/api/gateway/discover')
@@ -93,8 +105,7 @@ export function V1Discover() {
 
   const shown = useMemo(() => {
     let list = pools
-    if (tab === 'live') list = list.filter((p) => p.live)
-    else if (tab === 'new') list = list.filter((p) => p.poolAgeDays != null && p.poolAgeDays < 7)
+    if (tab === 'new') list = list.filter((p) => p.poolAgeDays != null && p.poolAgeDays < 7)
     return [...list].sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || sortVal(b, sortKey) - sortVal(a, sortKey))
   }, [pools, tab, sortKey])
 
@@ -105,15 +116,16 @@ export function V1Discover() {
     return [...pools].sort((a, b) => score(b) - score(a)).slice(0, 3)
   }, [pools])
 
-  const totalTvl = pools.reduce((s, p) => s + p.tvlUsd, 0)
   const totalVol = pools.reduce((s, p) => s + p.vol24Usd, 0)
+  const liveNav = (markets ?? []).reduce((s, m) => s + (m.navQuote ?? 0), 0)
+  const liveChains = [...new Set((markets ?? []).map((m) => marketChain(m.chainId)?.short ?? `Chain ${m.chainId}`))]
 
   return (
     <div>
       {/* hero */}
-      <div className="text-[12px] uppercase tracking-[0.13em] font-semibold" style={{ color: '#5A57DE' }}>Markets · Robinhood Chain</div>
+      <div className="text-[12px] uppercase tracking-[0.13em] font-semibold" style={{ color: '#5A57DE' }}>Markets · Base + Robinhood</div>
       <h1 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.05] text-[clamp(1.7rem,3.4vw,2.4rem)] mt-2.5 max-w-[26ch]">
-        Put USDG to work in curated pools —{' '}
+        Put your tokens to work in curated markets —{' '}
         <span style={{ backgroundImage: 'linear-gradient(100deg,#8A82F4,#F0A183)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>never locked.</span>
       </h1>
       <p className="text-[14.5px] leading-[1.6] mt-3 max-w-[58ch]" style={{ color: '#494957' }}>
@@ -123,15 +135,42 @@ export function V1Discover() {
 
       {/* stats strip */}
       <div className="flex gap-8 mt-6 flex-wrap">
-        <Stat k="Pools screened" v={loading ? '—' : String(pools.length)} />
-        <Stat k="Total TVL" v={loading ? '—' : usd(totalTvl)} />
-        <Stat k="24h Volume" v={loading ? '—' : usd(totalVol)} />
-        <Stat k="Network" v="Robinhood Testnet" />
+        <Stat k="Live markets" v={markets == null ? '—' : String(markets.length)} />
+        <Stat k="Live market value" v={markets == null ? '—' : `${liveNav.toLocaleString('en-US', { maximumFractionDigits: 0 })} test USD`} />
+        <Stat k="Live on" v={markets == null ? '—' : liveChains.length ? liveChains.join(' · ') : 'Testnets'} />
+        <Stat k="Watchlist 24h volume" v={loading ? '—' : usd(totalVol)} />
       </div>
+
+      {/* LIVE MARKETS — ours, on-chain, depositable (testnets) */}
+      <SectionHead
+        title="Live markets"
+        tag="Testnet"
+        sub="Mintware markets running today. Deposit one or both tokens, withdraw pro-rata any time."
+      />
+      {markets == null ? (
+        <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>
+          {[0, 1].map((i) => <div key={i} className="h-[132px] rounded-[14px] mw-shimmer" />)}
+        </div>
+      ) : markets.length === 0 ? (
+        <div className="mt-3 rounded-[14px] px-5 py-6 text-[13.5px]" style={{ ...CARD, color: '#494957' }}>
+          No market is open right now. New markets open here as each one is deployed and verified on-chain.
+        </div>
+      ) : (
+        <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>
+          {markets.map((mk) => <LiveMarketCard key={`${mk.chainId}:${mk.poolAddress}`} m={mk} />)}
+        </div>
+      )}
+
+      {/* WATCHLIST — real mainnet pools we screen */}
+      <SectionHead
+        title="Watchlist"
+        tag="Robinhood mainnet"
+        sub="Real pools we screen on depth, age and trading. Markets open on these after the audited mainnet launch."
+      />
 
       {/* spotlight — curated screened picks */}
       {!loading && spotlight.length > 0 && (
-        <div className="mt-7">
+        <div className="mt-4">
           <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-2.5" style={{ color: '#8A8A9E' }}>
             Screened picks <span style={{ color: '#A6A6B8' }}>· lowest-risk, most-established of the feed</span>
           </div>
@@ -174,7 +213,7 @@ export function V1Discover() {
       {/* controls: tabs + sort */}
       <div className="flex items-center justify-between gap-3 mt-7 flex-wrap">
         <div className="flex gap-1.5">
-          {([['all', 'All'], ['live', 'Live'], ['new', 'New']] as [Tab, string][]).map(([t, label]) => (
+          {([['all', 'All'], ['new', 'New']] as [Tab, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -314,11 +353,57 @@ export function V1Discover() {
       </GlassFrame>
 
       <p className="text-[12px] mt-5" style={{ color: '#8A8A9E' }}>
-        Robinhood testnet · metrics live from GeckoTerminal · est. APR = trailing-24h fees ÷ TVL, annualized
+        Live markets read from chain (testnets, test tokens) · watchlist metrics live from GeckoTerminal (Robinhood mainnet) · est. APR = trailing-24h fees ÷ TVL, annualized
         (an estimate, not a projection) · the score ranks, humans curate.{' '}
         <Link href="/legal" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>
+  )
+}
+
+const CARD = { background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)' }
+
+function SectionHead({ title, tag, sub }: { title: string; tag: string; sub: string }) {
+  return (
+    <div className="mt-9">
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <h2 className="font-atx-display font-semibold text-[19px] tracking-[-0.02em]">{title}</h2>
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] px-2 py-0.5 rounded-full" style={{ color: '#5A57DE', background: 'rgba(138,130,244,0.14)' }}>{tag}</span>
+      </div>
+      <p className="text-[13px] mt-1" style={{ color: '#6E6E80' }}>{sub}</p>
+    </div>
+  )
+}
+
+function LiveMarketCard({ m }: { m: LiveMarket }) {
+  const chain = marketChain(m.chainId)
+  const pair = m.pairLabel ?? `${m.poolAddress.slice(0, 8)}…`
+  const [base, quote] = pair.split('/').map((x) => x.trim())
+  return (
+    <Link
+      href={`/markets/${encodeURIComponent(m.poolAddress)}?pair=${encodeURIComponent(pair)}`}
+      className="block rounded-[14px] p-4 no-underline transition-transform hover:-translate-y-0.5"
+      style={{ ...CARD, color: '#191923' }}
+    >
+      <div className="flex items-center gap-2.5">
+        <TokenPair baseLogo={null} quoteLogo={null} baseSymbol={base ?? pair} quoteSymbol={quote ?? ''} size={28} ring="#FFFFFF" />
+        <span className="font-semibold text-[15px] truncate">{pair}</span>
+        <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ color: '#16A34A', background: 'rgba(22,163,74,0.12)' }}>● Live</span>
+      </div>
+      <div className="flex items-end justify-between mt-4">
+        <div>
+          <div className="font-mono font-bold text-[20px]">{m.navQuote == null ? 'Reading…' : m.navQuote.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
+          <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>Market value{m.quoteSymbol ? ` · ${m.quoteSymbol}` : ''}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[12.5px] font-semibold">{chain?.short ?? `Chain ${m.chainId}`}</div>
+          <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>{m.feePct != null ? `${m.feePct}% fee · ` : ''}testnet</div>
+        </div>
+      </div>
+      <div className="mt-3 pt-3 text-[12.5px] font-semibold flex justify-between" style={{ borderTop: '1px solid rgba(22,22,44,0.06)', color: '#5A57DE' }}>
+        <span>{m.depositable ? 'Deposit or withdraw' : 'View market'}</span><span>→</span>
+      </div>
+    </Link>
   )
 }
 
