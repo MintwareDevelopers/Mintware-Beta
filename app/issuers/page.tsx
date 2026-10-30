@@ -5,7 +5,7 @@ import { FlowDiagram } from '@/components/ui2/FlowDiagram'
 import { WaitlistForm } from '@/components/marketing/WaitlistForm'
 import { Section, Eyebrow, H2, P, Hero, GlassList, Rows, Steps, Kicker, CTA } from '@/components/marketing/Story'
 
-export const metadata = { title: 'Issuers — Mintware', description: 'Your token. Our liquidity. Deep, fair markets for tokenized stocks, RWAs and stablecoins from day one.' }
+export const metadata = { title: 'Issuers — Mintware', description: 'Your token. Real liquidity. Deep, fair markets for tokenized stocks, RWAs and stablecoins from day one.' }
 
 export default function IssuersPage() {
   return <main className="min-h-screen bg-white text-ink">
@@ -14,7 +14,7 @@ export default function IssuersPage() {
     <Hero
       eyebrow="For issuers of tokenized stocks, RWAs and stablecoins"
       title="Your token."
-      soft="Our liquidity."
+      soft="Real liquidity."
       lede="You did the hard part: a real asset, tokenized and compliant. Mintware makes sure it trades like one — deep, fair markets from the first day, funded by your own holders instead of a rented market maker."
       actions={<><a href="#talk" className="glass-pill-primary">Bring your asset to market</a><Link href="/markets" className="glass-pill">See live markets</Link></>}
       tone="lavender"

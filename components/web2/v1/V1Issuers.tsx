@@ -27,7 +27,7 @@ export function V1Issuers() {
       <LaneHeader
         eyebrow="Issuers"
         title="Your token."
-        accent="Our liquidity."
+        accent="Real liquidity."
         lede="Bring a tokenized asset to market with depth from day one, funded by its own holders. Your listed assets, and how a new one goes live."
         actions={<Link href="/issuers#talk" className="glass-pill-primary no-underline">Talk to us</Link>}
       />
