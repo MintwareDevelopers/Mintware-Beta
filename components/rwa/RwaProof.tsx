@@ -18,11 +18,11 @@ export function RwaProof({ slug }: { slug: string }) {
 
   return (
     <div className="text-ink">
-      <section className="border-b border-hair-soft bg-[radial-gradient(1000px_360px_at_90%_-20%,rgba(42,158,138,0.10),transparent_60%)]">
+      <section className="border-b border-hair-soft bg-[radial-gradient(1000px_380px_at_90%_-20%,rgba(201,192,244,0.5),transparent_60%)]">
         <div className={`${WRAP} pt-9 pb-8`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className={EY}>On-chain proof</div>
-            {RWA_UNITS.length > 1 && <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
+            {RWA_UNITS.length > 1 && <div className="inline-flex rounded-[14px] mw-inset p-1" role="tablist" aria-label="Chain">
               {RWA_UNITS.map((x) => (
                 <Link key={x.slug} href={`/v1/rwas/proof?unit=${x.slug}`} role="tab" aria-selected={x.slug === u.slug}
                   className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}>
@@ -39,7 +39,7 @@ export function RwaProof({ slug }: { slug: string }) {
         </div>
       </section>
 
-      <section className="border-b border-hair-soft bg-[#FCFBFF]">
+      <section className="border-b border-hair-soft bg-[#F6F6FA]">
         <div className={`${WRAP} py-10`}>
           <h2 className={H2}>The two refusals</h2>
           <div className="mt-6"><RefusalCards unit={u} /></div>
@@ -65,7 +65,7 @@ export function RwaProof({ slug }: { slug: string }) {
                       {leg.txs.map((t) => (
                         <li key={t.hash} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[13px]">
                           <span className="text-ink">
-                            <span className={t.status === 'reverted' ? 'text-[#B4532A]' : 'text-[#2F7D5B]'}>{t.status === 'reverted' ? '⨯' : '✓'}</span> {displayLabel(t.label)}
+                            <span className={t.status === 'reverted' ? 'text-[#B4532A]' : 'text-[#0F7A43]'}>{t.status === 'reverted' ? '⨯' : '✓'}</span> {displayLabel(t.label)}
                             {revertReasonText(t) && <span className="block text-[12px] text-[#B4532A]">{revertReasonText(t)}</span>}
                           </span>
                           <a href={ex.tx(t.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-peri-deep no-underline hover:underline">{shortHash(t.hash)} ↗</a>
@@ -80,10 +80,10 @@ export function RwaProof({ slug }: { slug: string }) {
         </div>
       </section>
 
-      <section className="border-b border-hair-soft bg-[#FAFAFD]">
+      <section className="border-b border-hair-soft bg-[#F6F6FA]">
         <div className={`${WRAP} py-10`}>
           <h2 className={H2}>Contracts, source-verified on {u.chain.name}</h2>
-          <div className="mt-5 overflow-x-auto rounded-[22px] border border-hair bg-white">
+          <div className="mt-5 overflow-x-auto rounded-[22px] mw-raise">
             <table className="w-full min-w-[640px] text-[13.5px]">
               <tbody>
                 {contractRows(u).map((r) => (
@@ -91,7 +91,7 @@ export function RwaProof({ slug }: { slug: string }) {
                     <td className="px-5 py-3.5"><div className="font-semibold">{r.name}</div><div className="text-[12.5px] text-ink-mid">{r.role}</div></td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
                       <a href={ex.addr(D.contracts[r.key])} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts[r.key])}</a>
-                      <a href={ex.source(r.key, D.contracts[r.key])} target="_blank" rel="noreferrer" className="ml-3 rounded-full bg-[rgba(47,125,91,0.10)] px-2 py-0.5 text-[11.5px] font-semibold text-[#2F7D5B] no-underline">Verified source ↗</a>
+                      <a href={ex.source(r.key, D.contracts[r.key])} target="_blank" rel="noreferrer" className="ml-3 rounded-full bg-[rgba(15,122,67,0.10)] px-2 py-0.5 text-[11.5px] font-semibold text-[#0F7A43] no-underline">Verified source ↗</a>
                     </td>
                   </tr>
                 ))}

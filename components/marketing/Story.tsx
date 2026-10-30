@@ -1,109 +1,142 @@
 import type { ReactNode } from 'react'
 import { GradientPanel, type PanelTone } from '@/components/ui2/GradientPanel'
 
-// Shared building blocks for the long-form marketing pages, in the v2 (Privy-esque) system:
-// two-tone grotesque headlines, mesh-gradient panels, soft/glass cards, glass-pill buttons.
-export const wrap = 'mx-auto max-w-[1160px] px-6 max-[800px]:px-4'
-export const body = 'text-ink-mid text-[16.5px] leading-[1.7] max-w-[62ch]'
-const display = 'font-atx-display tracking-[-0.04em] leading-[1.02]'
+// Shared building blocks for the long-form marketing pages, in Mineral (the landing's system): porcelain
+// ground, raised white cards for things you read or act on, inset wells for stages, solid periwinkle
+// buttons, two-tone semibold headlines, the pastel sheen only as soft light.
+export const wrap = 'mx-auto max-w-[1200px] px-[clamp(16px,4vw,40px)]'
+export const body = 'text-[17px] leading-[1.6] max-w-[62ch] text-ink-mid'
+const display = 'font-semibold tracking-[-0.04em] leading-[1.04]'
 
-/** Headline with an optional grey trailing phrase (the system's two-tone heading). */
+/** Headline with an optional muted trailing phrase (the system's two-tone heading). */
 function TwoTone({ main, soft }: { main: ReactNode; soft?: ReactNode }) {
   return <>{main}{soft && <> <span className="text-ink-soft">{soft}</span></>}</>
 }
 
+/** The page shell every marketing page sits in: porcelain ground, Geist, no sideways scroll. */
+export function Page({ children }: { children: ReactNode }) {
+  return <main className="font-geist min-h-screen overflow-x-hidden antialiased text-ink" style={{ background: 'var(--mw-ground)' }}>{children}</main>
+}
+
 export function Eyebrow({ children }: { children: ReactNode }) {
-  return <p className="inline-flex items-center gap-2 font-mono text-[11.5px] uppercase tracking-[0.16em] text-peri-deep"><span className="w-1.5 h-1.5 rounded-full bg-peri" />{children}</p>
+  return <p className="m-0 text-[13px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--mw-peri-deep)' }}>{children}</p>
 }
 
 export function H2({ children, soft }: { children: ReactNode; soft?: ReactNode }) {
-  return <h2 className={`${display} font-medium text-ink text-[clamp(2rem,4.4vw,3.3rem)] max-w-[20ch] mt-4`}><TwoTone main={children} soft={soft} /></h2>
+  return <h2 className={`${display} text-ink text-[clamp(34px,4.4vw,54px)] max-w-[20ch] mt-3`}><TwoTone main={children} soft={soft} /></h2>
 }
 
 export function P({ children }: { children: ReactNode }) {
   return <p className={`${body} mt-5`}>{children}</p>
 }
 
+/** A page band. `tint` gives the white band with hairlines that alternates with the porcelain ground. */
 export function Section({ id, tint, children }: { id?: string; tint?: boolean; children: ReactNode }) {
-  return <section id={id} className={`${tint ? 'bg-ground-cool' : 'bg-white'} scroll-mt-20`}><div className={`${wrap} py-24 max-[800px]:py-16`}>{children}</div></section>
+  return <section id={id} className="scroll-mt-20" style={tint ? { background: '#fff', borderTop: '1px solid var(--mw-line)', borderBottom: '1px solid var(--mw-line)' } : undefined}>
+    <div className={`${wrap} py-[clamp(64px,8vw,120px)]`}>{children}</div>
+  </section>
 }
 
-/** Page hero: copy on the left, an elevated gradient panel on the right. */
-export function Hero({ eyebrow, title, soft, lede, actions, aside, tone = 'periwinkle' }: {
+/** Soft concentric rings and a halo of sheen behind a hero object — the landing hero's backdrop. */
+function Halo() {
+  return <svg aria-hidden="true" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" className="absolute inset-x-0 -top-10 w-full h-[900px] pointer-events-none">
+    <defs><radialGradient id="story-halo" cx="72%" cy="52%" r="40%"><stop offset="0" stopColor="#C9C0F4" stopOpacity=".55" /><stop offset=".55" stopColor="#F2CBC2" stopOpacity=".18" /><stop offset="1" stopColor="#F6F6FA" stopOpacity="0" /></radialGradient></defs>
+    <rect width="1400" height="900" fill="url(#story-halo)" />
+    <g fill="none" stroke="#5B5BE6" strokeOpacity="0.07">
+      {[[160, 48], [260, 80], [370, 114], [490, 152], [620, 192], [760, 236], [910, 282]].map(([rx, ry]) => <ellipse key={rx} cx="1000" cy="560" rx={rx} ry={ry} />)}
+    </g>
+  </svg>
+}
+
+/** Page hero: copy on the left, a raised object on soft light to the right. */
+export function Hero({ eyebrow, title, soft, lede, actions, aside }: {
   eyebrow: ReactNode; title: ReactNode; soft?: ReactNode; lede: ReactNode; actions?: ReactNode; aside: ReactNode; tone?: PanelTone
 }) {
-  return <section className="bg-white">
-    <div className={`${wrap} pt-16 pb-24 max-[800px]:pt-10 max-[800px]:pb-16 grid lg:grid-cols-[1.1fr_1fr] gap-12 items-center`}>
-      <div>
-        <Eyebrow>{eyebrow}</Eyebrow>
-        <h1 className={`${display} font-medium text-[clamp(2.8rem,6.4vw,5.2rem)] max-w-[14ch] mt-5`}><TwoTone main={title} soft={soft} /></h1>
-        <p className={`${body} mt-7`}>{lede}</p>
-        {actions && <div className="flex flex-wrap gap-3 mt-9">{actions}</div>}
+  return <section className="relative">
+    <Halo />
+    <div className={`${wrap} relative pt-[clamp(40px,6vw,88px)] pb-[clamp(56px,7vw,104px)] flex flex-wrap items-center gap-12`}>
+      <div className="flex-[1_1_460px] min-w-0">
+        <div className="mw-raise-sm inline-flex items-center gap-2 rounded-full py-1.5 pl-2 pr-3 text-[13px] text-ink-mid">
+          <span className="w-2 h-2 rounded-full" style={{ background: 'var(--mw-btn)', boxShadow: '0 0 0 4px rgba(91,91,230,.15)' }} />
+          {eyebrow}
+        </div>
+        <h1 className="m-0 mt-6 font-semibold text-[clamp(46px,6.6vw,84px)] leading-[0.98] tracking-[-0.05em] max-w-[14ch]"><TwoTone main={title} soft={soft} /></h1>
+        <p className="mt-6 mb-0 max-w-[520px] text-[clamp(17px,1.6vw,20px)] leading-[1.55] text-ink-mid">{lede}</p>
+        {actions && <div className="flex flex-wrap gap-3 mt-8">{actions}</div>}
       </div>
-      <GradientPanel tone={tone} className="p-8 max-[800px]:p-5 min-h-[440px] flex items-center justify-center">
-        <div className="w-full flex justify-center">{aside}</div>
-      </GradientPanel>
+      <div className="flex-[1_1_420px] min-w-0 flex justify-center">{aside}</div>
     </div>
   </section>
 }
 
-/** A frosted card for hero asides: a title and a short list of outcomes. */
+/** A raised card for hero asides: a title and a short checked list of outcomes. */
 export function GlassList({ title, items }: { title: string; items: string[] }) {
-  return <div className="glass-card p-7 max-w-[420px] w-full">
-    <div className="text-[13px] font-semibold text-ink">{title}</div>
-    <ul className="mt-5 space-y-3.5">
-      {items.map(x => <li key={x} className="flex gap-3 text-[15px] leading-[1.45] text-ink"><span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-peri-deep shrink-0" />{x}</li>)}
+  return <div className="mw-raise-lg rounded-[26px] p-7 max-w-[440px] w-full">
+    <div className="text-[14px] font-semibold">{title}</div>
+    <ul className="mt-5 p-0 list-none flex flex-col gap-3">
+      {items.map(x => <li key={x} className="flex items-center gap-3 rounded-[14px] px-4 py-3 text-[15px] leading-[1.4]" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F7A43" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="m5 12 4 4 10-10" /></svg>{x}
+      </li>)}
     </ul>
   </div>
 }
 
-/** Outcome cards: the main "what you get" grid. */
-export function Rows({ items }: { items: [string, string][] }) {
+/** An icon on a tinted, recessed tile — the landing's feature-icon treatment. */
+export function IconTile({ children }: { children: ReactNode }) {
+  return <span className="flex-none w-11 h-11 rounded-[12px] grid place-items-center" style={{ color: 'var(--mw-peri-deep)', background: 'var(--mw-band)', boxShadow: 'var(--mw-inset)' }}>{children}</span>
+}
+
+/** Outcome cards: the main "what you get" grid. An optional third element is the card's icon. */
+export function Rows({ items }: { items: [string, string, ReactNode?][] }) {
   const cols = items.length % 3 === 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'
   return <div className={`grid ${cols} gap-5 mt-12`}>
-    {items.map(([t, d]) => <div key={t} className="soft-card p-8 flex flex-col">
-      <h3 className={`${display} font-medium text-[clamp(1.35rem,2.2vw,1.65rem)] tracking-[-0.025em] leading-[1.15]`}>{t}</h3>
-      <p className="text-[15px] text-ink-mid leading-[1.65] mt-4">{d}</p>
+    {items.map(([t, d, icon]) => <div key={t} className="mw-raise mw-lift rounded-[24px] p-8 flex flex-col">
+      {icon && <div className="mb-6"><IconTile>{icon}</IconTile></div>}
+      <h3 className="m-0 text-[22px] font-semibold tracking-[-0.02em] leading-[1.2]">{t}</h3>
+      <p className="text-[15px] text-ink-mid leading-[1.6] mt-3 mb-0">{d}</p>
     </div>)}
   </div>
 }
 
-/** Numbered step cards with gradient numerals. */
+/** Numbered step cards. */
 export function Steps({ items }: { items: [string, string][] }) {
   return <div className={`grid gap-5 mt-12 ${items.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
-    {items.map(([t, d], i) => <div key={t} className="soft-card p-8">
-      <span className={`${display} font-medium text-[56px] leading-none bg-clip-text text-transparent`} style={{ backgroundImage: 'linear-gradient(135deg, var(--color-peri-deep), var(--color-coral2))' }}>{i + 1}</span>
-      <h3 className="font-semibold text-[18px] mt-6">{t}</h3>
-      <p className="text-[14.5px] text-ink-mid leading-[1.6] mt-2">{d}</p>
+    {items.map(([t, d], i) => <div key={t} className="mw-raise rounded-[24px] p-8">
+      <span className="w-9 h-9 rounded-full grid place-items-center text-[15px] font-semibold text-white" style={{ background: 'var(--mw-btn)', boxShadow: 'var(--mw-glow)' }}>{i + 1}</span>
+      <h3 className="font-semibold text-[18px] mt-6 mb-0">{t}</h3>
+      <p className="text-[15px] text-ink-mid leading-[1.6] mt-2 mb-0">{d}</p>
     </div>)}
   </div>
 }
 
-/** Big numbers on a gradient panel. */
+/** Big numbers: raised tiles sitting in a lit well. */
 export function Stats({ items, tone = 'periwinkle' }: { items: [string, string][]; tone?: PanelTone }) {
-  return <GradientPanel tone={tone} className="p-6 max-[800px]:p-4 mt-12">
+  return <GradientPanel tone={tone} className="p-[clamp(16px,2.4vw,28px)] mt-12">
     <div className="grid md:grid-cols-4 gap-4">
-      {items.map(([n, t]) => <div key={n} className="glass-card p-6">
-        <div className={`${display} font-medium text-[clamp(2.2rem,4vw,3.2rem)]`}>{n}</div>
-        <p className="text-[14px] text-ink-mid leading-[1.55] mt-3">{t}</p>
+      {items.map(([n, t]) => <div key={n} className="mw-raise-sm rounded-[20px] p-6">
+        <div className="font-geist-mono text-[clamp(30px,3.4vw,42px)] tracking-[-0.03em]">{n}</div>
+        <p className="text-[14px] text-ink-mid leading-[1.55] mt-3 mb-0">{t}</p>
       </div>)}
     </div>
   </GradientPanel>
 }
 
-/** A key line, set large on a soft gradient band. */
-export function Kicker({ children, tone = 'lavender' }: { children: ReactNode; tone?: PanelTone }) {
-  return <GradientPanel tone={tone} className="px-10 py-14 max-[800px]:px-6 max-[800px]:py-10 mt-14">
-    <p className={`${display} font-medium text-[clamp(1.6rem,3.4vw,2.6rem)] max-w-[26ch]`}>{children}</p>
-  </GradientPanel>
+/** A key line, set large on a raised card with a patch of soft light. */
+export function Kicker({ children }: { children: ReactNode; tone?: PanelTone }) {
+  return <div className="mw-raise-lg relative overflow-hidden rounded-[28px] px-[clamp(24px,4vw,56px)] py-[clamp(36px,5vw,64px)] mt-14">
+    <div aria-hidden="true" className="absolute -right-[120px] -top-[140px] w-[420px] h-[420px] rounded-full opacity-30 blur-[60px]" style={{ background: 'var(--mw-sheen)' }} />
+    <p className={`relative m-0 ${display} text-[clamp(26px,3.4vw,40px)] max-w-[28ch]`}>{children}</p>
+  </div>
 }
 
-/** Closing call to action on a gradient panel. */
-export function CTA({ title, soft, children, tone = 'balanced' }: { title: ReactNode; soft?: ReactNode; children: ReactNode; tone?: PanelTone }) {
-  return <section className="bg-white"><div className={`${wrap} py-24 max-[800px]:py-16`}>
-    <GradientPanel tone={tone} className="px-12 py-20 max-[800px]:px-6 max-[800px]:py-12 text-center">
-      <h2 className={`${display} font-medium text-[clamp(2.2rem,5vw,4rem)] max-w-[18ch] mx-auto`}><TwoTone main={title} soft={soft} /></h2>
-      <div className="flex flex-wrap justify-center gap-3 mt-10">{children}</div>
-    </GradientPanel>
-  </div></section>
+/** Closing call to action: the landing's raised CTA card. */
+export function CTA({ title, soft, children }: { title: ReactNode; soft?: ReactNode; children: ReactNode; tone?: PanelTone }) {
+  return <section className="px-[clamp(16px,4vw,40px)] py-[clamp(56px,7vw,96px)]">
+    <div className="mw-raise-lg mx-auto max-w-[1200px] relative overflow-hidden rounded-[28px] px-[clamp(24px,5vw,64px)] py-[clamp(40px,6vw,80px)] text-center">
+      <div aria-hidden="true" className="absolute -right-[120px] -top-[120px] w-[420px] h-[420px] rounded-full opacity-35 blur-[60px]" style={{ background: 'var(--mw-sheen)' }} />
+      <div aria-hidden="true" className="absolute -left-[140px] -bottom-[160px] w-[380px] h-[380px] rounded-full opacity-25 blur-[60px]" style={{ background: 'var(--mw-sheen)' }} />
+      <h2 className={`relative m-0 ${display} text-[clamp(34px,4.6vw,58px)] max-w-[18ch] mx-auto`}><TwoTone main={title} soft={soft} /></h2>
+      <div className="relative flex flex-wrap justify-center gap-3 mt-10">{children}</div>
+    </div>
+  </section>
 }

@@ -29,7 +29,7 @@ export function V1Issuers() {
         title="Your token."
         accent="Real liquidity."
         lede="Bring a tokenized asset to market with depth from day one, funded by its own holders. Your listed assets, and how a new one goes live."
-        actions={<Link href="/issuers#talk" className="glass-pill-primary no-underline">Talk to us</Link>}
+        actions={<Link href="/issuers#talk" className="mw-btn">Talk to us</Link>}
       />
 
       <div className="mt-9 flex items-center gap-3">
@@ -48,7 +48,7 @@ export function V1Issuers() {
       </div>
       <div className="grid gap-5 mt-3 grid-cols-1 min-[900px]:grid-cols-[1fr_1fr]">
         <form
-          className="rounded-[16px] p-6"
+          className="rounded-[20px] p-6"
           style={PLAIN}
           onSubmit={(e) => { e.preventDefault(); if (name.trim()) setSent(true) }}
         >
@@ -58,40 +58,45 @@ export function V1Issuers() {
             value={name}
             onChange={(e) => { setName(e.target.value); setSent(false) }}
             placeholder="e.g. Willow Creek Parcel 7"
-            className="w-full mt-2 rounded-[10px] px-3 py-2.5 text-[14px] outline-none"
-            style={{ background: '#F6F6FA', border: '1px solid rgba(22,22,44,0.08)' }}
+            className="w-full mt-2 min-h-[46px] rounded-[12px] px-3.5 text-[15px] outline-none focus-visible:outline-2 focus-visible:outline-[var(--mw-btn)]"
+            style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}
           />
           <div className="text-[12.5px] font-semibold mt-5">Asset type</div>
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-1.5 mt-2 p-1.5 rounded-[14px]" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>
             {TYPES.map((t) => (
               <button
                 type="button"
                 key={t}
                 onClick={() => setType(t)}
-                className="text-[12.5px] font-medium px-3 py-1.5 rounded-full cursor-pointer"
-                style={t === type ? { background: '#4643D1', color: '#fff' } : { background: '#F6F6FA', color: '#454552', border: '1px solid rgba(22,22,44,0.08)' }}
+                aria-pressed={t === type}
+                className="text-[13px] font-medium px-3 min-h-[34px] rounded-[10px] cursor-pointer border-0"
+                style={t === type ? { background: '#fff', color: '#15151D', boxShadow: 'var(--mw-raise-sm)' } : { background: 'transparent', color: '#454552' }}
               >
                 {t}
               </button>
             ))}
           </div>
-          <button type="submit" disabled={!name.trim()} className="glass-pill-primary w-full mt-6 disabled:opacity-50">Request a market</button>
+          <button type="submit" disabled={!name.trim()} className="mw-btn w-full mt-6 !min-h-[48px] disabled:opacity-50 disabled:cursor-default">Request a market</button>
         </form>
 
-        <div className="rounded-[16px] p-6" style={PLAIN}>
+        <div className="rounded-[20px] p-6" style={PLAIN}>
           <div className="text-[13px] font-semibold">{sent ? `${name} · ${type}` : 'How a market goes live'}</div>
-          <ol className="mt-4 flex flex-col gap-4">
+          {/* Stage status is carried by the material, as on the landing: solid = done, dotted = in progress, hatched = ahead. */}
+          <ol className="mt-5 p-0 list-none flex flex-col">
             {STAGES.map((s, i) => {
               const state = !sent ? 'idle' : i === 0 ? 'done' : i === 1 ? 'active' : 'idle'
               return (
-                <li key={s.t} className="flex gap-3">
-                  <span
-                    className="w-6 h-6 rounded-full grid place-items-center text-[11px] font-bold shrink-0"
-                    style={state === 'done' ? { background: '#0F7A43', color: '#fff' } : state === 'active' ? { background: '#4643D1', color: '#fff' } : { background: '#F0F0F6', color: '#62626F' }}
-                  >
-                    {state === 'done' ? '✓' : i + 1}
-                  </span>
-                  <div>
+                <li key={s.t} className="flex gap-3.5">
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`w-8 h-8 rounded-full grid place-items-center text-[12px] font-bold shrink-0 ${state === 'active' ? 'mw-tex-dots' : state === 'idle' ? 'mw-tex-hatch' : ''}`}
+                      style={state === 'done' ? { backgroundColor: '#0F7A43', color: '#fff' } : state === 'active' ? { backgroundColor: '#E1DBFA', color: '#2E1F7A', boxShadow: '0 0 0 2px rgba(91,91,230,.4)' } : { backgroundColor: '#F2F2F5', color: '#454552', boxShadow: 'var(--mw-inset)' }}
+                    >
+                      {state === 'done' ? '✓' : i + 1}
+                    </span>
+                    {i < STAGES.length - 1 && <span className="w-px flex-1 min-h-[14px] my-1" style={{ background: 'var(--mw-line)' }} />}
+                  </div>
+                  <div className="pb-4 pt-1">
                     <div className="text-[14px] font-semibold">{s.t}{state === 'active' && <span className="ml-2 text-[11.5px] font-semibold" style={{ color: '#4643D1' }}>In progress</span>}</div>
                     <div className="text-[12.5px] mt-0.5" style={{ color: '#62626F' }}>{s.d}</div>
                   </div>

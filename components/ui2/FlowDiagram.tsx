@@ -1,8 +1,7 @@
 import { Fragment } from 'react'
 
-// FlowDiagram — Aave-style horizontal flow: glass nodes joined by animated
-// marching-dash connectors with an arrowhead. Collapses to a vertical stack on
-// mobile. Pure CSS animation (reduced-motion safe via .flow-dash-*). Design v2.
+// FlowDiagram — a row of raised step cards joined by arrows (Mineral). Wraps to a single column on
+// narrow screens, where the arrows turn downward.
 
 export interface FlowStep {
   label: string
@@ -10,23 +9,28 @@ export interface FlowStep {
   n?: string
 }
 
+function Arrow({ down }: { down?: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {down ? <path d="M12 5v14M6 13l6 6 6-6" /> : <path d="M5 12h14M13 6l6 6-6 6" />}
+    </svg>
+  )
+}
+
 export function FlowDiagram({ steps, className = '' }: { steps: FlowStep[]; className?: string }) {
   return (
     <div className={`flex items-stretch max-[860px]:flex-col ${className}`}>
       {steps.map((s, i) => (
         <Fragment key={i}>
-          <div className="flex-1 rounded-2xl border border-hair bg-white/70 backdrop-blur-[10px] p-4 min-w-0">
-            <div className="text-[11px] font-semibold text-peri-deep tabular-nums">{s.n ?? String(i + 1).padStart(2, '0')}</div>
-            <div className="font-atx-display font-medium text-[14px] tracking-[-0.01em] leading-[1.2] text-ink mt-1.5">{s.label}</div>
-            {s.sub && <div className="text-[11px] text-ink-soft leading-[1.4] mt-1">{s.sub}</div>}
+          <div className="mw-raise-sm flex-1 rounded-2xl px-5 py-[18px] min-w-0">
+            <div className="font-geist-mono text-[12px]" style={{ color: 'var(--mw-ink-3)' }}>{s.n ?? String(i + 1).padStart(2, '0')}</div>
+            <div className="font-semibold text-[15px] tracking-[-0.01em] leading-[1.25] mt-1.5" style={{ color: 'var(--mw-ink)' }}>{s.label}</div>
+            {s.sub && <div className="text-[13px] leading-[1.45] mt-1" style={{ color: 'var(--mw-ink-3)' }}>{s.sub}</div>}
           </div>
           {i < steps.length - 1 && (
-            <div className="flex items-center justify-center px-2 shrink-0 max-[860px]:justify-start max-[860px]:pl-6 max-[860px]:py-1">
-              {/* desktop: horizontal marching dash + arrowhead */}
-              <span aria-hidden className="flow-dash-h h-[2px] w-8 rounded-full opacity-70 max-[860px]:hidden" />
-              <span aria-hidden className="text-peri-deep text-[12px] -ml-[3px] max-[860px]:hidden">▸</span>
-              {/* mobile: vertical marching dash */}
-              <span aria-hidden className="flow-dash-v w-[2px] h-5 rounded-full opacity-70 hidden max-[860px]:inline-block" />
+            <div className="flex items-center justify-center px-2 shrink-0 max-[860px]:py-1.5" style={{ color: 'var(--mw-ink-3)' }}>
+              <span className="max-[860px]:hidden"><Arrow /></span>
+              <span className="hidden max-[860px]:inline"><Arrow down /></span>
             </div>
           )}
         </Fragment>

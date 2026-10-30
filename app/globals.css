@@ -2,7 +2,7 @@
 
 @theme {
   /* ── Per-page accent theming ── */
-  --page-accent-rgb: 79, 126, 247;  /* default: brand blue */
+  --page-accent-rgb: 91, 91, 230;  /* default: Mineral periwinkle */
 
   /* ── Fonts ── */
   --font-sans:    var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
@@ -17,17 +17,17 @@
      Periwinkle-led pastel + translucent glass, soft-coral accent. Display face is
      Space Grotesk (font-atx-display). Pastel ramp is `pas-`-prefixed to avoid
      clobbering Tailwind's default `sky`/`violet`/etc. ── */
-  --color-ink:          #17171F;   /* cool near-black text */
-  --color-ink-mid:      #55555F;
-  --color-ink-soft:     #9A9AA8;
+  --color-ink:          #15151D;   /* cool near-black text */
+  --color-ink-mid:      #454552;
+  --color-ink-soft:     #62626F;
   --color-ground:       #FFFFFF;
-  --color-ground-cool:  #F6F6FC;   /* lavender-white band */
+  --color-ground-cool:  #F6F6FA;   /* lavender-white band */
   --color-hair:         rgba(23, 23, 31, 0.08);
   --color-hair-soft:    rgba(23, 23, 31, 0.05);
   /* periwinkle — base accent */
-  --color-peri:         #6C6CF0;
+  --color-peri:         #5B5BE6;
   --color-peri-mid:     #8A82F4;
-  --color-peri-deep:    #5A57DE;
+  --color-peri-deep:    #4643D1;
   /* coral — warm accent */
   --color-coral2:       #F4A183;
   --color-coral2-mid:   #F7B79C;
@@ -62,22 +62,22 @@
   --text-mw-6xl:  56px;
 
   /* ── Brand (new flat blue) ── */
-  --color-mw-brand:      #4f7ef7;
-  --color-mw-brand-dim:  rgba(79, 126, 247, 0.07);
-  --color-mw-brand-mid:  rgba(79, 126, 247, 0.14);
+  --color-mw-brand:      #5B5BE6;
+  --color-mw-brand-dim:  rgba(91, 91, 230, 0.07);
+  --color-mw-brand-mid:  rgba(91, 91, 230, 0.14);
 
   /* ── Text ── */
-  --color-mw-ink:   #1a1a1a;
-  --color-mw-ink-2: #3d3d3d;
-  --color-mw-ink-3: #6b7280;
+  --color-mw-ink:   #15151D;
+  --color-mw-ink-2: #454552;
+  --color-mw-ink-3: #62626F;
 
   /* ── Surfaces ── */
   --color-mw-surface: #f5f5f7;
-  --color-mw-bg:      #F8F9FC;   /* app page background — clean neutral tint */
-  --color-mw-brand-vivid: #2563EB; /* deeper blue for primary CTAs */
+  --color-mw-bg:      #F6F6FA;   /* app page background — clean neutral tint */
+  --color-mw-brand-vivid: #4643D1; /* deeper blue for primary CTAs */
 
   /* ── Green (live / success) ── */
-  --color-mw-green:        #16a34a;
+  --color-mw-green:        #0F7A43;
   --color-mw-green-muted:  #f0fdf4;
   --color-mw-green-edge:   #bbf7d0;
 
@@ -92,23 +92,23 @@
   --color-mw-dark-border: rgba(255, 255, 255, 0.06);
 
   /* ── Brand deep (referral UI — distinct from nav blue) ── */
-  --color-mw-brand-deep:      #3A5CE8;
-  --color-mw-brand-deep-glow: rgba(58, 92, 232, 0.12);
+  --color-mw-brand-deep:      #4643D1;
+  --color-mw-brand-deep-glow: rgba(70, 67, 209, 0.12);
 
   /* ── Text variants ── */
-  --color-mw-ink-4: #8A8C9E;   /* lightest muted — referral UI */
-  --color-mw-ink-5: #9ca3af;   /* extra light — dashboard/leaderboard */
+  --color-mw-ink-4: #62626F;   /* lightest muted — referral UI */
+  --color-mw-ink-5: #6E6E7B;   /* extra light — dashboard/leaderboard */
 
   /* ── Surfaces ── */
-  --color-mw-surface-purple: #F7F6FF;   /* referral light bg */
-  --color-mw-surface-card:   #f9f9fb;   /* dashboard/leaderboard cards */
+  --color-mw-surface-purple: #F1F0FB;   /* referral light bg */
+  --color-mw-surface-card:   #F6F6FA;   /* dashboard/leaderboard cards */
 
   /* ── Semantic colors ── */
   --color-mw-live:  #22c55e;   /* live indicator dot (≠ --color-mw-green which is for earnings text) */
   --color-mw-pink:  #C2537A;   /* sharing / referral */
   --color-mw-teal:  #2A9E8A;   /* holding / success teal */
   --color-mw-amber: #C27A00;   /* pending / liquidity */
-  --color-mw-red:   #ef4444;   /* error / disconnect */
+  --color-mw-red:   #B42318;   /* error / disconnect */
 
   /* ── Borders ── */
   --color-mw-border-mid: rgba(0, 0, 0, 0.1);
@@ -129,8 +129,8 @@
   --shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.06);
   --shadow-md:         0 4px 12px rgba(0, 0, 0, 0.07);
   --shadow-sheet:      0 -4px 40px rgba(58, 92, 232, 0.12);
-  --shadow-card:       0 1px 2px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-card:       0 0 0 1px rgba(21,21,29,.06), 0 1px 2px rgba(21,21,29,.06), 0 4px 10px -4px rgba(21,21,29,.10);
+  --shadow-card-hover: 0 0 0 1px rgba(21,21,29,.05), 0 6px 12px -4px rgba(21,21,29,.07), 0 22px 40px -18px rgba(21,21,29,.16);
   --shadow-feature:    0 16px 48px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.04);
 
   /* ── Animations ── */
@@ -159,9 +159,13 @@
 @layer base {
   html { scroll-behavior: smooth; }
   body {
-    font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
+    /* Mineral: Geist everywhere. The font vars live on <body> (next/font), so the theme's sans/mono
+       tokens are re-pointed here rather than on :root, where they would compute empty. */
+    --font-sans: var(--font-geist), 'Geist', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: var(--font-geist-mono), 'Geist Mono', ui-monospace, Menlo, monospace;
+    font-family: var(--font-geist), 'Geist', ui-sans-serif, system-ui, sans-serif;
     background-color: #ffffff;
-    color: #1a1a1a;
+    color: #15151D;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
   }
@@ -170,77 +174,60 @@
 @layer components {
   /* ═══ Privy-esque v2 primitives ═══ */
 
-  /* Glass pill — the one button. Translucent frosted; reads on white + gradients. */
+  /* Legacy v2 class names, re-skinned as Mineral (2026-10) so every page that still uses them matches the
+     landing: glass-pill = quiet raised button, glass-pill-primary = solid periwinkle, glass-card / soft-card =
+     raised white surfaces. Prefer the mw-* classes in new code. */
   .glass-pill {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 14px 26px; border-radius: 999px;
+    min-height: 44px; padding: 0 20px; border-radius: 12px; border: 0;
     font-weight: 600; font-size: 0.94rem; line-height: 1; cursor: pointer;
-    color: var(--color-ink);
-    background: rgba(255,255,255,0.62);
-    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-    border: 1px solid rgba(23,23,31,0.10);
-    box-shadow: 0 2px 8px rgba(23,23,31,.06), inset 0 0 0 1px rgba(255,255,255,.5);
-    transition: transform .2s cubic-bezier(.4,0,.2,1), background .2s, box-shadow .2s;
-    text-decoration: none;
+    color: var(--mw-ink); background: var(--mw-surface); box-shadow: var(--mw-raise-sm);
+    transition: transform .15s ease, filter .15s ease; text-decoration: none;
   }
-  .glass-pill:hover {
-    background: rgba(255,255,255,0.85); transform: translateY(-1px);
-    box-shadow: 0 8px 18px rgba(23,23,31,.10), inset 0 0 0 1px rgba(255,255,255,.6);
-  }
-  .glass-pill:focus-visible { outline: 2px solid var(--color-peri); outline-offset: 2px; }
-  .glass-pill-sm { padding: 9px 18px; font-size: 0.85rem; }
+  .glass-pill:hover { transform: translateY(-1px); filter: brightness(.97); color: var(--mw-ink); }
+  .glass-pill:focus-visible { outline: 2px solid var(--mw-btn); outline-offset: 3px; }
+  .glass-pill-sm { min-height: 40px; padding: 0 16px; font-size: 0.875rem; }
 
-  /* Glass pill — primary. Same frosted family, periwinkle-tinted fill for the one
-     hero-weight CTA per section. Still glass, never solid/black. EXPERIMENTAL. */
   .glass-pill-primary {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 15px 28px; border-radius: 999px;
+    min-height: 48px; padding: 0 24px; border-radius: 12px; border: 0;
     font-weight: 600; font-size: 0.96rem; line-height: 1; cursor: pointer;
-    color: #fff;
-    background: linear-gradient(135deg, var(--color-peri) 0%, var(--color-peri-deep) 100%);
-    box-shadow: 0 6px 20px rgba(108,108,240,.32), inset 0 0 0 1px rgba(255,255,255,.16);
-    transition: transform .2s cubic-bezier(.4,0,.2,1), box-shadow .2s;
-    text-decoration: none; border: none;
+    color: #fff; background: var(--mw-btn); box-shadow: var(--mw-glow);
+    transition: transform .15s ease, filter .15s ease; text-decoration: none;
   }
-  .glass-pill-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(108,108,240,.4), inset 0 0 0 1px rgba(255,255,255,.22); }
-  .glass-pill-primary:focus-visible { outline: 2px solid var(--color-peri-deep); outline-offset: 2px; }
+  .glass-pill-primary:hover { transform: translateY(-1px); filter: brightness(.93); color: #fff; }
+  .glass-pill-primary:disabled { opacity: .6; cursor: default; transform: none; }
+  .glass-pill-primary:focus-visible { outline: 2px solid var(--mw-btn); outline-offset: 3px; }
 
-  /* Live pulse chip — small eyebrow badge with a beating dot. EXPERIMENTAL. */
+  /* Live chip — small status pill with a beating dot. */
   .live-chip {
     display: inline-flex; align-items: center; gap: 7px;
-    padding: 6px 14px 6px 10px; border-radius: 999px;
-    font-size: 0.72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
-    color: var(--color-peri-deep);
-    background: rgba(108,108,240,0.08);
-    border: 1px solid rgba(108,108,240,0.18);
+    padding: 5px 12px 5px 10px; border-radius: 999px;
+    font-size: 0.75rem; font-weight: 600;
+    color: var(--mw-peri-deep); background: var(--mw-band);
+    box-shadow: inset 0 0 0 1px rgba(91,91,230,.16);
   }
-  .live-chip .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-peri); animation: mw-pulse 1.8s ease-in-out infinite; }
+  .live-chip .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--mw-btn); animation: mw-pulse 1.8s ease-in-out infinite; }
 
-  /* Gradient accent text — the ONE hero-color-word treatment per section (h1/h2 accent
-     spans only; never body copy, never more than one run per heading). EXPERIMENTAL. */
+  /* Accent heading run — the same ink-to-ember gradient as the landing headline. */
   .text-gradient-accent {
-    background-image: linear-gradient(100deg, var(--color-peri) 10%, var(--color-coral2-deep) 90%);
+    background-image: linear-gradient(100deg, #4643D1 0%, #7A4FD0 55%, #C9572B 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
 
-  /* Glass card — translucent frosted surface (best over gradients). */
   .glass-card {
-    background: rgba(255,255,255,0.62);
-    -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
-    border: 1px solid rgba(255,255,255,0.6);
-    border-radius: var(--radius-panel);
-    box-shadow: 0 24px 60px rgba(120,110,220,.18), inset 0 0 0 1px rgba(255,255,255,.55);
+    background: var(--mw-surface);
+    border-radius: 24px;
+    box-shadow: var(--mw-raise);
   }
 
-  /* Soft card — clean white/pastel-tinted card with hairline + hover lift. */
   .soft-card {
-    background: linear-gradient(180deg, rgba(199,184,251,.14) 0%, var(--color-ground) 58%);
-    border: 1px solid var(--color-hair);
-    border-radius: var(--radius-card);
-    box-shadow: 0 1px 2px rgba(23,23,31,.04);
-    transition: transform .25s cubic-bezier(.4,0,.2,1), box-shadow .25s, border-color .25s;
+    background: var(--mw-surface);
+    border-radius: 22px;
+    box-shadow: var(--mw-raise);
+    transition: transform .2s ease;
   }
-  .soft-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lift); border-color: rgba(108,108,240,.24); }
+  .soft-card:hover { transform: translateY(-3px); }
 
   /* Grain — fractal-noise overlay for gradient panels (place as an ::after or child). */
   .grain::after {
@@ -251,10 +238,10 @@
   @media (prefers-reduced-motion: reduce) { .mw-drift { animation: none !important; } }
 
   /* ── Page accent themes ───────────────────────────────────────────── */
-  .page-earn        { --page-accent-rgb: 79, 126, 247; }
-  .page-swap        { --page-accent-rgb: 79, 126, 247; }
-  .page-leaderboard { --page-accent-rgb: 79, 126, 247; }
-  .page-profile     { --page-accent-rgb: 79, 126, 247; }
+  .page-earn        { --page-accent-rgb: 91, 91, 230; }
+  .page-swap        { --page-accent-rgb: 91, 91, 230; }
+  .page-leaderboard { --page-accent-rgb: 91, 91, 230; }
+  .page-profile     { --page-accent-rgb: 91, 91, 230; }
 
   /* ── Hero gradient card — dark navy ─────────────────────────── */
   .mw-hero-gradient {
@@ -436,7 +423,7 @@
     -webkit-appearance: none;
     width: 20px; height: 20px;
     border-radius: 50%;
-    background: var(--color-peri, #6C6CF0);
+    background: var(--mw-btn, #5B5BE6);
     border: 2px solid #fff;
     box-shadow: 0 2px 8px rgba(108, 108, 240, 0.35);
     cursor: pointer;
@@ -444,7 +431,7 @@
   .ypn-range::-moz-range-thumb {
     width: 20px; height: 20px;
     border-radius: 50%;
-    background: var(--color-peri, #6C6CF0);
+    background: var(--mw-btn, #5B5BE6);
     border: 2px solid #fff;
     box-shadow: 0 2px 8px rgba(108, 108, 240, 0.35);
     cursor: pointer;
@@ -454,12 +441,12 @@
   @keyframes mw-flow-march   { to { background-position: 0 12px; } }
   @keyframes mw-flow-march-h { to { background-position: 12px 0; } }
   .flow-dash-v {
-    background-image: repeating-linear-gradient(180deg, var(--color-peri, #6C6CF0), var(--color-peri, #6C6CF0) 4px, transparent 4px, transparent 12px);
+    background-image: repeating-linear-gradient(180deg, var(--mw-btn, #5B5BE6), var(--mw-btn, #5B5BE6) 4px, transparent 4px, transparent 12px);
     background-size: 100% 12px;
     animation: mw-flow-march 0.55s linear infinite;
   }
   .flow-dash-h {
-    background-image: repeating-linear-gradient(90deg, var(--color-peri, #6C6CF0), var(--color-peri, #6C6CF0) 4px, transparent 4px, transparent 12px);
+    background-image: repeating-linear-gradient(90deg, var(--mw-btn, #5B5BE6), var(--mw-btn, #5B5BE6) 4px, transparent 4px, transparent 12px);
     background-size: 12px 100%;
     animation: mw-flow-march-h 0.55s linear infinite;
   }
@@ -603,8 +590,9 @@
    them through a :root @theme token would compute empty. Applied on /style; rolled out with
    the design refresh. */
 @layer utilities {
-  .font-atx-display { font-family: var(--font-space-grotesk), 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; }
-  .font-atx-mono    { font-family: var(--font-jetbrains), 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; }
+  /* Mineral: the legacy display/mono utilities now resolve to Geist / Geist Mono. */
+  .font-atx-display { font-family: var(--font-geist), 'Geist', ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.02em; }
+  .font-atx-mono    { font-family: var(--font-geist-mono), 'Geist Mono', ui-monospace, Menlo, monospace; }
 }
 
 @layer base {
@@ -662,6 +650,7 @@
   }
   .mw-btn-quiet:hover { transform: translateY(-1px); filter: brightness(.97); color: var(--mw-ink); }
   .mw-btn:focus-visible, .mw-btn-quiet:focus-visible { outline: 2px solid var(--mw-btn); outline-offset: 3px; }
+  .mw-btn-lg { min-height: 54px; padding: 0 26px; border-radius: 14px; font-size: 16px; }
   .mw-lift { transition: transform .2s ease; }
   .mw-lift:hover { transform: translateY(-3px); }
 }
@@ -675,6 +664,13 @@
 .v1-app { font-family: var(--font-geist), 'Geist', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 .v1-app .font-mono { font-family: var(--font-geist-mono), 'Geist Mono', ui-monospace, Menlo, monospace; }
 @media (prefers-reduced-motion: reduce) { .mw-btn, .mw-btn-quiet, .mw-lift { transition: none; } }
+
+/* Mineral range input: an inset track filled solid up to the value (set --mw-fill), with a raised thumb. */
+.mw-range { -webkit-appearance: none; appearance: none; height: 10px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(90deg, #7C7AF0 var(--mw-fill, 0%), var(--mw-well) var(--mw-fill, 0%)); box-shadow: var(--mw-inset); }
+.mw-range::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 999px; background: #fff; box-shadow: var(--mw-raise-sm), 0 0 0 4px rgba(91,91,230,.18); }
+.mw-range::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 999px; background: #fff; box-shadow: var(--mw-raise-sm), 0 0 0 4px rgba(91,91,230,.18); }
+.mw-range:focus-visible { outline: 2px solid var(--mw-btn); outline-offset: 4px; }
 
 /* Mineral status textures — status lives in the material: solid = live, dotted = building, hatched = planned.
    Background-image only, so they sit on top of whatever background-color the element already has. */

@@ -32,7 +32,7 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
   const ageLeft = live && live.appraisal.maxAgeSecs ? live.appraisal.at + live.appraisal.maxAgeSecs - now : null
 
   return (
-    <div className="rounded-[16px] p-6 glass-card">
+    <div className="rounded-[20px] p-6 mw-raise">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-[12px] text-ink-mid"><span className="h-2 w-2 rounded-full bg-mw-live" />{unit.chain.name} · {D.property.symbol}</div>
@@ -40,7 +40,7 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {status && <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${STATUS_CLS[status.tone]}`}>{status.t}</span>}
-          <Link href={`/v1/rwas/${unit.slug}`} className="glass-pill glass-pill-sm no-underline">Open market</Link>
+          <Link href={`/v1/rwas/${unit.slug}`} className="mw-btn-quiet !min-h-[40px] no-underline">Open market</Link>
         </div>
       </div>
 

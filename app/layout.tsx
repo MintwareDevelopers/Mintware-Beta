@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Plus_Jakarta_Sans, DM_Mono, Space_Grotesk, JetBrains_Mono, Geist, Geist_Mono } from 'next/font/google'
+import { Plus_Jakarta_Sans, Space_Grotesk, JetBrains_Mono, Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Providers } from '@/components/web2/providers'
 import { Toaster } from 'sonner'
@@ -12,12 +12,6 @@ const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
   variable: '--font-jakarta',
   weight: ['300', '400', '500', '600', '700'],
-})
-
-const dmMono = DM_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  weight: ['400', '500'],
 })
 
 // ATX Settlemint (Phase-3 design language) — additive; existing pages keep Jakarta/DM Mono
@@ -74,7 +68,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${jakarta.variable} ${dmMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${jakarta.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
         {/* Enable motion before paint so scroll-reveal never flashes hidden and
             degrades to fully-visible content when JS is off. */}
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js-motion')" }} />
@@ -88,7 +82,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             position="bottom-right"
             toastOptions={{
               style: {
-                fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+                fontFamily: 'var(--font-geist), Geist, sans-serif',
                 fontSize: 13,
                 borderRadius: 12,
               },

@@ -18,8 +18,8 @@ export function WaitlistForm({ source, button = 'Join the waitlist' }: { source:
   }
   if (status === 'done') return <p className="text-[14px] font-semibold text-mw-green">You&apos;re on the list.</p>
   return <form onSubmit={submit} className="flex flex-wrap gap-2 max-w-[520px]">
-    <input className="min-w-[220px] flex-1 rounded-full border border-hair bg-white px-4 py-3 text-[14px] text-ink outline-none focus:border-peri" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" aria-label="Email address" />
-    <button className="glass-pill-primary" disabled={status === 'loading'}>{status === 'loading' ? '…' : button}</button>
+    <input className="min-w-[220px] flex-1 min-h-[48px] rounded-[12px] border-0 px-4 text-[15px] text-ink outline-none focus-visible:outline-2 focus-visible:outline-[var(--mw-btn)]" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }} type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" aria-label="Email address" />
+    <button className="mw-btn !min-h-[48px] !px-5" disabled={status === 'loading'}>{status === 'loading' ? '…' : button}</button>
     {status === 'error' && <span className="w-full text-[13px] text-mw-red">Could not submit. Try again.</span>}
   </form>
 }

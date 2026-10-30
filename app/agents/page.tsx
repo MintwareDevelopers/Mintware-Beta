@@ -7,7 +7,7 @@ import { Section, Eyebrow, H2, Hero, GlassList, Rows, Steps, Kicker, CTA } from 
 export const metadata = { title: 'Agents — Mintware', description: 'Money built for agents. Pay per call, earn between calls, and carry a reputation worth trusting.' }
 
 export default function AgentsPage() {
-  return <main className="min-h-screen bg-white text-ink">
+  return <main className="font-geist min-h-screen overflow-x-hidden bg-[#F6F6FA] text-ink">
     <V2Nav active="agents" />
 
     <Hero

@@ -73,7 +73,7 @@ export default function TheMath() {
   const floorLive = usdc.floorApy // the live best-of USDC lending rate
 
   return (
-    <div className="min-h-screen bg-white font-atx-display text-ink">
+    <div className="min-h-screen font-geist bg-[#F6F6FA] text-ink">
       <MwNav />
       <main className="mx-auto max-w-[1000px] px-6 max-[700px]:px-4 py-[40px]">
 

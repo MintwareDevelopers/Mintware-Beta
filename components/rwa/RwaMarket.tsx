@@ -25,14 +25,14 @@ export function RwaMarket({ slug }: { slug: string }) {
   return (
     <div className="text-ink">
       {/* HEADER */}
-      <section className="border-b border-hair-soft bg-[radial-gradient(1000px_360px_at_90%_-20%,rgba(108,108,240,0.12),transparent_60%)]">
+      <section className="border-b border-hair-soft bg-[radial-gradient(1000px_380px_at_90%_-20%,rgba(201,192,244,0.5),transparent_60%)]">
         <div className={`${WRAP} pt-9 pb-8`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full border border-hair bg-white px-2.5 py-0.5 text-[11.5px] font-semibold text-ink-mid">Testnet · unaudited · fictional property</span>
+              <span className="rounded-full mw-raise-sm px-2.5 py-0.5 text-[11.5px] font-semibold text-ink-mid">Testnet · unaudited · fictional property</span>
               <LiveDot block={unit?.block} failed={failed} />
             </div>
-            {RWA_UNITS.length > 1 && <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
+            {RWA_UNITS.length > 1 && <div className="inline-flex rounded-[14px] mw-inset p-1" role="tablist" aria-label="Chain">
               {RWA_UNITS.map((x) => (
                 <Link
                   key={x.slug}
@@ -54,7 +54,7 @@ export function RwaMarket({ slug }: { slug: string }) {
       {/* INSTRUMENT */}
       <section className="border-b border-hair-soft">
         <div className={`${WRAP} py-9 grid grid-cols-[1.25fr_1fr] gap-5 max-[980px]:grid-cols-1`}>
-          <div className="rounded-[24px] border border-hair bg-white p-7 shadow-[0_1px_2px_rgba(23,23,31,0.04),0_18px_48px_-24px_rgba(59,58,143,0.25)]">
+          <div className="rounded-[24px] mw-raise-lg p-7">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className={EY}>Price per {p.symbol}</div>
@@ -71,7 +71,7 @@ export function RwaMarket({ slug }: { slug: string }) {
               ? <LiveTradeButton slug={u.slug} chainName={u.chain.name} onTraded={() => { reload(true); setTimeout(() => reload(true), 4000) }} />
               : <p className="mt-5 border-t border-hair-soft pt-4 text-[12.5px] text-ink-soft">Live demo trading runs on the Base Sepolia market.</p>}
           </div>
-          <div className="rounded-[24px] border border-hair bg-white p-7">
+          <div className="rounded-[24px] mw-raise p-7">
             <div className={EY}>Where the liquidity sits</div>
             <div className="mt-6">{unit ? <LiquidityMap unit={unit} interest={interest} symbol={p.symbol} /> : <div className="h-[180px] mw-shimmer rounded-[14px]" />}</div>
           </div>
@@ -79,11 +79,11 @@ export function RwaMarket({ slug }: { slug: string }) {
       </section>
 
       {/* CHART */}
-      <section className="border-b border-hair-soft bg-[#FAFAFD]">
+      <section className="border-b border-hair-soft bg-[#F6F6FA]">
         <div className={`${WRAP} py-10`}>
           <div className={EY}>Price vs appraisal</div>
           <h2 className={`${H2} mt-1.5`}>Trading stays anchored to the appraised value</h2>
-          <div className="mt-6 rounded-[22px] border border-hair bg-white p-5">
+          <div className="mt-6 rounded-[22px] mw-raise p-5">
             {unit ? <PriceBandChart unit={unit} demo={D} /> : <div className="h-[280px] mw-shimmer rounded-[12px]" />}
           </div>
         </div>
@@ -99,7 +99,7 @@ export function RwaMarket({ slug }: { slug: string }) {
             </div>
             <Link href={`/v1/rwas/proof?unit=${u.slug}`} className="text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">Lifecycle proof + contracts →</Link>
           </div>
-          <div className="mt-5 overflow-x-auto rounded-[22px] border border-hair bg-white">
+          <div className="mt-5 overflow-x-auto rounded-[22px] mw-raise">
             <table className="w-full min-w-[640px] text-[13.5px]">
               <thead>
                 <tr className="border-b border-hair text-left text-[11.5px] uppercase tracking-[0.1em] text-ink-soft">
@@ -111,10 +111,10 @@ export function RwaMarket({ slug }: { slug: string }) {
               </thead>
               <tbody>
                 {unit?.trades.length ? unit.trades.map((t) => (
-                  <tr key={t.tx} className="border-b border-hair-soft last:border-0 hover:bg-[#FAFAFD]">
+                  <tr key={t.tx} className="border-b border-hair-soft last:border-0 hover:bg-[#F6F6FA]">
                     <td className="px-5 py-3 text-ink-mid">{t.ts ? ago(now - t.ts) : `block ${t.block}`}</td>
                     <td className="px-5 py-3">{t.trader ? walletLabel(t.trader, D) : '—'}</td>
-                    <td className="px-5 py-3"><span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${t.side === 'buy' ? 'text-[#2F7D5B] bg-[rgba(47,125,91,0.10)]' : 'text-peri-deep bg-[rgba(108,108,240,0.10)]'}`}>{t.side}</span></td>
+                    <td className="px-5 py-3"><span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${t.side === 'buy' ? 'text-[#0F7A43] bg-[rgba(15,122,67,0.10)]' : 'text-peri-deep bg-[rgba(108,108,240,0.10)]'}`}>{t.side}</span></td>
                     <td className="px-5 py-3 text-right font-atx-mono">{t.units.toFixed(3)}</td>
                     <td className="px-5 py-3 text-right font-atx-mono">{t.usd.toFixed(2)}</td>
                     <td className="px-5 py-3 text-right font-atx-mono">{usd(t.priceUsd, 2)}</td>
@@ -164,7 +164,7 @@ function LiveTradeButton({ onTraded, chainName, slug }: { onTraded: () => void; 
 
   return (
     <div className="mt-6 border-t border-hair-soft pt-5">
-      <button onClick={run} disabled={state.busy} className="glass-pill-primary w-full disabled:opacity-60">
+      <button onClick={run} disabled={state.busy} className="mw-btn w-full disabled:opacity-60">
         {state.busy ? `Settling on ${chainName}…` : 'Run a live trade'}
       </button>
       {state.msg && (

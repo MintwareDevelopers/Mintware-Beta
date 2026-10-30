@@ -5,6 +5,7 @@
 // show again" persists in localStorage. All storage access is wrapped (private windows / blocked storage
 // must still render the app), and it never blocks reading behind it beyond the overlay.
 
+import { MineralMark } from '@/components/ui2/MineralMark'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
@@ -43,7 +44,7 @@ export function V1DisclaimerGate() {
       <div className="relative w-full max-w-[440px] rounded-[18px] overflow-hidden" style={{ background: '#FFFFFF', boxShadow: 'var(--mw-raise)' }}>
         <div className="h-[92px] flex items-center justify-center" style={{ background: 'radial-gradient(120% 120% at 50% 0%, rgba(138,130,244,0.28), transparent 70%)' }}>
           <div className="flex items-center gap-2.5">
-            <span className="w-[26px] h-[26px] rounded-[7px_7px_9px_9px]" style={{ background: '#5B5BE6' }} />
+            <MineralMark size={28} />
             <span className="font-bold text-[19px] tracking-[-0.01em]" style={{ color: '#15151D' }}>Mintware</span>
           </div>
         </div>

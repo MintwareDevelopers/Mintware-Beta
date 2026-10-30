@@ -50,8 +50,8 @@ export function BandGauge({ unit, demo, size = 'lg' }: { unit: RwaUnitLive; demo
           style={{ left: pct(spotT) }}
           aria-label={`Pool price ${usd(unit.spot.usd, 2)}`}
         >
-          <div className={`absolute inset-y-[-2px] w-[3px] -ml-[1.5px] rounded-full ${outside ? 'bg-coral2-deep' : 'bg-[#2F7D5B]'}`} />
-          <div className={`absolute ${tall ? 'top-1.5' : 'top-1'} -translate-x-1/2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white whitespace-nowrap shadow-sm ${outside ? 'bg-coral2-deep' : 'bg-[#2F7D5B]'}`}>
+          <div className={`absolute inset-y-[-2px] w-[3px] -ml-[1.5px] rounded-full ${outside ? 'bg-coral2-deep' : 'bg-[#0F7A43]'}`} />
+          <div className={`absolute ${tall ? 'top-1.5' : 'top-1'} -translate-x-1/2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white whitespace-nowrap shadow-sm ${outside ? 'bg-coral2-deep' : 'bg-[#0F7A43]'}`}>
             {usd(unit.spot.usd, 2)}
           </div>
         </div>
@@ -77,15 +77,15 @@ export function LiquidityMap({ unit, interest, symbol }: { unit: RwaUnitLive; in
   const lend = unit.lending.balanceUsd, pool = unit.vault.deployedUsd, junior = unit.vault.juniorUsd
   const total = Math.max(1, lend + pool + junior)
   const segs = [
-    { k: 'lend', label: 'Earning in lending', v: lend, cls: 'bg-[#2A9E8A]', note: `${unit.lending.aprPct}% ${unit.lending.simulated ? 'simulated ' : ''}rate` },
+    { k: 'lend', label: 'Earning in lending', v: lend, cls: 'bg-[#A9A7FA]', note: `${unit.lending.aprPct}% ${unit.lending.simulated ? 'simulated ' : ''}rate` },
     { k: 'pool', label: 'In the pool', v: pool, cls: 'bg-peri', note: 'liquidity traders hit' },
     { k: 'junior', label: 'Issuer first-loss buffer', v: junior, cls: 'bg-[#F4A183]', note: `USD, plus ${Math.round(unit.vault.juniorUnits).toLocaleString()} ${symbol} locked beneath` },
   ]
   return (
     <div>
-      <div className="flex h-[18px] w-full overflow-hidden rounded-full bg-ground-cool">
+      <div className="flex h-[18px] w-full overflow-hidden rounded-full mw-inset p-[3px] gap-[3px]">
         {segs.map((s) => (
-          <div key={s.k} className={`${s.cls} h-full transition-[width] duration-1000 ease-out first:rounded-l-full last:rounded-r-full`} style={{ width: `${(s.v / total) * 100}%` }} />
+          <div key={s.k} className={`${s.cls} h-full transition-[width] duration-1000 ease-out rounded-full`} style={{ width: `${(s.v / total) * 100}%` }} />
         ))}
       </div>
       <div className="mt-5 divide-y divide-hair-soft">
@@ -105,7 +105,7 @@ export function LiquidityMap({ unit, interest, symbol }: { unit: RwaUnitLive; in
       {interest !== null && (
         <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2 rounded-[14px] border border-[rgba(42,158,138,0.3)] bg-[rgba(42,158,138,0.06)] px-4 py-3">
           <span className="text-[12.5px] text-ink-mid">Interest earned by idle liquidity, live</span>
-          <span className="font-atx-mono text-[20px] font-semibold text-[#1F7A6A] tabular-nums">{usd(interest, 4)}</span>
+          <span className="font-atx-mono text-[20px] font-semibold text-peri-deep tabular-nums">{usd(interest, 4)}</span>
         </div>
       )}
     </div>
@@ -126,7 +126,7 @@ export function RefusalCards({ unit, compact = false }: { unit: RwaUnit; compact
           </div>
           <h3 className="mt-3 font-atx-display text-[18px] font-semibold leading-snug">{t.leg.title}</h3>
           <p className="mt-1.5 text-[13.5px] leading-[1.55] text-ink-mid">{revertReasonText(t) ?? t.label}</p>
-          <a href={ex.tx(t.hash)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-hair bg-white px-3 py-1.5 font-atx-mono text-[12px] text-peri-deep no-underline hover:border-peri">
+          <a href={ex.tx(t.hash)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 rounded-full mw-raise-sm px-3 py-1.5 font-atx-mono text-[12px] text-peri-deep no-underline hover:border-peri">
             {shortHash(t.hash)} · mined, reverted ↗
           </a>
         </div>

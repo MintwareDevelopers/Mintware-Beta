@@ -154,7 +154,7 @@ function Kicker({ no, children }: { no: string; children: ReactNode }) {
 
 export default function LegalDisclosuresPage() {
   return (
-    <div className="min-h-screen bg-white text-ink">
+    <div className="min-h-screen font-geist bg-[#F6F6FA] text-ink">
       <MwNav />
       <main className="mx-auto max-w-[820px] px-6 max-[700px]:px-4 py-[44px]">
 

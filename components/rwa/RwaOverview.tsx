@@ -21,10 +21,10 @@ export function RwaOverview() {
   return (
     <div className="text-ink">
       {/* HERO */}
-      <section className="relative overflow-hidden border-b border-hair-soft bg-[radial-gradient(1200px_420px_at_85%_-10%,rgba(108,108,240,0.14),transparent_60%),radial-gradient(900px_380px_at_0%_0%,rgba(42,158,138,0.10),transparent_55%)]">
+      <section className="relative overflow-hidden border-b border-hair-soft bg-[radial-gradient(1100px_440px_at_85%_-10%,rgba(201,192,244,0.55),transparent_60%),radial-gradient(800px_360px_at_0%_0%,rgba(242,203,194,0.35),transparent_55%)]">
         <div className={`${WRAP} pt-12 pb-10`}>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full border border-hair bg-white/80 px-3 py-1 text-[11.5px] font-semibold uppercase tracking-[0.12em] text-[#1F7A6A]">RWA liquidity · demo</span>
+            <span className="rounded-full mw-raise-sm px-3 py-1 text-[12px] font-semibold text-peri-deep">RWA liquidity · demo</span>
             <LiveDot block={unit?.block} failed={failed} label={`Live on ${base.chain.name}`} />
           </div>
           <h1 className="mt-5 max-w-[17ch] font-atx-display text-[clamp(2.4rem,5vw,4rem)] font-semibold leading-[1.0] tracking-[-0.04em]">
@@ -35,7 +35,7 @@ export function RwaOverview() {
             its appraisal, open to any liquidity provider, while ownership stays with verified holders. Idle liquidity
             keeps earning until a trade needs it.
           </p>
-          <div className="mt-8 grid grid-cols-4 gap-px overflow-hidden rounded-[18px] border border-hair bg-hair max-[820px]:grid-cols-2">
+          <div className="mt-8 grid grid-cols-4 gap-px overflow-hidden rounded-[18px] mw-raise-sm bg-hair max-[820px]:grid-cols-2">
             <Stat k="Liquidity supplied" v={unit ? usd(unit.vault.seniorUsd) : '—'} />
             <Stat k="Earning while idle" v={unit ? `${Math.round((unit.lending.balanceUsd / Math.max(1, unit.lending.balanceUsd + unit.vault.deployedUsd)) * 100)}%` : '—'} />
             <Stat k="Proof transactions" v={String(proofTxs)} />
@@ -53,11 +53,11 @@ export function RwaOverview() {
               <h2 className={`${H2} mt-1.5`}>{D.property.name.replace(' (demo)', '')}</h2>
               <p className="mt-1.5 text-[13.5px] text-ink-mid">{D.property.symbol} / dUSD · Uniswap v4 · {base.chain.name} · fictional land parcel</p>
             </div>
-            <Link href={`/v1/rwas/${base.slug}`} className="glass-pill-primary !px-5 no-underline">Open the market →</Link>
+            <Link href={`/v1/rwas/${base.slug}`} className="mw-btn">Open the market →</Link>
           </div>
 
           <div className="mt-7 grid grid-cols-[1.25fr_1fr] gap-5 max-[980px]:grid-cols-1">
-            <div className="rounded-[24px] border border-hair bg-white p-7 shadow-[0_1px_2px_rgba(23,23,31,0.04),0_18px_48px_-24px_rgba(59,58,143,0.25)]">
+            <div className="rounded-[24px] mw-raise-lg p-7">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className={EY}>Pool price</div>
@@ -76,7 +76,7 @@ export function RwaOverview() {
               </p>
             </div>
 
-            <div className="rounded-[24px] border border-hair bg-white p-7">
+            <div className="rounded-[24px] mw-raise p-7">
               <div className={EY}>Where the liquidity sits</div>
               <h3 className="mt-1.5 font-atx-display text-[19px] font-semibold tracking-[-0.01em]">Never idle, never in the way</h3>
               <div className="mt-6">{unit ? <LiquidityMap unit={unit} interest={interest} symbol={D.property.symbol} /> : <div className="h-[180px] mw-shimmer rounded-[14px]" />}</div>
@@ -86,7 +86,7 @@ export function RwaOverview() {
       </section>
 
       {/* ENFORCED BY THE CHAIN */}
-      <section className="border-b border-hair-soft bg-[#FCFBFF]">
+      <section className="border-b border-hair-soft bg-[#F6F6FA]">
         <div className={`${WRAP} py-12`}>
           <div className={EY}>Enforced by the chain, not by a policy document</div>
           <h2 className={`${H2} mt-1.5 max-w-[30ch]`}>We asked the contracts to break the rules. They refused.</h2>
@@ -128,13 +128,13 @@ function Stat({ k, v, tone }: { k: string; v: string; tone?: 'warn' }) {
 }
 
 const TONES = {
-  teal: 'text-[#1F7A6A] bg-[rgba(42,158,138,0.10)]',
+  teal: 'text-peri-deep bg-[rgba(42,158,138,0.10)]',
   peri: 'text-peri-deep bg-[rgba(108,108,240,0.10)]',
   coral: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]',
 }
 function RoleCard({ n, tag, title, body, tone }: { n: string; tag: string; title: string; body: string; tone: keyof typeof TONES }) {
   return (
-    <div className="rounded-[20px] border border-hair bg-white p-6">
+    <div className="rounded-[20px] mw-raise p-6">
       <div className="flex items-center justify-between">
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.1em] ${TONES[tone]}`}>{tag}</span>
         <span className="font-atx-mono text-[12px] text-ink-soft">{n}</span>

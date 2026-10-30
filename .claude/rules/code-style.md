@@ -110,3 +110,17 @@ and every `.font-mono` inside `.v1-app`) for figures. V1 primitives: `PLAIN` (ra
 Custom icons: `components/ui2/MineralIcons.tsx` (disc/layer line icons — use these, not generic icon packs, on
 Mineral surfaces). Status textures: `.mw-tex-dots` (building) and `.mw-tex-hatch` (planned) — plain global rules in
 `globals.css`, deliberately NOT inside `@layer utilities` (Tailwind v4 did not emit them from there).
+
+**Site-wide rollout (same branch).** Every page now sits on Mineral, not just the landing:
+- Geist is the body font everywhere: the theme `--font-sans` / `--font-mono` are re-pointed on `body`, and DM Mono is no longer loaded. `font-atx-display` / `font-atx-mono` resolve to Geist and Geist Mono.
+- The v2 colour tokens (`ink`, `peri`, `ground-cool` and the rest) and the legacy `mw-*` brand/ink tokens are remapped to Mineral values.
+- The v2 classes keep their names but have Mineral styling: `glass-pill` is a quiet raised button, `glass-pill-primary` is solid periwinkle, `glass-card` / `soft-card` are raised white surfaces, and `live-chip` is a band pill.
+- `MintwareMark` now draws the disc stack, so every surface shows one logo.
+
+Shared pieces:
+- Marketing pages use the `components/marketing/Story.tsx` kit (`Page`, `Hero` on a halo, `Rows` with an optional icon, `IconTile`, `Kicker`, `CTA`).
+- `GradientPanel` is now a lit inset well rather than a mesh gradient.
+- `FlowDiagram` is raised step cards joined by arrows.
+- `V2Nav` has the inset nav with a raised active pill.
+
+New helpers: `.mw-btn-lg` (54px hero button) and `.mw-range` (inset slider track; set `--mw-fill`). For new code, prefer the `mw-*` classes over the legacy names.
