@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { createHandler, type RouteContext } from '@/lib/web2/routeHandler'
 import { deactivateInstance } from '@/lib/gateway/registry'
 import { marketEngineConfig, verifyMarketEngine } from '@/lib/gateway/marketEngine'
+import { marketChain } from '@/lib/chains/marketChains'
 import { marketEnginePublicClient } from '@/lib/gateway/chain'
 import {
   GATEWAY_CURATE_ACTION,
@@ -47,6 +48,8 @@ type Body = {
   reason?: string
   poolAddress?: string
   chainId?: number
+  /** display label for a direct registration (no queue row); cosmetic, length/charset-bounded */
+  pairLabel?: string
   instance?: {
     marketEngineAddress?: string
   }
@@ -56,6 +59,9 @@ type Body = {
   authSignature?: string
   issuedAt?: number
 }
+
+/** A direct registration's display label: short, plain text only (it is shown, never interpreted). */
+const safeLabel = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9 ./_-]{1,40}$/.test(v.trim()) ? v.trim() : null)
 
 type Actor = { kind: 'curator'; address: string } | { kind: 'server' }
 
@@ -115,15 +121,22 @@ async function curate(b: Body, ctx: RouteContext, actor: Actor) {
     const poolAddress = String(request?.pool_address ?? b.poolAddress ?? '').toLowerCase()
     if (!chainId || !poolAddress) return ctx.json({ success: false, error: 'pool_and_chain_required' }, 400)
 
-    // Verification needs the gateway chain configured AND matching — that's the chain we can read.
+    // Verification reads the engine on its own chain: the deployment's configured chain via its RPC, or another
+    // market chain (lib/chains/marketChains) via that chain's public RPC. Trust roots stay per chain — a non-
+    // configured chain needs its own MARKET_ENGINE_{QUOTE_ASSET,OWNER,CODEHASHES}_<chainId> or it fails closed.
     const cfg = marketEngineConfig()
     if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
-    if (chainId !== cfg.chainId) {
-      ctx.log.warn('gateway.curate', 'register chain mismatch — cannot verify on-chain', { requested: chainId, configured: cfg.chainId })
+    const other = chainId === cfg.chainId ? null : marketChain(chainId)
+    if (chainId !== cfg.chainId && !other) {
+      ctx.log.warn('gateway.curate', 'register chain unsupported — cannot verify on-chain', { requested: chainId, configured: cfg.chainId })
       return ctx.json({ success: false, error: 'chain_not_verifiable' }, 400)
     }
+    if (other && !process.env[`MARKET_ENGINE_CODEHASHES_${chainId}`]) {
+      return ctx.json({ success: false, error: 'chain_trust_root_unset', detail: `MARKET_ENGINE_CODEHASHES_${chainId}` }, 400)
+    }
+    const readCfg = other ? { chainId, rpcUrl: other.rpc } : cfg
     const engineAddress = inst.marketEngineAddress.toLowerCase() as `0x${string}`
-    const verified = await verifyMarketEngine({ client: marketEnginePublicClient(cfg), address: engineAddress, expectedPool: poolAddress, chainId: cfg.chainId })
+    const verified = await verifyMarketEngine({ client: marketEnginePublicClient(readCfg), address: engineAddress, expectedPool: poolAddress, chainId })
     if (!verified.ok) {
       ctx.log.warn('gateway.curate', 'instance registration REFUSED', {
         pool: poolAddress, chainId, marketEngine: engineAddress, curator: actor.address, reason: verified.error,
@@ -134,7 +147,7 @@ async function curate(b: Body, ctx: RouteContext, actor: Actor) {
     if (readError) return ctx.json({ success: false, error: 'registry_read_failed' }, 503)
     const exact = (old ?? []).find((row: { market_engine_address?: string | null; status?: string }) => row.market_engine_address?.toLowerCase() === engineAddress)
     if ((old ?? []).some((row: { status?: string; market_engine_address?: string | null }) => row.status === 'active' && row.market_engine_address?.toLowerCase() !== engineAddress)) return ctx.json({ success: false, error: 'active_instance_exists' }, 409)
-    const payload = { pool_address: poolAddress, chain_id: chainId, pair_label: (request?.pair_label as string) ?? null, position_manager: engineAddress, staging: null, quote_asset: verified.quoteAsset, paired_asset: verified.token1.toLowerCase() === verified.quoteAsset.toLowerCase() ? verified.token0 : verified.token1, market_engine_address: engineAddress, market_engine_code_hash: verified.codeHash, market_engine_owner: verified.owner, market_engine_token0: verified.token0, market_engine_token1: verified.token1, engine_verified_at: new Date().toISOString(), verification: 'codehash', verified_by: actor.address, verification_meta: { codeHash: verified.codeHash, owner: verified.owner }, status: 'active', created_by: actor.address, updated_at: new Date().toISOString() }
+    const payload = { pool_address: poolAddress, chain_id: chainId, pair_label: (request?.pair_label as string) ?? safeLabel(b.pairLabel), position_manager: engineAddress, staging: null, quote_asset: verified.quoteAsset, paired_asset: verified.token1.toLowerCase() === verified.quoteAsset.toLowerCase() ? verified.token0 : verified.token1, market_engine_address: engineAddress, market_engine_code_hash: verified.codeHash, market_engine_owner: verified.owner, market_engine_token0: verified.token0, market_engine_token1: verified.token1, engine_verified_at: new Date().toISOString(), verification: 'codehash', verified_by: actor.address, verification_meta: { codeHash: verified.codeHash, owner: verified.owner }, status: 'active', created_by: actor.address, updated_at: new Date().toISOString() }
     const write = exact
       ? await ctx.supabase.from('gateway_instances').update(payload).eq('id', exact.id).select('id')
       : await ctx.supabase.from('gateway_instances').insert(payload).select('id')

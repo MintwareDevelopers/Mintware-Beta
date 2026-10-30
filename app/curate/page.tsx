@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useSignMessage } from 'wagmi'
+import { MARKET_CHAINS } from '@/lib/chains/marketChains'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { buildGatewayCurateMessage, type CurateAction } from '@/lib/gateway/curateAuth'
 
@@ -50,6 +51,8 @@ export default function CuratePage() {
   const [msg, setMsg] = useState('')
   const [registerFor, setRegisterFor] = useState<string | null>(null)
   const [engineAddress, setEngineAddress] = useState('')
+  // Direct registration: a market we deployed ourselves (e.g. a testnet engine) has no discover-queue row.
+  const [direct, setDirect] = useState({ chainId: '84532', poolAddress: '', engineAddress: '', pairLabel: '' })
 
   const load = useCallback(() => {
     setLoading(true)
@@ -68,6 +71,7 @@ export default function CuratePage() {
     requestId?: string | null
     poolAddress?: string | null
     chainId?: number | null
+    pairLabel?: string | null
     instance?: { marketEngineAddress: string } | null
     reason?: string
   }) {
@@ -96,6 +100,7 @@ export default function CuratePage() {
         poolAddress: input.poolAddress ?? undefined,
         chainId: input.chainId ?? undefined,
         instance: input.instance ?? undefined,
+        pairLabel: input.pairLabel ?? undefined,
         reason: input.reason,
       }),
     })
@@ -118,6 +123,26 @@ export default function CuratePage() {
       })
       setRegisterFor(null)
       setEngineAddress('')
+      load()
+    } catch (e) {
+      setMsg(String((e as Error).message))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function registerDirect() {
+    setBusy('direct')
+    setMsg('')
+    try {
+      await signed({
+        curateAction: 'approve',
+        poolAddress: direct.poolAddress.trim().toLowerCase(),
+        chainId: Number(direct.chainId),
+        pairLabel: direct.pairLabel.trim() || null,
+        instance: { marketEngineAddress: direct.engineAddress.trim() },
+      })
+      setDirect({ chainId: direct.chainId, poolAddress: '', engineAddress: '', pairLabel: '' })
       load()
     } catch (e) {
       setMsg(String((e as Error).message))
@@ -233,6 +258,27 @@ export default function CuratePage() {
               </div>
             ))
           )}
+        </div>
+
+        <h2 className="font-atx-display font-semibold text-[18px] tracking-[-0.01em] mt-10">Register a market directly</h2>
+        <p className="text-[12.5px] text-ink-mid mt-1 max-w-[60ch]">
+          For a market Mintware deployed itself (no queue row). The engine is verified on its own chain against that
+          chain&apos;s allowlisted code hash, owner and quote asset before it can go live.
+        </p>
+        <div className="soft-card p-[18px] mt-3 grid gap-2.5" style={{ gridTemplateColumns: '140px 1fr' }}>
+          <select value={direct.chainId} onChange={(e) => setDirect({ ...direct, chainId: e.target.value })} className="py-2 px-3 rounded-[10px] bg-white border border-hair text-[13px]">
+            {Object.values(MARKET_CHAINS).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <input value={direct.pairLabel} onChange={(e) => setDirect({ ...direct, pairLabel: e.target.value })} placeholder="Pair label, e.g. WETH / USDC" className="py-2 px-3 rounded-[10px] bg-white border border-hair text-[13px]" />
+          <input value={direct.poolAddress} onChange={(e) => setDirect({ ...direct, poolAddress: e.target.value })} placeholder="v4 pool id (0x… 32 bytes)" className="col-span-2 py-2 px-3 rounded-[10px] bg-white border border-hair text-[13px] font-mono" />
+          <input value={direct.engineAddress} onChange={(e) => setDirect({ ...direct, engineAddress: e.target.value })} placeholder="MarketEngine address (0x…)" className="col-span-2 py-2 px-3 rounded-[10px] bg-white border border-hair text-[13px] font-mono" />
+          <button
+            onClick={registerDirect}
+            disabled={busy === 'direct' || !isConnected || !/^0x[0-9a-fA-F]{64}$/.test(direct.poolAddress.trim()) || !/^0x[0-9a-fA-F]{40}$/.test(direct.engineAddress.trim())}
+            className="col-span-2 glass-pill-primary justify-self-start disabled:opacity-50"
+          >
+            {busy === 'direct' ? 'Signing…' : 'Verify + register'}
+          </button>
         </div>
 
         <h2 className="font-atx-display font-semibold text-[18px] tracking-[-0.01em] mt-10">Registered instances</h2>

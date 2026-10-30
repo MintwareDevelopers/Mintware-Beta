@@ -90,11 +90,15 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `EthSeniorDemo_TreasuryVault` | testnet · base-sepolia | `0xb84776B8CB27C924A3B4e704C0FF826CB4A98A1c` | deprecated |
 | `EthSeniorDemo_YieldAdapter` | testnet · base-sepolia | `0xd01EcCF90Ac339B836c85e800ca11235D48F916f` | deprecated |
 | `MintwareEthSettlement` | testnet · base-sepolia | `0x20140811123db9C00CA1dF1023BA4fE758B98c5F` | testnet |
+| `MintwareFixedTestMark` | testnet · base-sepolia | `0x11fbbDC9954A2Ca6C1eA9E5786d3725d7803dC8D` | testnet |
 | `MintwareFixedTestMark` | testnet · robinhood-testnet | `0xA7e84b45E59bccC5F1227e706Cc335dc7ab6ed10` | testnet |
 | `MintwareMarketAdapter_tPONS` | testnet · robinhood-testnet | `0xDc11D311364a175d992bB47484BA9DFaa3A0b73b` | testnet |
 | `MintwareMarketAdapter_tUSDG` | testnet · robinhood-testnet | `0xFC17B41e102DA194083a3BfD0df49F79Fd1FcA62` | testnet |
-| `MintwareMarketEngine` | testnet · base-sepolia | `0x18c22836c71ae2dc6f483ab9ac41b4503e18c384` | testnet |
+| `MintwareMarketAdapter_USDC` | testnet · base-sepolia | `0xc1287f27A79711F6a8945f1B9Dec2Ae9E15cc9E5` | testnet |
+| `MintwareMarketAdapter_WETH` | testnet · base-sepolia | `0xc04a84794782a3F5e6dB1226b68cF46934aE4994` | testnet |
+| `MintwareMarketEngine` | testnet · base-sepolia | `0x961534db8C0EbB7cEb729E74CaB698A83A9c827e` | testnet |
 | `MintwareMarketEngine` | testnet · robinhood-testnet | `0x38E426D6671FB2c07C07a468e59f954Dcd0eDeb8` | testnet |
+| `MintwareMarketEngine_v1_superseded` | testnet · base-sepolia | `0x18c22836c71ae2dc6f483ab9ac41b4503e18c384` | superseded |
 | `MintwareMarketLifecycleModule` | testnet · robinhood-testnet | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` | testnet |
 | `MintwareStagedLiquidityRouter` | testnet · base-sepolia | `0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3` | deprecated |
 | `MintwareTreasuryGatewayDeployer` | testnet · base-sepolia | `0xfbf781676fe93cd8d8d8e17716461c29f549a644` | testnet |
@@ -108,7 +112,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVHook` | testnet · base-sepolia | `0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8` | deprecated |
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | deprecated |
 
-**30 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**34 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
 **21 of 25 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
