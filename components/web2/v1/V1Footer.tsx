@@ -64,12 +64,12 @@ export function V1Footer() {
               <span className="font-bold text-[17px] tracking-[-0.01em]" style={{ color: '#191923' }}>Mintware</span>
             </div>
             <p className="text-[13.5px] leading-[1.6] mt-3.5 max-w-[34ch]" style={{ color: '#494957' }}>
-              Never idle. Never locked. Always yours. — put USDG to work in curated Robinhood-Chain pools and
-              hold quote-valued shares in a curated pool and withdraw both tokens pro-rata.
+              Never idle. Never locked. Always yours. Curated markets for tokens, stocks and real-world assets,
+              on Base and Robinhood Chain.
             </p>
             <span className="inline-flex items-center gap-1.5 mt-4 text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={{ color: '#B7791F', background: 'rgba(194,122,0,0.1)' }}>
               <span style={{ width: 6, height: 6, borderRadius: 99, background: '#B7791F' }} />
-              Robinhood testnet · unaudited
+              Testnet · unaudited
             </span>
           </div>
 

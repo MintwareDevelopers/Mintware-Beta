@@ -208,6 +208,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/v1/agents` | `app/v1/agents/page.tsx` |
 | `/v1/card` | `app/v1/card/page.tsx` |
 | `/v1/issuers` | `app/v1/issuers/page.tsx` |
+| `/v1/portfolio` | `app/v1/portfolio/page.tsx` |
 | `/v1/referrals` | `app/v1/referrals/page.tsx` |
 | `/v1/rwas` | `app/v1/rwas/page.tsx` |
 | `/v1/rwas/[unit]` | `app/v1/rwas/[unit]/page.tsx` |

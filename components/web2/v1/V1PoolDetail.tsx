@@ -29,6 +29,8 @@ import { createWalletClient, createPublicClient, custom, http, parseUnits, forma
 import { useAccount } from 'wagmi'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
+import { chainLabel, marketChain } from '@/lib/chains/marketChains'
+import type { LiveMarket } from '@/app/api/gateway/markets/route'
 import { GlassFrame } from './GlassFrame'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
@@ -49,7 +51,7 @@ type Meta = {
   // is held ready but not yet earning, 'unknown' when the probe couldn't read it (never guess which).
   adapterKind?: 'idle' | 'real' | 'unknown'
 }
-type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; live: boolean }
+type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; feePct?: number | null; live: boolean }
 type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
 type Position = { shares: string; positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; recorded?: boolean; costBasisComplete?: boolean; history?: Snapshot[] }
 type PositionResponse = { position: Position; poolState: null; totalNav?: string; totalSupply?: string }
@@ -89,6 +91,9 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const [meta, setMeta] = useState<Meta | null>(null)
   const [metaState, setMetaState] = useState<'loading' | 'ok' | 'not_live' | 'unavailable'>('loading')
   const [m, setM] = useState<Metrics | null>(null)
+  // Our own live market (registry + chain NAV) — the source of TVL for testnet markets, which no
+  // market-data site indexes.
+  const [live, setLive] = useState<LiveMarket | null>(null)
   const [pos, setPos] = useState<Position | null>(null)
   const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit')
   const [amount, setAmount] = useState('')
@@ -122,6 +127,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       if (r.ok && d?.success) { setMeta(d.meta); setMetaState('ok') }
       else { setMeta(null); setMetaState(r.status === 404 ? 'not_live' : 'unavailable') }
     }).catch(() => { setMeta(null); setMetaState('unavailable') })
+    fetch('/api/gateway/markets').then((r) => r.json()).then((d) => {
+      const list: LiveMarket[] = d?.success && Array.isArray(d.markets) ? d.markets : []
+      setLive(list.find((x) => x.poolAddress.toLowerCase() === decoded) ?? null)
+    }).catch(() => {})
     fetch('/api/gateway/discover').then((r) => r.json()).then((d) => {
       const list: Metrics[] = d?.success && Array.isArray(d.pools) ? d.pools : []
       setM(list.find((p) => p.poolAddress?.toLowerCase() === decoded) ?? list.find((p) => norm(p.pairLabel) === decoded) ?? null)
@@ -150,7 +159,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const feeRate = meta?.feePips != null ? meta.feePips / 1e6 : null
   const dayFeesUsd = feeRate != null && m ? m.vol24Usd * feeRate : null
   const estAprPct = feeRate != null && m && m.tvlUsd > 0 ? (m.vol24Usd * feeRate) / m.tvlUsd * 365 * 100 : null
-  const feeTierLabel = meta?.feePips != null ? `${(meta.feePips / 1e4).toFixed(2)}%` : meta?.dynamicFee ? 'Dynamic' : '—'
+  const feeTierLabel = meta?.feePips != null ? `${(meta.feePips / 1e4).toFixed(2)}%` : meta?.dynamicFee ? 'Dynamic' : m?.feePct != null ? `${m.feePct.toFixed(2)}%` : live?.feePct != null ? `${live.feePct.toFixed(2)}%` : 'Not published'
   // Fee-tier band (Krystal cost/vol read): ≤0.05 low · 0.05–0.30 standard · >0.30 high.
   const feePct = meta?.feePips != null ? meta.feePips / 1e4 : null
   const feeBand = feePct == null ? '' : feePct <= 0.05 ? ' · low' : feePct <= 0.3 ? ' · standard' : ' · high'
@@ -197,7 +206,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     return (await connector.getProvider()) as import('viem').EIP1193Provider
   }
   function chainObj(mm: Meta) {
-    const name = mm.chainId === 84532 ? 'Base Sepolia' : mm.chainId === 46630 ? 'Robinhood Chain Testnet' : `Chain ${mm.chainId}`
+    const name = chainLabel(mm.chainId)
     return { id: mm.chainId, name, nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [mm.rpcUrl] } } } as const
   }
   async function ensureChain(eth: Awaited<ReturnType<typeof getSignerProvider>>, mm: Meta) {
@@ -353,7 +362,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const chip = m ? riskChip(m.riskScore) : null
   const pairedSym = m?.baseSymbol ?? base
 
-  const liveChip = meta?.live
+  // A registry market on a chain this deployment doesn't route deposits through still IS live — label it so.
+  const chainId = meta?.chainId ?? live?.chainId ?? null
+  const otherChainLive = metaState === 'not_live' && live != null
+  const liveChip = meta?.live || otherChainLive
     ? { text: 'Live', style: { color: '#16A34A', background: 'rgba(22,163,74,0.12)' } }
     : isDevRig
       ? { text: 'Single-instance dev rig', style: { color: '#B7791F', background: 'rgba(194,122,0,0.12)' } }
@@ -373,7 +385,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             <h1 className="font-atx-display font-semibold tracking-[-0.03em] text-[28px]">{pairLabel}</h1>
           </div>
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-            <Tag>Uniswap V4</Tag><Tag>Curated</Tag><Tag>Robinhood Testnet</Tag>
+            <Tag>Uniswap V4</Tag><Tag>Curated</Tag><Tag>{chainId != null ? chainLabel(chainId) : 'Robinhood mainnet'}</Tag>
             <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={liveChip.style}>{liveChip.text}</span>
             {meta?.inRange != null && (
               <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={meta.inRange ? { color: '#16A34A', background: 'rgba(22,163,74,0.12)' } : { color: '#B7791F', background: 'rgba(194,122,0,0.12)' }}>
@@ -382,10 +394,12 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             )}
           </div>
         </div>
-        <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
-          <div className="font-mono font-bold text-[22px]" style={{ color: '#5A57DE' }}>{aprLabel ?? (m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(1)}×` : '—')}</div>
-          <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>{aprLabel ? 'Est. Fee APR · 24h' : '24h Vol / TVL'}</div>
-        </div>
+        {(aprLabel || m?.volTvlRatio != null) && (
+          <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
+            <div className="font-mono font-bold text-[22px]" style={{ color: '#5A57DE' }}>{aprLabel ?? `${m!.volTvlRatio!.toFixed(1)}×`}</div>
+            <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>{aprLabel ? 'Est. Fee APR · 24h' : '24h Vol / TVL'}</div>
+          </div>
+        )}
       </div>
 
       {isDevRig && (
@@ -394,7 +408,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <span style={{ color: '#494957' }}>No curated instances are registered yet. This view uses a configured MarketEngine ({shortId(meta!.positionManager)}); it is not currently registered for deposits.</span>
         </div>
       )}
-      {metaState === 'not_live' && (
+      {metaState === 'not_live' && !otherChainLive && (
         <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(22,22,44,0.04)', border: '1px solid rgba(22,22,44,0.08)', color: '#494957' }}>
           This pool is still in curation — no market is open on it yet.{' '}
           <Link href="/v1" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Pick a live pool from Discover →</Link>
@@ -404,8 +418,8 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       <div className="grid gap-5 mt-6 grid-cols-1 min-[900px]:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]">
         {/* LEFT: pool info */}
         <GlassFrame className="min-[900px]:order-1 order-2" innerClassName="p-6">
-          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#8A8A9E' }}>Total Value Locked</div>
-          <div className="font-mono font-bold text-[30px] mt-1.5">{m ? usd(m.tvlUsd) : '—'}</div>
+          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#8A8A9E' }}>{m ? 'Total Value Locked' : 'Market value'}</div>
+          <div className="font-mono font-bold text-[30px] mt-1.5">{m ? usd(m.tvlUsd) : live?.navQuote != null ? `${live.navQuote.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${live.quoteSymbol ?? ''}` : '—'}</div>
           <div className="text-[12.5px] mt-1" style={{ color: '#5A57DE' }}>Curated + spun up by Mintware</div>
 
           {/* allocation */}
@@ -424,15 +438,18 @@ export function V1PoolDetail({ slug }: { slug: string }) {
 
           {/* metadata rows */}
           <div className="mt-6 flex flex-col">
-            <Meta2 k="Current Pool Price" v={m?.priceQuotePerBase != null ? `1 ${base} ≈ ${m.priceQuotePerBase < 0.01 ? m.priceQuotePerBase.toPrecision(3) : m.priceQuotePerBase.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${quote}` : '—'} />
-            <Meta2 k="24h Volume" v={m ? usd(m.vol24Usd) : '—'} />
             <Meta2 k="Fee tier" v={feeTierLabel + feeBand} />
-            <Meta2 k="24h Fees (est)" v={dayFeesUsd != null ? usd(dayFeesUsd) : '—'} />
-            <Meta2 k="Est. Fee APR · 24h, gross of IL" v={aprLabel ?? '—'} />
-            <Meta2 k="Activity (Vol / TVL)" v={m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(2)}×` : '—'} />
-            <Meta2 k="24h Trades" v={m?.txCount24 != null ? m.txCount24.toLocaleString() : '—'} />
-            <Meta2 k="Pool age" v={m?.poolAgeDays != null ? `${m.poolAgeDays}d` : '—'} />
-            <Meta2 k="Network" v="Robinhood Testnet (46630)" />
+            {/* Market-data rows come from the mainnet feed; a testnet market has none, so they are omitted, not dashed. */}
+            {m && <>
+              <Meta2 k="Current Pool Price" v={m?.priceQuotePerBase != null ? `1 ${base} ≈ ${m.priceQuotePerBase < 0.01 ? m.priceQuotePerBase.toPrecision(3) : m.priceQuotePerBase.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${quote}` : '—'} />
+              <Meta2 k="24h Volume" v={m ? usd(m.vol24Usd) : '—'} />
+              <Meta2 k="24h Fees (est)" v={dayFeesUsd != null ? usd(dayFeesUsd) : '—'} />
+              <Meta2 k="Est. Fee APR · 24h, gross of IL" v={aprLabel ?? '—'} />
+              <Meta2 k="Activity (Vol / TVL)" v={m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(2)}×` : '—'} />
+              <Meta2 k="24h Trades" v={m?.txCount24 != null ? m.txCount24.toLocaleString() : '—'} />
+              <Meta2 k="Pool age" v={m?.poolAgeDays != null ? `${m.poolAgeDays}d` : '—'} />
+            </>}
+            <Meta2 k="Network" v={chainId != null ? `${chainLabel(chainId)} (${chainId})` : 'Robinhood mainnet (watchlist)'} />
             <Meta2 k="Pool ID" v={shortId(meta?.poolAddress ?? m?.poolAddress ?? decoded)} mono />
             {meta && <Meta2 k="MarketEngine" v={`${shortId(meta.engineAddress ?? meta.positionManager)} · ${meta.source === 'registry' ? 'registry-verified' : 'env-configured'}`} mono />}
           </div>
@@ -452,12 +469,13 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           {/* explorers */}
           {(meta || m) && (() => {
             const id = meta?.poolAddress ?? m!.poolAddress
-            const explorerBase = meta?.chainId === 84532 ? 'https://sepolia.basescan.org' : meta?.chainId === 46630 ? 'https://robinhoodchain.blockscout.com' : null
+            const explorerBase = marketChain(meta?.chainId)?.explorer ?? null
             return (
               <div className="flex gap-3 mt-5 flex-wrap text-[12.5px]">
-                {meta && explorerBase && <a href={`${explorerBase}/address/${meta.positionManager}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Gateway on Explorer ↗</a>}
-                <a href={`https://www.geckoterminal.com/robinhood/pools/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>GeckoTerminal ↗</a>
-                <a href={`https://dexscreener.com/robinhood/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>DEXScreener ↗</a>
+                {meta && explorerBase && <a href={`${explorerBase}/address/${meta.positionManager}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>MarketEngine on Explorer ↗</a>}
+                {/* Market-data sites index Robinhood mainnet only; a testnet market has no page there. */}
+                {!meta && <a href={`https://www.geckoterminal.com/robinhood/pools/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>GeckoTerminal ↗</a>}
+                {!meta && <a href={`https://dexscreener.com/robinhood/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>DEXScreener ↗</a>}
               </div>
             )
           })()}
@@ -467,10 +485,11 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         {metaState === 'not_live' && !hasPos ? (
           <div className="rounded-[16px] p-6 min-[900px]:order-2 order-1 self-start" style={PANEL}>
             <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>Status</div>
-            <div className="font-atx-display font-semibold text-[20px] mt-1.5">In curation</div>
+            <div className="font-atx-display font-semibold text-[20px] mt-1.5">{otherChainLive ? `Live on ${chainLabel(chainId)}` : 'In curation'}</div>
             <p className="text-[13px] leading-[1.6] mt-2" style={{ color: '#494957' }}>
-              Mintware screens a pool on depth, age and real trading before a market opens on it. This one is on the
-              watchlist; deposits open once its market is live.
+              {otherChainLive
+                ? 'This market is live and verified on-chain. Deposits from this app open for its network shortly.'
+                : 'Mintware screens a pool on depth, age and real trading before a market opens on it. This one is on the watchlist; deposits open once its market is live.'}
             </p>
             <Link href="/v1" className="inline-flex mt-4 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#5A57DE' }}>Browse live markets →</Link>
           </div>
