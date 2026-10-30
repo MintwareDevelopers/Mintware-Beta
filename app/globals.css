@@ -617,3 +617,61 @@
   /* Never suppress the ring on keyboard focus. */
   :focus:not(:focus-visible) { outline: none; }
 }
+
+/* ── Mineral (2026-10 redesign) ─────────────────────────────────────────────────────────────────────
+   Light, tactile: things you act on are RAISED, places you put something are INSET. Buttons are solid
+   periwinkle. The pastel sheen is reserved for the hero object and soft background light. */
+:root {
+  --mw-ground: #F6F6FA;
+  --mw-surface: #FFFFFF;
+  --mw-band: #F1F0FB;
+  --mw-well: #EEEEF4;
+  --mw-ink: #15151D;
+  --mw-ink-2: #454552;
+  --mw-ink-3: #62626F;
+  --mw-line: rgba(21,21,29,.08);
+  --mw-btn: #5B5BE6;
+  --mw-peri-deep: #4643D1;
+  --mw-gain: #0F7A43;
+  --mw-sheen: linear-gradient(120deg,#A9A7FA 0%,#C9C0F4 38%,#F2CBC2 68%,#F6A988 100%);
+  --mw-raise: 0 0 0 1px rgba(21,21,29,.05),0 1px 1px rgba(21,21,29,.04),0 6px 12px -4px rgba(21,21,29,.07),0 22px 40px -18px rgba(21,21,29,.16),inset 0 1px 0 #fff;
+  --mw-raise-lg: 0 0 0 1px rgba(21,21,29,.05),0 2px 2px rgba(21,21,29,.03),0 12px 24px -8px rgba(21,21,29,.08),0 48px 80px -32px rgba(40,36,120,.28),inset 0 1px 0 #fff;
+  --mw-raise-sm: 0 0 0 1px rgba(21,21,29,.06),0 1px 2px rgba(21,21,29,.06),0 4px 10px -4px rgba(21,21,29,.10),inset 0 1px 0 #fff;
+  --mw-inset: inset 0 1px 2px rgba(21,21,29,.08),inset 0 0 0 1px rgba(21,21,29,.05);
+  --mw-glow: 0 6px 18px -6px rgba(70,67,209,.6),0 0 0 1px rgba(60,57,200,.9),inset 0 1px 0 rgba(255,255,255,.22);
+}
+
+@layer components {
+  .mw-raise    { background: var(--mw-surface); box-shadow: var(--mw-raise); }
+  .mw-raise-lg { background: var(--mw-surface); box-shadow: var(--mw-raise-lg); }
+  .mw-raise-sm { background: var(--mw-surface); box-shadow: var(--mw-raise-sm); }
+  .mw-inset    { background: var(--mw-well); box-shadow: var(--mw-inset); }
+  .mw-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
+    padding: 0 18px; border: 0; border-radius: 12px; background: var(--mw-btn); color: #fff;
+    font-weight: 600; text-decoration: none; cursor: pointer; box-shadow: var(--mw-glow);
+    transition: transform .15s ease, filter .15s ease;
+  }
+  .mw-btn:hover { transform: translateY(-1px); filter: brightness(.93); color: #fff; }
+  .mw-btn:active { transform: none; }
+  .mw-btn-quiet {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
+    padding: 0 18px; border: 0; border-radius: 12px; background: var(--mw-surface); color: var(--mw-ink);
+    font-weight: 500; text-decoration: none; cursor: pointer; box-shadow: var(--mw-raise-sm);
+    transition: transform .15s ease, filter .15s ease;
+  }
+  .mw-btn-quiet:hover { transform: translateY(-1px); filter: brightness(.97); color: var(--mw-ink); }
+  .mw-btn:focus-visible, .mw-btn-quiet:focus-visible { outline: 2px solid var(--mw-btn); outline-offset: 3px; }
+  .mw-lift { transition: transform .2s ease; }
+  .mw-lift:hover { transform: translateY(-3px); }
+}
+
+@layer utilities {
+  .font-geist      { font-family: var(--font-geist), 'Geist', ui-sans-serif, system-ui, sans-serif; }
+  .font-geist-mono { font-family: var(--font-geist-mono), 'Geist Mono', ui-monospace, Menlo, monospace; }
+}
+
+/* Inside the app shell every mono number is Geist Mono, so columns and figures read as one system. */
+.v1-app { font-family: var(--font-geist), 'Geist', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.v1-app .font-mono { font-family: var(--font-geist-mono), 'Geist Mono', ui-monospace, Menlo, monospace; }
+@media (prefers-reduced-motion: reduce) { .mw-btn, .mw-btn-quiet, .mw-lift { transition: none; } }

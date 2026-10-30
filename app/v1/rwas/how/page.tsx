@@ -7,7 +7,7 @@ import { RWA_UNITS } from '@/lib/rwa/demo'
 
 const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
 const EY = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
-const H2 = 'font-atx-display font-semibold text-ink tracking-[-0.025em] text-[clamp(1.4rem,2.4vw,1.9rem)] leading-[1.15]'
+const H2 = 'font-geist font-semibold text-ink tracking-[-0.025em] text-[clamp(1.4rem,2.4vw,1.9rem)] leading-[1.15]'
 
 const RULES: { k: string; t: string; d: string }[] = [
   { k: 'Band', t: 'Trades stay near the appraisal', d: 'A swap that would end outside the hard band reverts. Inside it, a tighter core band carries the lowest fee.' },
@@ -24,7 +24,7 @@ export default function RwaHow() {
       <section className="border-b border-hair-soft bg-[radial-gradient(1000px_360px_at_90%_-20%,rgba(108,108,240,0.12),transparent_60%)]">
         <div className={`${WRAP} pt-10 pb-10`}>
           <div className={EY}>How it works</div>
-          <h1 className="mt-4 max-w-[20ch] font-atx-display text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.04] tracking-[-0.035em]">
+          <h1 className="mt-4 max-w-[20ch] font-geist text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.04] tracking-[-0.035em]">
             Divisible is not liquid. Here is the missing layer.
           </h1>
           <p className="mt-4 max-w-[64ch] text-[15.5px] leading-[1.6] text-ink-mid">
@@ -65,7 +65,7 @@ export default function RwaHow() {
             {RULES.map((r) => (
               <div key={r.k} className="rounded-[20px] border border-hair bg-white p-6">
                 <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-peri-deep">{r.k}</div>
-                <h3 className="mt-2 font-atx-display text-[17px] font-semibold">{r.t}</h3>
+                <h3 className="mt-2 font-geist text-[17px] font-semibold">{r.t}</h3>
                 <p className="mt-1.5 text-[13.5px] leading-[1.55] text-ink-mid">{r.d}</p>
               </div>
             ))}

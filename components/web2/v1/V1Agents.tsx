@@ -62,11 +62,11 @@ export function V1Agents() {
         <div className="rounded-[16px] p-6" style={PLAIN}>
           <div className="flex items-center justify-between gap-3">
             <Label>Make a paid call</Label>
-            <span className="flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: '#16A34A' }}>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#16A34A' }} />Live quote
+            <span className="flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: '#0F7A43' }}>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#0F7A43' }} />Live quote
             </span>
           </div>
-          <div className="mt-3 font-mono text-[12.5px] rounded-[10px] px-3 py-2.5 overflow-x-auto whitespace-nowrap" style={{ background: '#F7F7FB', border: '1px solid rgba(22,22,44,0.08)' }}>
+          <div className="mt-3 font-mono text-[12.5px] rounded-[10px] px-3 py-2.5 overflow-x-auto whitespace-nowrap" style={{ background: '#F6F6FA', border: '1px solid rgba(22,22,44,0.08)' }}>
             GET /api/x402/score?address={short(DEMO_AGENT)}
           </div>
 
@@ -93,7 +93,7 @@ export function V1Agents() {
             ) : (
               <button onClick={() => { setStep('idle'); setQuote(null) }} className="glass-pill w-full cursor-pointer">Run it again</button>
             )}
-            {step === 'error' && <p className="text-[12.5px] mt-2" style={{ color: '#DC4A44' }}>Couldn’t reach the endpoint. Try again.</p>}
+            {step === 'error' && <p className="text-[12.5px] mt-2" style={{ color: '#B42318' }}>Couldn’t reach the endpoint. Try again.</p>}
           </div>
         </div>
 
@@ -101,7 +101,7 @@ export function V1Agents() {
           <div className="rounded-[16px] p-6" style={PLAIN}>
             <div className="flex items-center justify-between"><Label>Agent wallet</Label><SimTag /></div>
             <div className="font-mono font-bold text-[32px] mt-1.5 tracking-[-0.02em]">$1,240.18</div>
-            <div className="text-[13px] mt-1" style={{ color: '#16A34A' }}>Earning between calls</div>
+            <div className="text-[13px] mt-1" style={{ color: '#0F7A43' }}>Earning between calls</div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="rounded-[16px] p-5" style={PLAIN}><Label>Calls today</Label><div className="font-mono font-bold text-[24px] mt-1.5">3,412</div></div>
@@ -109,10 +109,10 @@ export function V1Agents() {
           </div>
           <div className="rounded-[16px] p-5" style={PLAIN}>
             <Label>Identity</Label>
-            <p className="text-[13.5px] mt-2 leading-[1.55]" style={{ color: '#494957' }}>
+            <p className="text-[13.5px] mt-2 leading-[1.55]" style={{ color: '#454552' }}>
               Mintware is registered agent <b>#37297</b> on Base. Every agent can carry an on-chain identity and a track record.
             </p>
-            <Link href="/agents/leaderboard" className="inline-block mt-2 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#5A57DE' }}>See the leaderboard →</Link>
+            <Link href="/agents/leaderboard" className="inline-block mt-2 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#4643D1' }}>See the leaderboard →</Link>
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ export function V1Agents() {
       <GlassFrame className="mt-3" innerClassName="overflow-x-auto">
         <table className="w-full text-[13.5px] min-w-[560px]">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.07em]" style={{ color: '#8A8A9E' }}>
+            <tr className="text-left text-[11px] uppercase tracking-[0.07em]" style={{ color: '#62626F' }}>
               <th className="font-semibold px-5 py-3">Call</th>
               <th className="font-semibold px-5 py-3 text-right">Price</th>
               <th className="font-semibold px-5 py-3 text-right">Latency</th>
@@ -133,8 +133,8 @@ export function V1Agents() {
               <tr key={i} className="border-t border-white/70">
                 <td className="px-5 py-3.5 font-semibold">{c.api}</td>
                 <td className="px-5 py-3.5 text-right font-mono">${c.price.toFixed(2)}</td>
-                <td className="px-5 py-3.5 text-right font-mono" style={{ color: '#494957' }}>{c.ms} ms</td>
-                <td className="px-5 py-3.5 text-right" style={{ color: '#8A8A9E' }}>{c.when}</td>
+                <td className="px-5 py-3.5 text-right font-mono" style={{ color: '#454552' }}>{c.ms} ms</td>
+                <td className="px-5 py-3.5 text-right" style={{ color: '#62626F' }}>{c.when}</td>
               </tr>
             ))}
           </tbody>
@@ -145,18 +145,18 @@ export function V1Agents() {
 }
 
 function SimTag() {
-  return <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full" style={{ color: '#8A8A9E', background: 'rgba(22,22,44,0.05)' }}>Simulated</span>
+  return <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full" style={{ color: '#62626F', background: 'rgba(22,22,44,0.05)' }}>Simulated</span>
 }
 
 function Row({ n, done, title, body, simulated }: { n: number; done: boolean; title: string; body: string; simulated?: boolean }) {
   return (
     <li className="flex gap-3">
-      <span className="w-6 h-6 rounded-full grid place-items-center text-[11px] font-bold shrink-0" style={done ? { background: '#16A34A', color: '#fff' } : { background: '#F0F0F6', color: '#8A8A9E' }}>
+      <span className="w-6 h-6 rounded-full grid place-items-center text-[11px] font-bold shrink-0" style={done ? { background: '#0F7A43', color: '#fff' } : { background: '#F0F0F6', color: '#62626F' }}>
         {done ? '✓' : n}
       </span>
       <div>
         <div className="text-[14px] font-semibold">{title}{simulated && <span className="ml-2 align-middle"><SimTag /></span>}</div>
-        <div className="text-[12.5px] mt-0.5" style={{ color: '#8A8A9E' }}>{body}</div>
+        <div className="text-[12.5px] mt-0.5" style={{ color: '#62626F' }}>{body}</div>
       </div>
     </li>
   )

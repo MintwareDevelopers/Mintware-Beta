@@ -97,3 +97,13 @@ pnpm dev
 Preview tool uses `.claude/launch.json` — PATH must include nvm node for Turbopack child processes.
 
 Common: `Unable to acquire lock at .next/dev/lock` → `pkill -f "next dev"` then delete `.next/dev/lock`
+
+## Mineral (2026-10 redesign — branch `feat/mineral-redesign`)
+
+Light and tactile. Tokens are `--mw-*` CSS variables in `app/globals.css` (ground `#F6F6FA`, ink `#15151D`,
+ink-2 `#454552`, ink-3 `#62626F`, button `#5B5BE6`). Surfaces: `.mw-raise` / `.mw-raise-sm` / `.mw-raise-lg` for
+things you act on, `.mw-inset` for places you put something (inputs, tab wells, stats inside a card). Buttons are
+SOLID periwinkle (`.mw-btn`, white text) or white (`.mw-btn-quiet`) — never gradient. `--mw-sheen` is only for the
+hero object and soft background light. Fonts: Geist (`font-geist`) for UI/display, Geist Mono (`font-geist-mono`,
+and every `.font-mono` inside `.v1-app`) for figures. V1 primitives: `PLAIN` (raised), `INSET`, `GlassFrame`
+(raised data card). Landing: `app/page.tsx` + `components/marketing/mineral/*`; mark: `components/ui2/MineralMark`.

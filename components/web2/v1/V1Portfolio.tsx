@@ -48,8 +48,8 @@ export function V1Portfolio() {
       {!isConnected ? (
         <div className="mt-6 rounded-[16px] p-7" style={PLAIN}>
           <div className="font-semibold text-[16px]">Connect a wallet to see your positions</div>
-          <p className="text-[13.5px] mt-1.5" style={{ color: '#494957' }}>Positions are read straight from the market contracts, nothing is stored about you.</p>
-          <button onClick={() => privy.login({ loginMethods: ['wallet', 'email'], walletChainType: 'ethereum-only' })} className="mt-4 rounded-full px-5 py-2.5 text-[13.5px] font-semibold text-white cursor-pointer" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', boxShadow: '0 6px 20px rgba(108,108,240,0.35)' }}>
+          <p className="text-[13.5px] mt-1.5" style={{ color: '#454552' }}>Positions are read straight from the market contracts, nothing is stored about you.</p>
+          <button onClick={() => privy.login({ loginMethods: ['wallet', 'email'], walletChainType: 'ethereum-only' })} className="mt-4 rounded-full px-5 py-2.5 text-[13.5px] font-semibold text-white cursor-pointer" style={{ background: '#5B5BE6', boxShadow: '0 6px 18px -6px rgba(70,67,209,0.6), 0 0 0 1px rgba(60,57,200,0.9), inset 0 1px 0 rgba(255,255,255,0.22)' }}>
             Connect wallet
           </button>
         </div>
@@ -58,20 +58,20 @@ export function V1Portfolio() {
       ) : rows.length === 0 ? (
         <div className="mt-6 rounded-[16px] p-7" style={PLAIN}>
           <div className="font-semibold text-[16px]">{partial ? 'Some markets could not be read right now' : 'No positions yet'}</div>
-          <p className="text-[13.5px] mt-1.5" style={{ color: '#494957' }}>{partial ? 'Try again in a moment; your funds are unaffected.' : 'Open a live market and deposit one or both tokens to start earning its fees.'}</p>
-          <Link href="/v1" className="inline-flex mt-4 text-[13.5px] font-semibold no-underline hover:underline" style={{ color: '#5A57DE' }}>Browse live markets →</Link>
+          <p className="text-[13.5px] mt-1.5" style={{ color: '#454552' }}>{partial ? 'Try again in a moment; your funds are unaffected.' : 'Open a live market and deposit one or both tokens to start earning its fees.'}</p>
+          <Link href="/v1" className="inline-flex mt-4 text-[13.5px] font-semibold no-underline hover:underline" style={{ color: '#4643D1' }}>Browse live markets →</Link>
         </div>
       ) : (
         <GlassFrame className="mt-6">
-          <div className="grid px-5 py-3 text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ gridTemplateColumns: '2fr 1fr 1fr 0.8fr', color: '#8A8A9E', borderBottom: '1px solid rgba(22,22,44,0.06)' }}>
+          <div className="grid px-5 py-3 text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ gridTemplateColumns: '2fr 1fr 1fr 0.8fr', color: '#62626F', borderBottom: '1px solid rgba(22,22,44,0.06)' }}>
             <span>Market</span><span>Network</span><span className="text-right">Value</span><span className="text-right" />
           </div>
           {rows.map((p) => (
-            <Link key={`${p.chainId}:${p.marketEngine}`} href={`/markets/${encodeURIComponent(p.poolAddress)}?pair=${encodeURIComponent(p.pairLabel)}&pm=${p.marketEngine}`} className="grid items-center px-5 py-4 no-underline hover:bg-white/60" style={{ gridTemplateColumns: '2fr 1fr 1fr 0.8fr', color: '#191923', borderBottom: '1px solid rgba(22,22,44,0.05)' }}>
-              <span className="font-semibold text-[14.5px]">{p.pairLabel}{!p.live && <span className="ml-2 text-[11px] font-semibold" style={{ color: '#B7791F' }}>closed · exit available</span>}</span>
-              <span className="text-[13px]" style={{ color: '#494957' }}>{marketChain(p.chainId)?.short ?? `Chain ${p.chainId}`} · testnet</span>
+            <Link key={`${p.chainId}:${p.marketEngine}`} href={`/markets/${encodeURIComponent(p.poolAddress)}?pair=${encodeURIComponent(p.pairLabel)}&pm=${p.marketEngine}`} className="grid items-center px-5 py-4 no-underline hover:bg-white/60" style={{ gridTemplateColumns: '2fr 1fr 1fr 0.8fr', color: '#15151D', borderBottom: '1px solid rgba(22,22,44,0.05)' }}>
+              <span className="font-semibold text-[14.5px]">{p.pairLabel}{!p.live && <span className="ml-2 text-[11px] font-semibold" style={{ color: '#8A5300' }}>closed · exit available</span>}</span>
+              <span className="text-[13px]" style={{ color: '#454552' }}>{marketChain(p.chainId)?.short ?? `Chain ${p.chainId}`} · testnet</span>
               <span className="text-right font-mono font-semibold text-[14px]">{p.value == null ? `${p.shares} shares` : `${p.value.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${p.symbol ?? ''}`}</span>
-              <span className="text-right text-[13px] font-semibold" style={{ color: '#5A57DE' }}>Manage →</span>
+              <span className="text-right text-[13px] font-semibold" style={{ color: '#4643D1' }}>Manage →</span>
             </Link>
           ))}
         </GlassFrame>

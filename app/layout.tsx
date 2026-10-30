@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Plus_Jakarta_Sans, DM_Mono, Space_Grotesk, JetBrains_Mono } from 'next/font/google'
+import { Plus_Jakarta_Sans, DM_Mono, Space_Grotesk, JetBrains_Mono, Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Providers } from '@/components/web2/providers'
 import { Toaster } from 'sonner'
@@ -32,6 +32,10 @@ const jetbrainsMono = JetBrains_Mono({
   variable: '--font-jetbrains',
   weight: ['400', '500'],
 })
+
+// Mineral (2026-10 redesign): Geist for UI and display, Geist Mono for figures
+const geist = Geist({ subsets: ['latin'], variable: '--font-geist', weight: ['400', '500', '600', '700'] })
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono', weight: ['400', '500', '600'] })
 
 const BASE_URL = 'https://mintware.finance'
 
@@ -70,7 +74,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${jakarta.variable} ${dmMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased`}>
+      <body className={`${jakarta.variable} ${dmMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
         {/* Enable motion before paint so scroll-reveal never flashes hidden and
             degrades to fully-visible content when JS is off. */}
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js-motion')" }} />

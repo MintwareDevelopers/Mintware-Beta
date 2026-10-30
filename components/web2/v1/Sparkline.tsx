@@ -15,7 +15,7 @@ export function Sparkline({ series, width = 68, height = 26 }: { series?: number
   const y = (v: number) => height - 4 - ((v - min) / span) * (height - 8) // 4px vertical padding
   const pts = series.map((v, i) => `${(i * stepX).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
   const up = series[series.length - 1] >= series[0]
-  const color = up ? '#16A34A' : '#DC4A44'
+  const color = up ? '#0F7A43' : '#B42318'
   const id = `sg-${up ? 'u' : 'd'}`
 
   return (

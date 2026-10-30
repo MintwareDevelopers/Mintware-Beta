@@ -54,18 +54,18 @@ export function V1Card() {
           <div className="rounded-[16px] p-6" style={PLAIN}>
             <Label>Earning balance</Label>
             <div className="font-mono font-bold text-[34px] mt-1.5 tracking-[-0.02em]">{money(earning)}</div>
-            <div className="text-[13px] mt-1" style={{ color: '#16A34A' }}>Earning in a curated stablecoin market</div>
+            <div className="text-[13px] mt-1" style={{ color: '#0F7A43' }}>Earning in a curated stablecoin market</div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="rounded-[16px] p-5" style={PLAIN}>
               <Label>Card balance</Label>
               <div className="font-mono font-bold text-[24px] mt-1.5">$480.00</div>
-              <div className="text-[12.5px] mt-1" style={{ color: '#8A8A9E' }}>Ready to spend</div>
+              <div className="text-[12.5px] mt-1" style={{ color: '#62626F' }}>Ready to spend</div>
             </div>
             <div className="rounded-[16px] p-5" style={PLAIN}>
               <Label>Refilled this month</Label>
               <div className="font-mono font-bold text-[24px] mt-1.5">$1,240.00</div>
-              <div className="text-[12.5px] mt-1" style={{ color: '#8A8A9E' }}>Only what you spent</div>
+              <div className="text-[12.5px] mt-1" style={{ color: '#62626F' }}>Only what you spent</div>
             </div>
           </div>
           <div className="rounded-[16px] p-5" style={PLAIN}>
@@ -73,9 +73,9 @@ export function V1Card() {
               <Label>Daily refill limit</Label>
               <span className="font-mono font-bold text-[15px]">{money(limit)}</span>
             </div>
-            <input type="range" min={100} max={5000} step={100} value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="w-full mt-3 accent-[#5A57DE]" aria-label="Daily refill limit" />
+            <input type="range" min={100} max={5000} step={100} value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="w-full mt-3 accent-[#4643D1]" aria-label="Daily refill limit" />
             <div className="flex items-center justify-between mt-3">
-              <span className="text-[13px]" style={{ color: '#494957' }}>{frozen ? 'Card frozen' : 'Card active'}</span>
+              <span className="text-[13px]" style={{ color: '#454552' }}>{frozen ? 'Card frozen' : 'Card active'}</span>
               <button onClick={() => setFrozen((f) => !f)} className="glass-pill glass-pill-sm cursor-pointer">{frozen ? 'Unfreeze' : 'Freeze card'}</button>
             </div>
           </div>
@@ -87,7 +87,7 @@ export function V1Card() {
         <GlassFrame className="mt-3" innerClassName="overflow-x-auto">
           <table className="w-full text-[13.5px] min-w-[560px]">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-[0.07em]" style={{ color: '#8A8A9E' }}>
+              <tr className="text-left text-[11px] uppercase tracking-[0.07em]" style={{ color: '#62626F' }}>
                 <th className="font-semibold px-5 py-3">Description</th>
                 <th className="font-semibold px-5 py-3">When</th>
                 <th className="font-semibold px-5 py-3">Type</th>
@@ -98,13 +98,13 @@ export function V1Card() {
               {TXNS.map((t, i) => (
                 <tr key={i} className="border-t border-white/70">
                   <td className="px-5 py-3.5 font-semibold">{t.merchant}</td>
-                  <td className="px-5 py-3.5" style={{ color: '#494957' }}>{t.when}</td>
+                  <td className="px-5 py-3.5" style={{ color: '#454552' }}>{t.when}</td>
                   <td className="px-5 py-3.5">
-                    <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full bg-white/80" style={{ color: t.kind === 'refill' ? '#5A57DE' : '#494957' }}>
+                    <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full bg-white/80" style={{ color: t.kind === 'refill' ? '#4643D1' : '#454552' }}>
                       {t.kind === 'refill' ? 'Auto-refill' : 'Purchase'}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right font-mono font-semibold" style={{ color: t.kind === 'refill' ? '#16A34A' : '#191923' }}>
+                  <td className="px-5 py-3.5 text-right font-mono font-semibold" style={{ color: t.kind === 'refill' ? '#0F7A43' : '#15151D' }}>
                     {t.kind === 'refill' ? '+' : '−'}{money(t.amount)}
                   </td>
                 </tr>

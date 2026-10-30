@@ -34,8 +34,8 @@ export function V1Issuers() {
 
       <div className="mt-9 flex items-center gap-3">
         <Label>Your listed assets</Label>
-        <span className="flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: '#16A34A' }}>
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#16A34A' }} />Live on testnet
+        <span className="flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: '#0F7A43' }}>
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#0F7A43' }} />Live on testnet
         </span>
       </div>
       <div className="mt-3">
@@ -44,7 +44,7 @@ export function V1Issuers() {
 
       <div className="mt-12 flex items-center gap-3">
         <Label>Bring an asset to market</Label>
-        <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full" style={{ color: '#8A8A9E', background: 'rgba(22,22,44,0.05)' }}>Simulated</span>
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full" style={{ color: '#62626F', background: 'rgba(22,22,44,0.05)' }}>Simulated</span>
       </div>
       <div className="grid gap-5 mt-3 grid-cols-1 min-[900px]:grid-cols-[1fr_1fr]">
         <form
@@ -59,7 +59,7 @@ export function V1Issuers() {
             onChange={(e) => { setName(e.target.value); setSent(false) }}
             placeholder="e.g. Willow Creek Parcel 7"
             className="w-full mt-2 rounded-[10px] px-3 py-2.5 text-[14px] outline-none"
-            style={{ background: '#F7F7FB', border: '1px solid rgba(22,22,44,0.08)' }}
+            style={{ background: '#F6F6FA', border: '1px solid rgba(22,22,44,0.08)' }}
           />
           <div className="text-[12.5px] font-semibold mt-5">Asset type</div>
           <div className="flex flex-wrap gap-2 mt-2">
@@ -69,7 +69,7 @@ export function V1Issuers() {
                 key={t}
                 onClick={() => setType(t)}
                 className="text-[12.5px] font-medium px-3 py-1.5 rounded-full cursor-pointer"
-                style={t === type ? { background: '#5A57DE', color: '#fff' } : { background: '#F7F7FB', color: '#494957', border: '1px solid rgba(22,22,44,0.08)' }}
+                style={t === type ? { background: '#4643D1', color: '#fff' } : { background: '#F6F6FA', color: '#454552', border: '1px solid rgba(22,22,44,0.08)' }}
               >
                 {t}
               </button>
@@ -87,13 +87,13 @@ export function V1Issuers() {
                 <li key={s.t} className="flex gap-3">
                   <span
                     className="w-6 h-6 rounded-full grid place-items-center text-[11px] font-bold shrink-0"
-                    style={state === 'done' ? { background: '#16A34A', color: '#fff' } : state === 'active' ? { background: '#5A57DE', color: '#fff' } : { background: '#F0F0F6', color: '#8A8A9E' }}
+                    style={state === 'done' ? { background: '#0F7A43', color: '#fff' } : state === 'active' ? { background: '#4643D1', color: '#fff' } : { background: '#F0F0F6', color: '#62626F' }}
                   >
                     {state === 'done' ? '✓' : i + 1}
                   </span>
                   <div>
-                    <div className="text-[14px] font-semibold">{s.t}{state === 'active' && <span className="ml-2 text-[11.5px] font-semibold" style={{ color: '#5A57DE' }}>In progress</span>}</div>
-                    <div className="text-[12.5px] mt-0.5" style={{ color: '#8A8A9E' }}>{s.d}</div>
+                    <div className="text-[14px] font-semibold">{s.t}{state === 'active' && <span className="ml-2 text-[11.5px] font-semibold" style={{ color: '#4643D1' }}>In progress</span>}</div>
+                    <div className="text-[12.5px] mt-0.5" style={{ color: '#62626F' }}>{s.d}</div>
                   </div>
                 </li>
               )
