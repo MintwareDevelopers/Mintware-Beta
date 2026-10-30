@@ -32,7 +32,8 @@ set -euo pipefail
 
 STEP="${1:-}"; BROADCAST="${2:-}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-RPC="${BASE_SEPOLIA_RPC_URL:-https://base-sepolia-rpc.publicnode.com}"
+# Own RPC var: a sourced app env file often sets BASE_SEPOLIA_RPC_URL to sepolia.base.org, which rejects forge.
+RPC="${RELAUNCH_RPC_URL:-https://base-sepolia-rpc.publicnode.com}"
 export PATH="$HOME/.foundry/bin:$PATH"
 
 # ── fixed market config (the existing seeded pool) ─────────────────────────────────────────────────────
