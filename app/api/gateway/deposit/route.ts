@@ -1,19 +1,22 @@
 import { decodeEventLog } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { marketEnginePublicClient } from '@/lib/gateway/chain'
-import { listMarketEngines, marketEngineConfig, resolveMarketEngine, type MarketEngineInstance } from '@/lib/gateway/marketEngine'
+import { listMarketEngines, marketEngineConfigForPool, resolveMarketEngine, type MarketEngineInstance } from '@/lib/gateway/marketEngine'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { bindSignedRecord } from '@/lib/gateway/recordAuth'
 
 export const dynamic = 'force-dynamic'
 export const POST = createHandler(async (req, ctx) => {
-  const cfg = marketEngineConfig()
-  if (!cfg) return ctx.json({ success: false, error: 'market_engine_not_configured' }, 503)
   const body = (await req.clone().json().catch(() => ({}))) as Record<string, unknown>
   const address = ctx.user!.address
   const bound = bindSignedRecord(body)
   if (!bound.ok) return ctx.json({ success: false, error: bound.error }, bound.error === 'auth_replayed' ? 409 : bound.error === 'txHash_required' ? 400 : 401)
   const { txHash, pool } = bound.bound
+  // The receipt is read and verified on the market's own chain (from the registry), not just the default one.
+  let cfg
+  try { cfg = await marketEngineConfigForPool(ctx.supabase, pool) }
+  catch { return ctx.json({ success: false, error: 'registry_unavailable' }, 503) }
+  if (!cfg) return ctx.json({ success: false, error: 'market_engine_not_configured' }, 503)
   const client = marketEnginePublicClient(cfg)
   let receipt
   try { receipt = await client.getTransactionReceipt({ hash: txHash }) } catch { return ctx.json({ success: false, error: 'tx_not_found' }, 404) }
