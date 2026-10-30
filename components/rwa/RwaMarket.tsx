@@ -32,7 +32,7 @@ export function RwaMarket({ slug }: { slug: string }) {
               <span className="rounded-full border border-hair bg-white px-2.5 py-0.5 text-[11.5px] font-semibold text-ink-mid">Testnet · unaudited · fictional property</span>
               <LiveDot block={unit?.block} failed={failed} />
             </div>
-            <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
+            {RWA_UNITS.length > 1 && <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
               {RWA_UNITS.map((x) => (
                 <Link
                   key={x.slug}
@@ -44,7 +44,7 @@ export function RwaMarket({ slug }: { slug: string }) {
                   {x.chain.name}
                 </Link>
               ))}
-            </div>
+            </div>}
           </div>
           <h1 className="mt-5 font-atx-display text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.04] tracking-[-0.035em]">{p.name.replace(' (demo)', '')}</h1>
           <p className="mt-2 text-[14px] text-ink-mid">{p.symbol} / dUSD · Uniswap v4{D.poolManagerDeployedByUs ? ' (our v4-core deployment)' : ''} · {u.chain.name}</p>

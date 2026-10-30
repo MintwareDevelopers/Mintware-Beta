@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic'
 // Public read for the Discover surface: the hottest Robinhood-Chain pools that pass our criteria
 // (v4 + USDG-quoted by ADDRESS, not ineligible), live from GeckoTerminal + our risk score. Marks which are
 // already live-depositable (an ACTIVE gateway instance exists) vs still curating. Cached ~3 min to respect
-// GT rate limits; concurrent refreshes coalesce into one upstream read.
+// GT rate limits; concurrent refreshes coalesce into one upstream read. A failed/empty upstream read keeps the
+// last good feed and retries in 30 s. Sub-$10k TVL and wash-traded pools are hidden unless live.
 // Honest: metrics are real (TVL / 24h vol / activity); no APY/guaranteed framing. Deposits gate to live pools.
 // Fail-closed (O-7): with `LP_GATEWAY_DISCOVER_USDG`/`LP_GATEWAY_USDG` unset the quote asset is unknown →
 // every pool is ineligible → the feed is EMPTY and `usdgConfigured:false` says why. Set the env; never
@@ -17,6 +18,12 @@ export const dynamic = 'force-dynamic'
 // on-chain, today the testnet mock tUSDG) because the browse feed reads real MAINNET GeckoTerminal data.
 
 const TTL_MS = 3 * 60_000
+/** An empty upstream read is retried after 30 s and never replaces a good snapshot (keep the last good feed). */
+const EMPTY_RETRY_MS = 30_000
+/** Display floor for the browse feed: below this TVL, or with turnover this extreme, a pool is noise or wash
+ *  trading, not a market worth showing. Live pools always show. */
+const MIN_TVL_USD = 10_000
+const MAX_VOL_TVL = 200
 let cache: { at: number; pools: PoolCandidate[] } | null = null
 let refreshing: Promise<PoolCandidate[]> | null = null
 
@@ -34,7 +41,8 @@ export const GET = createHandler(async (req, ctx) => {
     if (!refreshing) {
       refreshing = fetchHotPools({ log: ctx.log })
         .then((pools) => {
-          cache = { at: Date.now(), pools }
+          if (pools.length) cache = { at: Date.now(), pools }
+          else cache = { at: Date.now() - TTL_MS + EMPTY_RETRY_MS, pools: cache?.pools ?? [] }
           return pools
         })
         .finally(() => { refreshing = null })
@@ -77,6 +85,7 @@ export const GET = createHandler(async (req, ctx) => {
       estFeeAprPct: p.estFeeAprPct,
       live: liveSet.has(p.poolAddress),
     }))
+    .filter((p) => p.live || (p.tvlUsd >= MIN_TVL_USD && (p.volTvlRatio ?? 0) <= MAX_VOL_TVL))
     .sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || b.vol24Usd - a.vol24Usd)
 
   return ctx.json({ success: true, pools, cachedAt: snapshot.at, usdgConfigured })

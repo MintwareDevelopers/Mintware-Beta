@@ -14,7 +14,6 @@ export function RwaProof({ slug }: { slug: string }) {
   const u = getUnit(slug) ?? RWA_UNITS[0]
   const D = u.demo
   const ex = explorer(u)
-  const xrpl = u.network === 'xrpl-evm-testnet'
   const txCount = D.deployTxs.length + D.legs.reduce((n, l) => n + l.txs.length, 0)
 
   return (
@@ -23,14 +22,14 @@ export function RwaProof({ slug }: { slug: string }) {
         <div className={`${WRAP} pt-9 pb-8`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className={EY}>On-chain proof</div>
-            <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
+            {RWA_UNITS.length > 1 && <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
               {RWA_UNITS.map((x) => (
                 <Link key={x.slug} href={`/v1/rwas/proof?unit=${x.slug}`} role="tab" aria-selected={x.slug === u.slug}
                   className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}>
                   {x.chain.name}
                 </Link>
               ))}
-            </div>
+            </div>}
           </div>
           <h1 className="mt-4 max-w-[24ch] font-atx-display text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.05] tracking-[-0.035em]">Every step, a transaction you can open.</h1>
           <p className="mt-3 max-w-[66ch] text-[15px] leading-[1.6] text-ink-mid">
@@ -83,14 +82,7 @@ export function RwaProof({ slug }: { slug: string }) {
 
       <section className="border-b border-hair-soft bg-[#FAFAFD]">
         <div className={`${WRAP} py-10`}>
-          <h2 className={H2}>{xrpl ? `Contracts on ${u.chain.name}, source proven by metadata hash` : `Contracts, source-verified on ${u.chain.name}`}</h2>
-          {xrpl && (
-            <p className="mt-2 max-w-[72ch] text-[13px] leading-[1.55] text-ink-mid">
-              This chain&apos;s explorer verifier does not support Solidity 0.8.26 yet, so each contract is proven instead by its on-chain
-              metadata hash matching the build from this repo&apos;s source (<span className="font-atx-mono">scripts/prove-rwa-source-match.mjs</span>, re-runnable by anyone).
-              {D.poolManagerDeployedByUs && ' There is no Uniswap v4 on this chain yet, so the PoolManager is our own testnet deployment of v4-core.'}
-            </p>
-          )}
+          <h2 className={H2}>Contracts, source-verified on {u.chain.name}</h2>
           <div className="mt-5 overflow-x-auto rounded-[22px] border border-hair bg-white">
             <table className="w-full min-w-[640px] text-[13.5px]">
               <tbody>
@@ -99,7 +91,7 @@ export function RwaProof({ slug }: { slug: string }) {
                     <td className="px-5 py-3.5"><div className="font-semibold">{r.name}</div><div className="text-[12.5px] text-ink-mid">{r.role}</div></td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
                       <a href={ex.addr(D.contracts[r.key])} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts[r.key])}</a>
-                      <a href={ex.source(r.key, D.contracts[r.key])} target="_blank" rel="noreferrer" className="ml-3 rounded-full bg-[rgba(47,125,91,0.10)] px-2 py-0.5 text-[11.5px] font-semibold text-[#2F7D5B] no-underline">{xrpl ? 'Source match ✓' : 'Verified source ↗'}</a>
+                      <a href={ex.source(r.key, D.contracts[r.key])} target="_blank" rel="noreferrer" className="ml-3 rounded-full bg-[rgba(47,125,91,0.10)] px-2 py-0.5 text-[11.5px] font-semibold text-[#2F7D5B] no-underline">Verified source ↗</a>
                     </td>
                   </tr>
                 ))}

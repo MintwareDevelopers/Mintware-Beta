@@ -1,10 +1,12 @@
 // GET /api/rwa/unit?unit=<slug> — V2-RWAs: LIVE on-chain state of one demo RWA liquidity unit (Base Sepolia
-// `wcp7` by default; XRPL EVM testnet `wcp7-xrpl`). Reads the vault / lending adapter / appraisal hook directly
+// `wcp7`). Reads the vault / lending adapter / appraisal hook directly
 // (no DB), plus the pool's swap history, the demo router's trade events and the hook's appraisal events, so the
-// market page shows the chain as of now. Public and read-only; the cache bypass is operator-only. Best-effort: an RPC hiccup returns { ok:false }; the page then shows its recorded proof run (legs +
-// contracts) but no live numbers. All state reads are pinned to ONE block. Testnet + unaudited.
+// market page shows the chain as of now. Public and read-only; the cache bypass is operator-only. Never blank:
+// state reads and history fail independently (history is best-effort), an RPC outage serves the last good read
+// (`source:'cached'`), and a cold instance with no read at all serves the recorded run (`source:'recorded'`).
+// All state reads are pinned to ONE block. Testnet + unaudited.
 
-import { createPublicClient, http, keccak256, encodeAbiParameters, parseAbi, parseAbiItem, defineChain, type Log, type PublicClient } from 'viem'
+import { createPublicClient, http, keccak256, encodeAbiParameters, parseAbi, parseAbiItem, type Log, type PublicClient } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { canSeeRwa } from '@/lib/v2/rwaGate'
@@ -12,22 +14,13 @@ import { getUnit, tickToUsd, RWA_UNITS, type RwaUnit } from '@/lib/rwa/demo'
 
 export const dynamic = 'force-dynamic'
 
-const xrplEvmTestnet = defineChain({
-  id: 1449000, name: 'XRPL EVM Testnet', nativeCurrency: { name: 'XRP', symbol: 'XRP', decimals: 18 },
-  rpcUrls: { default: { http: ['https://rpc.testnet.xrplevm.org'] } },
-})
-
-// Per network: the head/state RPC and the history RPC (sepolia.base.org caps eth_getLogs at 1,000 blocks).
-const RPCS: Record<RwaUnit['network'], { chain: typeof baseSepolia | typeof xrplEvmTestnet; rpc: string; logs: string }> = {
+// Per network: the head/state RPC and the history RPC. publicnode by default — sepolia.base.org rate-limits the
+// route's parallel reads and caps eth_getLogs at 1,000 blocks.
+const RPCS: Record<RwaUnit['network'], { chain: typeof baseSepolia; rpc: string; logs: string }> = {
   'base-sepolia': {
     chain: baseSepolia,
-    rpc: process.env.RWA_RPC_URL ?? 'https://sepolia.base.org',
+    rpc: process.env.RWA_RPC_URL ?? 'https://base-sepolia-rpc.publicnode.com',
     logs: process.env.RWA_LOGS_RPC_URL ?? 'https://base-sepolia-rpc.publicnode.com',
-  },
-  'xrpl-evm-testnet': {
-    chain: xrplEvmTestnet,
-    rpc: process.env.RWA_XRPL_RPC_URL ?? 'https://rpc.testnet.xrplevm.org',
-    logs: process.env.RWA_XRPL_LOGS_RPC_URL ?? process.env.RWA_XRPL_RPC_URL ?? 'https://rpc.testnet.xrplevm.org',
   },
 }
 
@@ -59,7 +52,7 @@ const usd6 = (v: bigint) => Number(v) / 1e6
 const prop18 = (v: bigint) => Number(v) / 1e18
 const A = (s: string) => s as `0x${string}`
 
-async function logsInChunks<T>(get: (from: bigint, to: bigint) => Promise<T[]>, from: bigint, to: bigint, step = 9_000n): Promise<T[]> {
+async function logsInChunks<T>(get: (from: bigint, to: bigint) => Promise<T[]>, from: bigint, to: bigint, step = 49_999n): Promise<T[]> {
   const ranges: [bigint, bigint][] = []
   for (let a = from; a <= to; a += step + 1n) ranges.push([a, a + step > to ? to : a + step])
   const out: T[][] = []
@@ -93,6 +86,8 @@ function makeContext(u: RwaUnit) {
   let hist: Hist | null = null
   const ctx = {
     unit: u, client, cache: null as { at: number; body: unknown } | null,
+    /** block → timestamp, kept across requests so each block is fetched once per warm instance */
+    stamps: new Map<bigint, number>(),
     async fromBlock(): Promise<bigint> {
       if (fromBlockCache !== null) return fromBlockCache
       const known = d.deployTxs.map((t) => t.block).filter((b): b is number => typeof b === 'number')
@@ -147,13 +142,22 @@ export const GET = createHandler(async (req, ctx) => {
       ])
     const [spotTick, appraisalTick, deviationTicks, inCore, inSpec, freshAppraisal] = band
 
-    // Logs node may trail the head node by a block or two — scan to a safe depth behind head.
-    const { swaps, demoSwaps, appraisals } = await k.history(head.number - 2n)
+    // History is best-effort: a logs-RPC failure must not blank the state reads above. Logs node may trail the
+    // head node by a block or two — scan to a safe depth behind head.
+    const { swaps, demoSwaps, appraisals, historyOk } = await k.history(head.number - 2n)
+      .then((h) => ({ ...h, historyOk: true }))
+      .catch((err) => {
+        ctx.log.warn('rwa', 'history read failed', { unit: u.slug, err: String(err) })
+        return { swaps: [], demoSwaps: [], appraisals: [], historyOk: false }
+      })
 
-    // Block timestamps for every block that carries an event (bounded: a demo market, not a busy pool).
-    const blocks = [...new Set([...swaps, ...appraisals].map((l) => l.blockNumber as bigint))].slice(-200)
-    const stamps = new Map<bigint, number>()
-    await Promise.all(blocks.map(async (n) => stamps.set(n, Number((await client.getBlock({ blockNumber: n })).timestamp))))
+    // Block timestamps for the most recent event blocks (bounded, cached across requests).
+    const stamps = k.stamps
+    const blocks = [...new Set([...swaps, ...appraisals].map((l) => l.blockNumber as bigint))].slice(-200).filter((n) => !stamps.has(n))
+    await Promise.all(blocks.slice(-60).map(async (n) => {
+      const b = await client.getBlock({ blockNumber: n }).catch(() => null)
+      if (b) stamps.set(n, Number(b.timestamp))
+    }))
     const ts = (l: Log) => stamps.get(l.blockNumber as bigint) ?? null
 
     const traderByTx = new Map(demoSwaps.map((l) => [l.transactionHash, l.args.trader as string]))
@@ -187,6 +191,8 @@ export const GET = createHandler(async (req, ctx) => {
 
     const body = {
       ok: true,
+      source: 'live' as const,
+      historyOk,
       unit: u.slug,
       chainId: d.chainId,
       chainName: u.chain.name,
@@ -217,6 +223,43 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json(body)
   } catch (err) {
     ctx.log.warn('rwa', 'live unit read failed', { unit: u.slug, err: String(err) })
-    return ctx.json({ ok: false })
+    // Never blank the page: the last good read on this instance, else the recorded run.
+    if (k.cache) return ctx.json({ ...(k.cache.body as object), source: 'cached' })
+    return ctx.json(recordedBody(u))
   }
 }, { rateLimit: { max: 60, windowMs: 60_000 } })
+
+/** The recorded run as a read: launch appraisal + the lifecycle script's final vault/lending snapshot. */
+function recordedBody(u: RwaUnit) {
+  const d = u.demo
+  const propIs0 = d.propertyIsCurrency0
+  const appraisalUsd = d.property.appraisalUsdAtLaunch
+  const tick = Math.round(Math.log(propIs0 ? appraisalUsd / 1e12 : 1e12 / appraisalUsd) / Math.log(1.0001))
+  const n = (k: string) => Number(d.snapshot[k] ?? 0)
+  const at = Math.floor(new Date(d.generatedAt).getTime() / 1000)
+  const cfg = d.hookConfig
+  const bandUsd = (t: number) => {
+    const lo = tickToUsd(tick - t, propIs0), hi = tickToUsd(tick + t, propIs0)
+    return [Math.min(lo, hi), Math.max(lo, hi)]
+  }
+  return {
+    ok: true,
+    source: 'recorded' as const,
+    historyOk: false,
+    unit: u.slug,
+    chainId: d.chainId,
+    chainName: u.chain.name,
+    block: 0,
+    blockTime: at,
+    appraisal: { tick, usd: appraisalUsd, at, fresh: true, oracleReady: true, maxAgeSecs: cfg?.maxAppraisalAge ?? null, minUpdateSecs: cfg?.minUpdateInterval ?? null },
+    spot: { tick, usd: appraisalUsd, deviationTicks: 0, inCore: true, inSpec: true },
+    band: cfg ? { core: bandUsd(cfg.coreBandTicks), spec: bandUsd(cfg.specBandTicks), coreFeePct: cfg.coreFeePips / 1e4, specFeePct: cfg.specFeePips / 1e4 } : null,
+    tradingPaused: false,
+    vault: { seniorUsd: n('seniorAssets'), deployedUsd: n('deployedFromSenior'), seniorShares: '0', juniorUnits: 0, juniorUsd: 0, lockExpiry: 0 },
+    lending: { balanceUsd: n('lendingBalance'), pendingUsd: 0, aprPct: 0, interestMintedUsd: n('interestMinted'), simulated: true },
+    trades: [],
+    tradeCount: 0,
+    priceSeries: [],
+    appraisalSeries: [],
+  }
+}

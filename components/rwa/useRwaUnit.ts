@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 export type RwaUnitLive = {
   ok: boolean
+  /** live = read this request · cached = last good read (RPC outage) · recorded = the lifecycle run's snapshot */
+  source: 'live' | 'cached' | 'recorded'
   block: number
   blockTime: number
   appraisal: { tick: number; usd: number; at: number; fresh: boolean; oracleReady: boolean; maxAgeSecs: number | null; minUpdateSecs: number | null }
@@ -29,7 +31,7 @@ export function useRwaUnit(slug: string, pollMs = 12_000) {
   const load = useCallback((fresh = false) =>
     fetch(`/api/rwa/unit?unit=${slug}${fresh ? '&fresh=1' : ''}`, { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d: RwaUnitLive) => { if (d.ok) { setUnit(d); setFailed(false) } else setFailed(true) })
+      .then((d: RwaUnitLive) => { if (d.ok) { setUnit(d); setFailed(d.source !== 'live') } else setFailed(true) })
       .catch(() => setFailed(true)), [slug])
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export const ago = (secs: number) => {
 export type RwaStatus = { t: string; tone: 'good' | 'info' | 'warn' }
 export function rwaStatus(unit: RwaUnitLive | null): RwaStatus | null {
   if (!unit) return null
+  if (unit.source === 'recorded') return { t: 'Recorded run', tone: 'info' }
   if (unit.tradingPaused) return { t: 'Trading paused', tone: 'warn' }
   if (!unit.appraisal.fresh && unit.appraisal.oracleReady) return { t: 'Appraisal stale — trading halted, exit window open', tone: 'warn' }
   if (!unit.appraisal.fresh) return { t: 'Appraisal expired — awaiting a new appraisal', tone: 'warn' }
