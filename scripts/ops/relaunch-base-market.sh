@@ -13,6 +13,7 @@
 #   2. engine    deploy MintwareMarketEngine + idle adapters (inactive)   -> export MARKET_ENGINE=<addr>
 #   3. activate  owner activates the engine (checks spot ≈ mark, adapters readable)
 #   4. verify    read back the deployment against this config (no transaction)
+#   all          1–4 in one go (owner = the deployer unless MARKET_OWNER is set)
 # Then, outside this script:
 #   5. Vercel env (Production + Preview), then redeploy:
 #        MARKET_ENGINE_CODEHASHES_84532 = <printed by step 4>
@@ -92,6 +93,22 @@ case "$STEP" in
     echo "quote     $(cast call "$MARKET_ENGINE" "quoteAsset()(address)" --rpc-url "$RPC")"
     echo "totalNav  $(cast call "$MARKET_ENGINE" "totalNav()(uint256)" --rpc-url "$RPC")"
     echo "poolId    0x033f9c6a29740ff07044ab5e63e2dff909793801a0b1e51496d9963765052937" ;;
+  all)
+    # One shot: mark → engine → activate → verify. Owner defaults to the deployer so it can activate.
+    [ "$BROADCAST" = "--broadcast" ] && need DEPLOYER_PRIVATE_KEY
+    key
+    export MARKET_OWNER="${MARKET_OWNER:-$(cast wallet address --private-key "$DEPLOYER_PRIVATE_KEY")}"
+    export MARKET_GUARDIAN="${MARKET_GUARDIAN:-$MARKET_OWNER}"
+    echo "· owner/guardian $MARKET_OWNER"
+    out=$(fs DeployMarketTestMark.s.sol DeployMarketTestMark 2>&1) || { echo "$out"; exit 1; }
+    export MARKET_NONQUOTE_MARK=$(echo "$out" | awk '/FreshTestMark 0x/ {print $2}')
+    echo "1/4 mark    $MARKET_NONQUOTE_MARK"
+    [ "$BROADCAST" = "--broadcast" ] || { echo "· dry run stops here: the engine step needs the mark on-chain. Re-run with --broadcast."; exit 0; }
+    out=$(fs DeployMarketEngine.s.sol DeployMarketEngine 2>&1) || { echo "$out"; exit 1; }
+    export MARKET_ENGINE=$(echo "$out" | awk '/MintwareMarketEngine 0x/ {print $2}')
+    echo "2/4 engine  $MARKET_ENGINE"
+    "$0" activate --broadcast >/dev/null && echo "3/4 activated"
+    echo "4/4 verify"; "$0" verify ;;
   *)
     sed -n '2,30p' "$0"; exit 1 ;;
 esac
