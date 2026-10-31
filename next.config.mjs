@@ -45,15 +45,16 @@ const nextConfig = {
 
   async redirects() {
     return [
-      { source: '/dashboard', destination: '/app/rewards', permanent: true },
+      // Retired campaign/leaderboard addresses. Their old /app targets no longer exist, so send them somewhere real.
+      { source: '/dashboard', destination: '/app/portfolio', permanent: false },
       // Functional app pages moved into the /app tier (IA Phase 1). Query params
       // (e.g. /swap?cid=, ?ref=) are preserved through Next redirects.
       { source: '/swap', destination: '/app/swap', permanent: true },
-      { source: '/leaderboard', destination: '/app/leaderboard', permanent: true },
+      { source: '/leaderboard', destination: '/app/markets', permanent: false },
       { source: '/profile', destination: '/app/portfolio', permanent: true },
-      { source: '/create-campaign', destination: '/app/create-campaign', permanent: true },
-      { source: '/manage/:campaign_id', destination: '/app/manage/:campaign_id', permanent: true },
-      { source: '/rewards', destination: '/app/rewards', permanent: true },
+      { source: '/create-campaign', destination: '/issuers', permanent: false },
+      { source: '/manage/:campaign_id', destination: '/issuers', permanent: false },
+      { source: '/rewards', destination: '/app/portfolio', permanent: false },
       { source: '/v2', destination: '/', permanent: true },
       { source: '/vaults', destination: '/markets', permanent: true },
       { source: '/defi', destination: '/markets', permanent: true },
@@ -74,6 +75,8 @@ const nextConfig = {
       { source: '/app/team/vaults', destination: '/app/team', permanent: false },
       { source: '/app/team/developers', destination: '/app/team', permanent: false },
       { source: '/app/team/swap', destination: '/app/swap', permanent: false },
+      // The agent-account lookup was retired (its API always answered 410); agents live under Previews.
+      { source: '/app/agents', destination: '/app/previews/agents', permanent: false },
       // Account, Profile and Referrals folded into Portfolio (2026-10-31).
       { source: '/app/account', destination: '/app/portfolio', permanent: false },
       { source: '/app/profile', destination: '/app/portfolio', permanent: false },

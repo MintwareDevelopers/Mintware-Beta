@@ -8,7 +8,6 @@ import { wagmiConfig } from '@/lib/web3/wagmi'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
-import { LaunchModalProvider } from './LaunchModal'
 import { AppModeProvider } from './AppMode'
 import { activeRole, type MintwareOrgMeta } from '@/lib/auth/rbac'
 import { MW_ROLE_COOKIE } from '@/lib/auth/cookies'
@@ -92,14 +91,11 @@ function GlobalReferralGate() {
 
 function AppWalletProviders({ children }: { children: ReactNode }) {
   // Privy is the single wallet/connect layer — no RainbowKitProvider. Privy's own
-  // modal (via LaunchModal → privy.login/connectWallet) handles external wallets
-  // and email/embedded onboarding.
+  // modal (privy.login/connectWallet) handles external wallets and email/embedded onboarding.
   return (
     <>
       <AppModeProvider>
-        <LaunchModalProvider>
-          {children}
-        </LaunchModalProvider>
+        {children}
       </AppModeProvider>
       <GlobalReferralGate />
     </>

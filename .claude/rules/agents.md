@@ -72,7 +72,7 @@ Submitted PR adding Mintware to `### 🪪 Identity & Trust` section of the curat
 
 # Agent parking account + x402
 
-> **Status: code-complete + testnet, NOT mainnet/audited.** `lib/x402/*` + 5 routes + `/app/agents`
+> **Status: code-complete + testnet, NOT mainnet/audited.** `lib/x402/*` + 5 routes + the `/app/previews/agents` preview
 > UI + 13 plugin actions are built and green (**52 Vitest + 86 edge-auth Rust tests**), but the
 > stack is **runtime-gated** (503 until env set) and rides the Arc-**testnet** YPN vault. External
 > audit + a real settlement/card path gate real value. **Not live.** (See `.claude/STATE.md`.)
@@ -118,7 +118,7 @@ Each runtime keeps its existing Attribution actions and adds the 5-action parkin
 | Standing permit | `POST /api/x402/permit` — an agent signs ONE EIP-712 `DelegatedSpendPermit` (the SAME scheme the human card flow uses — `lib/org/spendPermit.ts`, domain `Mintware Payment Gateway`/`2.0`) verified server-side (recovers to `payer`, `user`==`payer`) → stored in `x402_standing_permits` (deny-all RLS). `/api/x402/settle` fetches it by `(payer, gateway)` and threads it into the relayer `SettleParams.permit`; **no permit registered ⇒ settle fails closed `no_standing_permit`** (never fabricated). Closes the `settlement_permit_unavailable` gap. |
 | Discovery | `public/.well-known/x402.json` (facilitator/schemes/networks) |
 | Live spendable | edge-auth `GET /available/:user` (read-only headroom = NAV − holds − cap − liquidity; without it, spendable defaults to full parked balance — parking never locks) |
-| UI | public `/agents` (reorged to lead with earn + pay) · `/app/agents` (live clickable parking account: parked / spendable / earning) |
+| UI | public `/agents` (reorged to lead with earn + pay) · `/app/previews/agents` (simulated console with a live x402 quote). The `/app/agents` parking-account lookup was removed 2026-10-31 (its API answers 410) and redirects to the preview. |
 | Spec (full) | [`docs/developers/agentkit-compute-402-spec.md`](../../docs/developers/agentkit-compute-402-spec.md) |
 
 **Runtime gates:** the facilitator/seller/live-spendable need `EDGE_AUTH_URL` / `EDGE_AUTH_SECRET`
