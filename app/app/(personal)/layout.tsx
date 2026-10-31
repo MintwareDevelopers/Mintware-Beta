@@ -1,10 +1,9 @@
 import { PersonalShell } from '@/components/web2/AppShell'
-import { V2AppGate } from '@/components/web2/V2AppGate'
 
-// Personal workspace — every retail route (account, swap, vaults, agents, profile) shares the one AppShell chrome.
-// URLs are unchanged: (personal) is a route group. V2-gated (V2AppGate).
+// Personal workspace — markets, portfolio, swap, the RWA demo and the simulated previews share the one AppShell
+// chrome. Open to everyone (one app, 2026-10-31); only the Team workspace keeps the V2 password (V2AppGate).
 export const dynamic = 'force-dynamic'
 
 export default function PersonalLayout({ children }: { children: React.ReactNode }) {
-  return <V2AppGate><PersonalShell>{children}</PersonalShell></V2AppGate>
+  return <PersonalShell>{children}</PersonalShell>
 }

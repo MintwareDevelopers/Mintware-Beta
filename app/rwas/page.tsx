@@ -119,7 +119,7 @@ export default function RwasPage() {
         <div>
           <SectionHead eyebrow="See one running" title="A tokenized property," soft="with a market of its own." />
           <p className="mt-6 mb-0 text-[17px] leading-[1.6] text-ink-mid max-w-[50ch]">Our demo runs a live market for a fictional land parcel on Base Sepolia. Only verified holders can own it, it’s priced against an issuer appraisal, and the chain itself refuses trades that break the rules.</p>
-          <Link href="/v1/rwas" className="mw-btn mw-btn-lg mt-8">Open the property demo <Arrow /></Link>
+          <Link href="/app/rwas" className="mw-btn mw-btn-lg mt-8">Open the property demo <Arrow /></Link>
         </div>
         <GradientPanel tone="lavender" className="p-[clamp(16px,3vw,32px)]">
           <div className="mw-raise-lg rounded-[24px] p-6">

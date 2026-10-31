@@ -123,7 +123,7 @@ export default function IssuersPage() {
           <IconTile><IconRules /></IconTile>
           <h3 className="font-semibold text-[clamp(24px,2.6vw,32px)] tracking-[-0.03em] leading-[1.12] mt-6 mb-0">Your rules travel with your token.</h3>
           <p className="text-[15.5px] text-ink-mid leading-[1.6] mt-4">Identity and transfer rules stay with the token, so only verified holders take part, and the market unwinds inside its own pool instead of relying on outside liquidators.</p>
-          <Link href="/v1/rwas" className="mw-btn-quiet mt-4">See it with a tokenized property <Arrow size={16} /></Link>
+          <Link href="/app/rwas" className="mw-btn-quiet mt-4">See it with a tokenized property <Arrow size={16} /></Link>
         </div>
         <div className="mw-raise rounded-[26px] p-[clamp(24px,3.4vw,40px)]">
           <IconTile><IconTrade /></IconTile>

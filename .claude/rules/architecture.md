@@ -15,8 +15,9 @@ route lists there. Campaign issuance and the former LP Gateway mechanics are ret
 
 - `app/` contains Next.js App Router pages and routes; `components/` holds UI; `lib/` holds shared services and
   domain logic.
-- `app/app/` contains guarded Personal, Team, organization, and RWA workspaces. `V2AppGate` protects guarded
-  workspaces; verify current route groups in the generated route inventory.
+- `app/app/` is the one app. `(personal)` holds Markets, Portfolio, Swap, the RWA demo and the simulated Previews,
+  open to everyone. `team/` and `org/` hold the Team workspace, which `V2AppGate` protects. The old `/v1` platform
+  and `/markets/[pool]` redirect into `/app` (`next.config.mjs`); verify route groups in the generated inventory.
 - `app/api/gateway/*` is a legacy route namespace for MarketEngine discovery, curation, registry, and transaction
   event recording. It does not expose the retired PositionManager/Staging system.
 - `contracts-v4/src/vaults/MintwareMarketEngine*.sol` implements current V1 pool liquidity. Earn and refill are
@@ -36,7 +37,13 @@ All contract products are testnet-only and unaudited; external audit gates real 
 1. Interactive wallet pages use client components where Privy/wagmi hooks are needed.
 2. `proxy.ts`, `TeamGuard`, and `V2AppGate` implement separate route and workspace gates; check their code before
    changing access claims.
-3. Personal, Team, organization, and RWA workspaces share the `AppShell` family.
+3. Personal and Team (including organization pages) share `AppShell`; the sidebar menu and the workspace
+   switcher are the only things that change. The RWA demo lives in Personal, not in a workspace of its own.
 4. `/explorer` redirects to `/`; the historical static explorer file, if present, is not in the current site map.
 5. Keep archived product designs clearly historical. A source file or retained deployed contract does not make a
    retired product current.
+
+**One app (2026-10-31).** V1 (`/v1`, its own top-bar shell) and the gated V2 app (`/app`) were merged into one
+`/app` with Personal and Team workspaces, because the working features were split between a public demo shell and
+a hidden app. V1Shell and V1Footer were deleted; their testnet notice (`V1DisclaimerGate`) now opens the Personal
+workspace.

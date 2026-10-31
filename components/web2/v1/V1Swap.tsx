@@ -129,7 +129,7 @@ export function V1Swap() {
         </div>
 
         <p className="text-[13px] mt-4" style={{ color: '#62626F' }}>
-          <Link href="/v1" className="no-underline hover:underline" style={{ color: '#4643D1', fontWeight: 600 }}>Browse pools →</Link>{' '}
+          <Link href="/app/markets" className="no-underline hover:underline" style={{ color: '#4643D1', fontWeight: 600 }}>Browse pools →</Link>{' '}
           · <Link href="/legal" className="no-underline hover:underline" style={{ color: '#4643D1', fontWeight: 600 }}>Legal →</Link>
         </p>
       </div>

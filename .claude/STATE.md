@@ -10,9 +10,12 @@
 
 The public marketing site uses one light design system and the owner-approved vision copy. Primary routes are
 `/`, `/markets`, `/rwas`, `/issuers`, `/cards`, and `/agents`; the header carries the Testnet chip and
-links to `/v1`. The `/v1` platform shell carries five lanes: Markets (`/v1`), RWAs (`/v1/rwas`), Issuers
-(`/v1/issuers`), Card (`/v1/card`) and Agents (`/v1/agents`); Card, the issuer request flow and the agent wallet/call
-log are Simulated (tagged on screen). Pool detail is `/markets/[pool]`. Earn (the stablecoin vault) is presented as the card's
+links to the app. **One app (2026-10-31):** every "Launch app" goes to `/app/markets`; the old `/v1` platform
+and `/markets/[pool]` redirect into `/app`. The app has two workspaces in one sidebar shell (`components/web2/AppShell.tsx`):
+**Personal** (open to everyone) — Markets (`/app/markets`, pool detail `/app/markets/[pool]`), Portfolio
+(`/app/portfolio`), Swap (`/app/swap`, LI.FI), the RWA property demo (`/app/rwas`), and Previews: Card, Agents and
+Issuers (`/app/previews/*`, Simulated, tagged on screen). **Team** (`/app/team`, `/app/org/*`) stays behind the V2
+access code. Earn (the stablecoin vault) is presented as the card's
 earning balance, not a standalone page. Legacy `/about`, `/earn`, `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
 `/solutions/:path*`, `/yield-payment-network`, and `/explorer` redirect to their current destinations. Legal and
 risk content remain on their existing routes. Canonical route inventory is generated in the AUTO block below.
@@ -30,7 +33,7 @@ risk content remain on their existing routes. Canonical route inventory is gener
   integration is Bridge + Stripe in pre-enable state; see [`rules/payments-ypn.md`](rules/payments-ypn.md).
 - **Discover and curation** — GeckoTerminal data feeds candidate discovery; risk scores rank candidates and never
   certify them. Curated MarketEngine instances are verified against on-chain configuration.
-- **RWA demo** — the RWAs tab (`/v1/rwas`) and `MintwareRwaAppraisalHook` remain a testnet demo. See
+- **RWA demo** — the property demo (`/app/rwas`) and `MintwareRwaAppraisalHook` remain a testnet demo. See
   [`rules/rwa-liquidity.md`](rules/rwa-liquidity.md).
 - **Attribution** — the AIAttribution v3 contract is deployed on Base mainnet; this is a fundless attestation
   ledger. User-facing agent reputation surfaces remain documented in [`rules/agents.md`](rules/agents.md).
@@ -169,6 +172,8 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app` | `app/app/page.tsx` |
 | `/app/account` | `app/app/(personal)/account/page.tsx` |
 | `/app/agents` | `app/app/(personal)/agents/page.tsx` |
+| `/app/markets` | `app/app/(personal)/markets/page.tsx` |
+| `/app/markets/[pool]` | `app/app/(personal)/markets/[pool]/page.tsx` |
 | `/app/org` | `app/app/org/(guarded)/page.tsx` |
 | `/app/org/[slug]` | `app/app/org/[slug]/(guarded)/page.tsx` |
 | `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
@@ -181,7 +186,16 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/org/[slug]/payroll` | `app/app/org/[slug]/(guarded)/payroll/page.tsx` |
 | `/app/org/[slug]/roles` | `app/app/org/[slug]/(guarded)/roles/page.tsx` |
 | `/app/org/new` | `app/app/org/(guarded)/new/page.tsx` |
+| `/app/portfolio` | `app/app/(personal)/portfolio/page.tsx` |
+| `/app/previews/agents` | `app/app/(personal)/previews/agents/page.tsx` |
+| `/app/previews/card` | `app/app/(personal)/previews/card/page.tsx` |
+| `/app/previews/issuers` | `app/app/(personal)/previews/issuers/page.tsx` |
 | `/app/profile` | `app/app/(personal)/profile/page.tsx` |
+| `/app/referrals` | `app/app/(personal)/referrals/page.tsx` |
+| `/app/rwas` | `app/app/(personal)/rwas/page.tsx` |
+| `/app/rwas/[unit]` | `app/app/(personal)/rwas/[unit]/page.tsx` |
+| `/app/rwas/how` | `app/app/(personal)/rwas/how/page.tsx` |
+| `/app/rwas/proof` | `app/app/(personal)/rwas/proof/page.tsx` |
 | `/app/swap` | `app/app/(personal)/swap/page.tsx` |
 | `/app/team` | `app/app/team/page.tsx` |
 | `/app/team/cards` | `app/app/team/cards/page.tsx` |
@@ -198,7 +212,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/issuers` | `app/issuers/page.tsx` |
 | `/legal` | `app/legal/page.tsx` |
 | `/markets` | `app/markets/page.tsx` |
-| `/markets/[pool]` | `app/markets/[pool]/page.tsx` |
 | `/org/[slug]` | `app/org/[slug]/page.tsx` |
 | `/org/[slug]/badge` | `app/org/[slug]/badge/page.tsx` |
 | `/privacy` | `app/privacy/page.tsx` |
@@ -208,15 +221,4 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/rwas` | `app/rwas/page.tsx` |
 | `/terms` | `app/terms/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` |
-| `/v1` | `app/v1/page.tsx` |
-| `/v1/agents` | `app/v1/agents/page.tsx` |
-| `/v1/card` | `app/v1/card/page.tsx` |
-| `/v1/issuers` | `app/v1/issuers/page.tsx` |
-| `/v1/portfolio` | `app/v1/portfolio/page.tsx` |
-| `/v1/referrals` | `app/v1/referrals/page.tsx` |
-| `/v1/rwas` | `app/v1/rwas/page.tsx` |
-| `/v1/rwas/[unit]` | `app/v1/rwas/[unit]/page.tsx` |
-| `/v1/rwas/how` | `app/v1/rwas/how/page.tsx` |
-| `/v1/rwas/proof` | `app/v1/rwas/proof/page.tsx` |
-| `/v1/swap` | `app/v1/swap/page.tsx` |
 <!-- /AUTO:pages -->

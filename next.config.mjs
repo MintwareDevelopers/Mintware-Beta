@@ -61,11 +61,23 @@ const nextConfig = {
       { source: '/solutions/:path*', destination: '/issuers', permanent: true },
       { source: '/yield-payment-network', destination: '/cards', permanent: true },
       { source: '/earn', destination: '/cards', permanent: true },
-      { source: '/app/rwa', destination: '/v1/rwas', permanent: false },
-      { source: '/app/rwa/:path*', destination: '/v1/rwas/:path*', permanent: false },
+      { source: '/app/rwa', destination: '/app/rwas', permanent: false },
+      { source: '/app/rwa/:path*', destination: '/app/rwas/:path*', permanent: false },
+      // One app (2026-10-31): the old /v1 platform and the pool pages moved under /app. Kept temporary until the
+      // new addresses settle.
+      { source: '/v1', destination: '/app/markets', permanent: false },
+      { source: '/v1/rwas', destination: '/app/rwas', permanent: false },
+      { source: '/v1/rwas/:path*', destination: '/app/rwas/:path*', permanent: false },
+      { source: '/v1/portfolio', destination: '/app/portfolio', permanent: false },
+      { source: '/v1/referrals', destination: '/app/referrals', permanent: false },
+      { source: '/v1/swap', destination: '/app/swap', permanent: false },
+      { source: '/v1/card', destination: '/app/previews/card', permanent: false },
+      { source: '/v1/agents', destination: '/app/previews/agents', permanent: false },
+      { source: '/v1/issuers', destination: '/app/previews/issuers', permanent: false },
+      { source: '/markets/:pool', destination: '/app/markets/:pool', permanent: false },
       { source: '/about', destination: '/', permanent: true },
       { source: '/explorer', destination: '/', permanent: true },
-      { source: '/earn/:pool', destination: '/markets/:pool', permanent: true },
+      { source: '/earn/:pool', destination: '/app/markets/:pool', permanent: true },
     ]
   },
 
