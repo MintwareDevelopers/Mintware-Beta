@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { keccak256 } from 'viem'
 import { computePoolId } from '@/lib/gateway/registry'
-import { marketEngineConfig, verifyMarketEngine, BASE_SEPOLIA_MARKET_ENGINE, resolveMarketEngine } from '@/lib/gateway/marketEngine'
+import { marketEngineConfig, marketEngineConfigForPool, marketEngineConfigs, verifyMarketEngine, BASE_SEPOLIA_MARKET_ENGINE, resolveMarketEngine } from '@/lib/gateway/marketEngine'
 import { fakeSupabase } from '@/lib/gateway/__audit__/fakeSupabase'
 
 const ENGINE = '0x' + 'aa'.repeat(20) as `0x${string}`
@@ -74,5 +74,29 @@ describe('resolveMarketEngine inactive resolution', () => {
   it('returns null for ambiguous active engines when no pool is specified', async () => {
     const { client: db } = fakeSupabase({ tables: { gateway_instances: [row(poolA, engineA, 'active'), row(poolB, engineB, 'active')] } })
     expect(await resolveMarketEngine(db, cfg, null)).toBeNull()
+  })
+})
+
+describe('marketEngineConfigForPool', () => {
+  const RH_ENV = { MARKET_ENGINE_CHAIN_ID: '46630', MARKET_ENGINE_RPC_URL: 'https://rh.test', MARKET_ENGINE_INSTANCES: '46630:0x' + 'cc'.repeat(20) }
+  const reg = (pool: string, chain_id: number) => ({ pool_address: pool, chain_id, market_engine_address: '0x' + 'dd'.repeat(20) })
+  const BASE_POOL = '0x' + 'b1'.repeat(32)
+  const RH_POOL = '0x' + 'a1'.repeat(32)
+
+  it('routes a pool registered on another market chain to that chain’s public RPC', async () => {
+    const { client: db } = fakeSupabase({ tables: { gateway_instances: [reg(BASE_POOL, 84532), reg(RH_POOL, 46630)] } })
+    expect(await marketEngineConfigForPool(db, BASE_POOL, RH_ENV)).toEqual({ chainId: 84532, rpcUrl: 'https://base-sepolia-rpc.publicnode.com', defaultEngine: null })
+  })
+
+  it('keeps the configured chain (and its env engine) for its own pools, unknown pools and no pool', async () => {
+    const { client: db } = fakeSupabase({ tables: { gateway_instances: [reg(BASE_POOL, 84532), reg(RH_POOL, 46630)] } })
+    const cfg = marketEngineConfig(RH_ENV)
+    expect(await marketEngineConfigForPool(db, RH_POOL, RH_ENV)).toEqual(cfg)
+    expect(await marketEngineConfigForPool(db, '0x' + 'ee'.repeat(32), RH_ENV)).toEqual(cfg)
+    expect(await marketEngineConfigForPool(db, null, RH_ENV)).toEqual(cfg)
+  })
+
+  it('lists the configured chain first, then the other market chain', () => {
+    expect(marketEngineConfigs(RH_ENV).map((c) => c.chainId)).toEqual([46630, 84532])
   })
 })

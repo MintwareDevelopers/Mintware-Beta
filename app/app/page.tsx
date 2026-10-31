@@ -5,5 +5,5 @@ import { cookies } from 'next/headers'
 export default async function AppHome() {
   const store = await cookies()
   const mode = store.get('mw_app_mode')?.value
-  redirect(mode === 'team' ? '/app/team' : mode === 'rwa' && process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true' ? '/app/rwa' : '/app/account')
+  redirect(mode === 'team' ? '/app/team' : mode === 'rwa' && process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true' ? '/v1/rwas' : '/app/account')
 }

@@ -14,14 +14,6 @@
   },
   "testnet": {
     "base-sepolia": {
-      "MintwareMarketEngine": {
-        "address": "0x18c22836c71ae2dc6f483ab9ac41b4503e18c384",
-        "chainId": 84532,
-        "status": "testnet",
-        "note": "Current V1 MarketEngine deployment; code presence confirmed by Base Sepolia eth_getCode on 2026-10-29. Constructor configuration not independently verified.",
-        "verified": "2026-10-29",
-        "source": "Base Sepolia RPC eth_getCode"
-      },
       "MintwareEthSettlement": {
         "address": "0x20140811123db9C00CA1dF1023BA4fE758B98c5F",
         "chainId": 84532,
@@ -193,6 +185,46 @@
         "note": "NEXT_PUBLIC_MW_TREASURY_ADDRESS (client display). On-chain probe 2026-08-30: ~3.6KB code present; exact role not re-confirmed \u2014 verify + label before relying on it.",
         "verified": "2026-08-30",
         "source": "on-chain probe"
+      },
+      "MintwareMarketEngine_v1_superseded": {
+        "address": "0x18c22836c71ae2dc6f483ab9ac41b4503e18c384",
+        "chainId": 84532,
+        "status": "superseded",
+        "note": "Superseded 2026-10-30: reverts StaleMark() (immutable fixed mark + short max mark age). Replaced by MintwareMarketEngine on the same pool; never registered for deposits.",
+        "verified": "2026-10-29",
+        "source": "Base Sepolia RPC eth_getCode"
+      },
+      "MintwareMarketEngine": {
+        "address": "0x961534db8C0EbB7cEb729E74CaB698A83A9c827e",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "USDC/WETH MarketEngine on pool 0x033f9c6a\u20262937 (fee 2500, spacing 50); activated; owner/guardian 0x9c64\u20263AD; runtime codehash 0x0648d4d7\u20260dac; idle-custody adapters; fixed test mark, 1-year max age; unaudited. Deployed via scripts/ops/relaunch-base-market.sh.",
+        "verified": "2026-10-30",
+        "source": "Base Sepolia RPC reads (owner, activated, tokens, mark, totalNav)"
+      },
+      "MintwareMarketAdapter_USDC": {
+        "address": "0xc1287f27A79711F6a8945f1B9Dec2Ae9E15cc9E5",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Token-0 (USDC) idle-custody adapter bound to the Base Sepolia MarketEngine.",
+        "verified": "2026-10-30",
+        "source": "Base Sepolia RPC reads (owner, activated, tokens, mark, totalNav)"
+      },
+      "MintwareMarketAdapter_WETH": {
+        "address": "0xc04a84794782a3F5e6dB1226b68cF46934aE4994",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Token-1 (WETH) idle-custody adapter bound to the Base Sepolia MarketEngine.",
+        "verified": "2026-10-30",
+        "source": "Base Sepolia RPC reads (owner, activated, tokens, mark, totalNav)"
+      },
+      "MintwareFixedTestMark": {
+        "address": "0x11fbbDC9954A2Ca6C1eA9E5786d3725d7803dC8D",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Fixed WETH/USDC test mark at the pool price (2359.038 USDC); max mark age is set on the engine (1 year). TEST ONLY.",
+        "verified": "2026-10-30",
+        "source": "Base Sepolia RPC reads (owner, activated, tokens, mark, totalNav)"
       }
     },
     "robinhood-testnet": {
@@ -200,7 +232,7 @@
         "address": "0x38E426D6671FB2c07C07a468e59f954Dcd0eDeb8",
         "chainId": 46630,
         "status": "testnet",
-        "note": "Current V1 one-pool MarketEngine for curated tUSDG/tPONS pool 0x07340da7…0dfa2; code present on RPC; fixed test mark, 1-year max age; unaudited.",
+        "note": "Current V1 one-pool MarketEngine for curated tUSDG/tPONS pool 0x07340da7\u20260dfa2; code present on RPC; fixed test mark, 1-year max age; unaudited.",
         "verified": "2026-10-29",
         "source": "Robinhood testnet RPC eth_getCode"
       },

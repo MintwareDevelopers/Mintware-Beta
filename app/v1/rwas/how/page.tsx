@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Disclosure } from '@/components/rwa/RwaVisuals'
 import { RWA_UNITS } from '@/lib/rwa/demo'
 
-// /app/rwa/how — the RWA liquidity unit explained. Static (gated by the rwa layout). Light-only; copy rules:
+// /v1/rwas/how — the RWA liquidity unit explained. Static. Light-only; copy rules:
 // "supply", never deposit / savings / guaranteed / fixed APY.
 
 const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
@@ -39,16 +39,16 @@ export default function RwaHow() {
       <section className="border-b border-hair-soft">
         <div className={`${WRAP} py-12`}>
           <div className={EY}>The liquidity unit</div>
-          <h2 className={`${H2} mt-1.5`}>One vault, one pool, two tranches</h2>
+          <h2 className={`${H2} mt-1.5`}>One vault, one pool, two sides</h2>
           <div className="mt-8 grid grid-cols-[1fr_1.3fr_1fr] items-center gap-4 max-[900px]:grid-cols-1">
-            <Box tone="teal" title="Liquidity providers" lines={['Supply dollars — any wallet', 'Senior tranche, at par', 'Exit in dollars only', 'Never hold the property token']} />
+            <Box tone="teal" title="Liquidity providers" lines={['Supply dollars — any wallet', 'Valued in dollars', 'Exit in dollars only', 'Never hold the property token']} />
             <div className="rounded-[24px] border-2 border-[rgba(108,108,240,0.35)] bg-white p-6 shadow-[0_18px_48px_-26px_rgba(59,58,143,0.35)]">
               <div className="text-center text-[11px] font-bold uppercase tracking-[0.12em] text-peri-deep">The vault</div>
               <div className="mt-4 grid grid-cols-[4fr_1fr] gap-2 text-center text-[12.5px]">
                 <div className="rounded-[12px] bg-[rgba(42,158,138,0.12)] px-3 py-4 text-[#1F7A6A]"><div className="font-semibold">Lending venue</div><div className="mt-0.5 text-[11.5px]">~80% · earning while idle</div></div>
                 <div className="rounded-[12px] bg-[rgba(108,108,240,0.14)] px-2 py-4 text-peri-deep"><div className="font-semibold">Pool</div><div className="mt-0.5 text-[11.5px]">~20%</div></div>
               </div>
-              <div className="mt-2 rounded-[12px] bg-[rgba(232,138,103,0.14)] px-3 py-3 text-center text-[12.5px] text-[#B4532A]"><span className="font-semibold">Junior: issuer inventory</span> · locked ≥ 90 days · first-loss</div>
+              <div className="mt-2 rounded-[12px] bg-[rgba(232,138,103,0.14)] px-3 py-3 text-center text-[12.5px] text-[#B4532A]"><span className="font-semibold">Issuer inventory</span> · locked ≥ 90 days · first-loss</div>
               <div className="mt-4 text-center text-[12px] text-ink-soft">Valued at min(pool price, appraisal) — never marked up</div>
             </div>
             <Box tone="coral" title="Verified traders" lines={['Buy and sell the property token', 'Checked by the issuer’s token on receipt', 'Unverified wallets refused', 'Through the issuer’s licensed front end']} />
@@ -99,7 +99,7 @@ export default function RwaHow() {
             This is a testnet demonstration. Before any real asset: an external audit of the hook and vault, counsel on venue
             and LP eligibility, integration with the issuer&apos;s production token standard, and a mainnet deployment on Base.
           </p>
-          <Link href="/app/rwa/proof" className="mt-4 inline-flex text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">See what is already proven on-chain →</Link>
+          <Link href="/v1/rwas/proof" className="mt-4 inline-flex text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">See what is already proven on-chain →</Link>
         </div>
       </section>
 

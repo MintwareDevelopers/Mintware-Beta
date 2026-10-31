@@ -5,7 +5,7 @@ import { FlowDiagram } from '@/components/ui2/FlowDiagram'
 import { WaitlistForm } from '@/components/marketing/WaitlistForm'
 import { Section, Eyebrow, H2, P, Hero, GlassList, Rows, Steps, Kicker, CTA } from '@/components/marketing/Story'
 
-export const metadata = { title: 'Issuers — Mintware', description: 'Your token. Our liquidity. Deep, fair markets for tokenized stocks, RWAs and stablecoins from day one.' }
+export const metadata = { title: 'Issuers — Mintware', description: 'Your token. Real liquidity. Deep, fair markets for tokenized stocks, RWAs and stablecoins from day one.' }
 
 export default function IssuersPage() {
   return <main className="min-h-screen bg-white text-ink">
@@ -14,7 +14,7 @@ export default function IssuersPage() {
     <Hero
       eyebrow="For issuers of tokenized stocks, RWAs and stablecoins"
       title="Your token."
-      soft="Our liquidity."
+      soft="Real liquidity."
       lede="You did the hard part: a real asset, tokenized and compliant. Mintware makes sure it trades like one — deep, fair markets from the first day, funded by your own holders instead of a rented market maker."
       actions={<><a href="#talk" className="glass-pill-primary">Bring your asset to market</a><Link href="/markets" className="glass-pill">See live markets</Link></>}
       tone="lavender"
@@ -58,7 +58,7 @@ export default function IssuersPage() {
           <Eyebrow>Built for regulated assets</Eyebrow>
           <h3 className="font-atx-display font-medium text-[clamp(1.6rem,3vw,2.2rem)] tracking-[-0.03em] leading-[1.1] mt-4">Your rules travel with your token.</h3>
           <p className="text-[15px] text-ink-mid leading-[1.65] mt-4">Identity and transfer rules stay with the token, so only verified holders take part. See it working with a tokenized property in our RWA demo.</p>
-          <Link href="/app/rwa" className="inline-block mt-6 text-[14px] font-semibold text-peri-deep no-underline hover:underline">View the RWA demo →</Link>
+          <Link href="/v1/rwas" className="inline-block mt-6 text-[14px] font-semibold text-peri-deep no-underline hover:underline">View the RWA demo →</Link>
         </div>
         <div className="soft-card p-10">
           <Eyebrow>Where the market is going</Eyebrow>

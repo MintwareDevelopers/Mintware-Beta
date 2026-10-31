@@ -1,6 +1,6 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { marketEnginePublicClient } from '@/lib/gateway/chain'
-import { marketEngineConfig, resolveMarketEngine } from '@/lib/gateway/marketEngine'
+import { marketEngineConfigForPool, resolveMarketEngine } from '@/lib/gateway/marketEngine'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
 
@@ -11,7 +11,9 @@ const ERC20_DECIMALS_ABI = [{ type: 'function', stateMutability: 'view', name: '
 export const GET = createHandler(async (req, ctx) => {
   const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0]?.trim() || 'unknown'
   if (!ipBucket.take(ip)) return ctx.json({ success: false, error: 'Too many requests', code: 'RATE_LIMITED' }, 429)
-  const cfg = marketEngineConfig()
+  let cfg
+  try { cfg = await marketEngineConfigForPool(ctx.supabase, req.nextUrl.searchParams.get('pool')) }
+  catch { return ctx.json({ success: false, error: 'engine_registry_unavailable' }, 503) }
   if (!cfg) return ctx.json({ success: false, error: 'market_engine_not_configured' }, 503)
   const pm = req.nextUrl.searchParams.get('pm')
   let inst

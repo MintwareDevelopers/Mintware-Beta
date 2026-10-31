@@ -33,11 +33,11 @@ const POOL = '0x' + 'ab'.repeat(32)
 const ENGINE = '0x' + 'cd'.repeat(20)
 
 function req(body: unknown) { return new Request('https://mw.test/api/gateway/curate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) as never }
-async function signedRegister() {
+async function signedRegister(chainId = 84532) {
   const issuedAt = Date.now()
-  const authMessage = buildGatewayCurateMessage({ address: curator.address, issuedAt, curateAction: 'approve', requestId: 'req-1', poolAddress: POOL, chainId: 84532, marketEngineAddress: ENGINE })
+  const authMessage = buildGatewayCurateMessage({ address: curator.address, issuedAt, curateAction: 'approve', requestId: 'req-1', poolAddress: POOL, chainId, marketEngineAddress: ENGINE })
   const authSignature = await curator.signMessage({ message: authMessage })
-  return { address: curator.address, issuedAt, authMessage, authSignature, action: 'approve', requestId: 'req-1', poolAddress: POOL, chainId: 84532, instance: { marketEngineAddress: ENGINE } }
+  return { address: curator.address, issuedAt, authMessage, authSignature, action: 'approve', requestId: 'req-1', poolAddress: POOL, chainId, instance: { marketEngineAddress: ENGINE } }
 }
 
 beforeEach(() => {
@@ -62,5 +62,34 @@ describe('POST /api/gateway/curate — MarketEngine registration', () => {
     expect(res.status).toBe(400)
     expect(saved.gateway_instances).toHaveLength(0)
     expect(saved.gateway_pool_requests[0].status).toBe('pending')
+  })
+
+  describe('another market chain', () => {
+    const asChain = (chainId: number) => { saved.gateway_pool_requests[0].chain_id = chainId }
+    beforeEach(() => { delete process.env.MARKET_ENGINE_CODEHASHES_46630 })
+
+    it('fails closed without that chain’s own code-hash allowlist', async () => {
+      asChain(46630)
+      const res = await POST(req(await signedRegister(46630)))
+      expect(res.status).toBe(400)
+      expect((await res.json()).error).toBe('chain_trust_root_unset')
+      expect(verify).not.toHaveBeenCalledWith(expect.objectContaining({ chainId: 46630 }))
+      expect(saved.gateway_instances).toHaveLength(0)
+    })
+
+    it('verifies on that chain when its trust root is set', async () => {
+      asChain(46630)
+      process.env.MARKET_ENGINE_CODEHASHES_46630 = '0x' + '44'.repeat(32)
+      const res = await POST(req(await signedRegister(46630)))
+      expect(res.status).toBe(200)
+      expect(verify).toHaveBeenLastCalledWith(expect.objectContaining({ chainId: 46630, address: ENGINE }))
+      expect(saved.gateway_instances[0]).toMatchObject({ chain_id: 46630, status: 'active' })
+    })
+
+    it('rejects a chain that is not a market chain', async () => {
+      asChain(1)
+      const res = await POST(req(await signedRegister(1)))
+      expect((await res.json()).error).toBe('chain_not_verifiable')
+    })
   })
 })

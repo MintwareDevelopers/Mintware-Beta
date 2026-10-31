@@ -9,7 +9,7 @@ const ENGINE = '0x' + '11'.repeat(20)
 const POOL = '0x' + 'bb'.repeat(32)
 const TX = '0x' + '12'.repeat(32)
 vi.mock('@/lib/web2/routeHandler', () => ({ createHandler: (fn: any) => (req: any) => fn(req, { user: { address: ACCOUNT }, supabase: state.db.client, json: (body: unknown, status = 200) => Response.json(body, { status }), log: { warn: vi.fn(), error: vi.fn() } }) }))
-vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => ({ chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }), listMarketEngines: async () => state.engines, resolveMarketEngine: async () => null }))
+vi.mock('@/lib/gateway/marketEngine', () => ({ marketEngineConfig: () => ({ chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }), marketEngineConfigForPool: async () => ({ chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null }), marketEngineConfigs: () => [({ chainId: 84532, rpcUrl: 'https://rpc.test', defaultEngine: null })], listMarketEngines: async () => state.engines, resolveMarketEngine: async () => null }))
 vi.mock('@/lib/gateway/chain', () => ({ marketEnginePublicClient: () => ({ getTransactionReceipt: async () => state.receipt, readContract: async () => 8n }) }))
 vi.mock('@/lib/gateway/recordAuth', () => ({ bindSignedRecord: () => ({ ok: true, bound: { txHash: TX, pool: POOL } }) }))
 

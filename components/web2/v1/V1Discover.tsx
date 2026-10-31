@@ -1,16 +1,21 @@
 'use client'
 
-// Discover — the V1 app home (Meteora × Krystal parity): a scannable table of the hottest Robinhood-Chain
-// pools that pass our screen, live from /api/gateway/discover (real GeckoTerminal metrics + our risk score).
-// Real paired token icons, 24h price-trend sparklines, est. fee APR, sortable columns, and a curated
-// "screened picks" spotlight. Live pools are depositable, the rest are "Curating".
+// Markets — the V1 app home, in two clearly separated parts:
+//   1. Live markets: our MarketEngine markets (Base + Robinhood testnets), from the on-chain-verified
+//      registry via /api/gateway/markets. These accept deposits.
+//   2. Watchlist: the real Robinhood-mainnet pools we screen (live GeckoTerminal metrics + our risk score
+//      via /api/gateway/discover), with sparklines, est. fee APR, sortable columns and screened picks.
+//      Markets open on these after the audited mainnet launch.
 // Honest: real metrics only, est. APR labeled an estimate, no APY/guaranteed framing; the score ranks,
 // humans curate.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { GlassFrame } from './GlassFrame'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { Sparkline } from '@/components/web2/v1/Sparkline'
+import { marketChain } from '@/lib/chains/marketChains'
+import type { LiveMarket } from '@/app/api/gateway/markets/route'
 
 type Pool = {
   poolAddress: string
@@ -30,7 +35,7 @@ type Pool = {
   live: boolean
 }
 
-type Tab = 'all' | 'live' | 'new'
+type Tab = 'all' | 'new'
 type SortKey = 'vol' | 'apr' | 'tvl' | 'activity' | 'trust'
 
 const usd = (n: number) =>
@@ -47,9 +52,9 @@ const projFeesYr = (p: Pool, amount: number) => (p.estFeeAprPct != null && amoun
 const projFmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(0)}`)
 
 function risk(score: number): { label: string; color: string } {
-  if (score < 20) return { label: 'Low', color: '#34D399' }
-  if (score < 50) return { label: 'Med', color: '#F0B45E' }
-  return { label: 'High', color: '#F0736E' }
+  if (score < 20) return { label: 'Low', color: '#16A34A' }
+  if (score < 50) return { label: 'Med', color: '#B7791F' }
+  return { label: 'High', color: '#DC4A44' }
 }
 
 const sortVal = (p: Pool, k: SortKey): number => {
@@ -65,12 +70,20 @@ const COLS = '1.9fr 0.85fr 0.85fr 0.85fr 0.85fr 0.7fr 0.9fr 0.9fr'
 
 export function V1Discover() {
   const [pools, setPools] = useState<Pool[]>([])
+  const [markets, setMarkets] = useState<LiveMarket[] | null>(null)
   const [series, setSeries] = useState<Record<string, number[]>>({})
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('all')
   const [sortKey, setSortKey] = useState<SortKey>('vol')
   const [simStr, setSimStr] = useState('1,000') // earnings-simulator deposit amount (USDG)
   const sim = Number(simStr.replace(/[^0-9.]/g, '')) || 0
+
+  useEffect(() => {
+    fetch('/api/gateway/markets')
+      .then((r) => r.json())
+      .then((d) => setMarkets(d?.success && Array.isArray(d.markets) ? (d.markets as LiveMarket[]) : []))
+      .catch(() => setMarkets([]))
+  }, [])
 
   useEffect(() => {
     fetch('/api/gateway/discover')
@@ -92,8 +105,7 @@ export function V1Discover() {
 
   const shown = useMemo(() => {
     let list = pools
-    if (tab === 'live') list = list.filter((p) => p.live)
-    else if (tab === 'new') list = list.filter((p) => p.poolAgeDays != null && p.poolAgeDays < 7)
+    if (tab === 'new') list = list.filter((p) => p.poolAgeDays != null && p.poolAgeDays < 7)
     return [...list].sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || sortVal(b, sortKey) - sortVal(a, sortKey))
   }, [pools, tab, sortKey])
 
@@ -104,35 +116,63 @@ export function V1Discover() {
     return [...pools].sort((a, b) => score(b) - score(a)).slice(0, 3)
   }, [pools])
 
-  const totalTvl = pools.reduce((s, p) => s + p.tvlUsd, 0)
   const totalVol = pools.reduce((s, p) => s + p.vol24Usd, 0)
+  const liveNav = (markets ?? []).reduce((s, m) => s + (m.navQuote ?? 0), 0)
+  const liveChains = [...new Set((markets ?? []).map((m) => marketChain(m.chainId)?.short ?? `Chain ${m.chainId}`))]
 
   return (
     <div>
       {/* hero */}
-      <div className="text-[12px] uppercase tracking-[0.13em] font-semibold" style={{ color: '#8A82F4' }}>Earn · Robinhood Chain</div>
+      <div className="text-[12px] uppercase tracking-[0.13em] font-semibold" style={{ color: '#5A57DE' }}>Markets · Base + Robinhood</div>
       <h1 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.05] text-[clamp(1.7rem,3.4vw,2.4rem)] mt-2.5 max-w-[26ch]">
-        Put USDG to work in curated pools —{' '}
+        Put your tokens to work in curated markets —{' '}
         <span style={{ backgroundImage: 'linear-gradient(100deg,#8A82F4,#F0A183)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>never locked.</span>
       </h1>
-      <p className="text-[14.5px] leading-[1.6] mt-3 max-w-[58ch]" style={{ color: '#9B9BAD' }}>
+      <p className="text-[14.5px] leading-[1.6] mt-3 max-w-[58ch]" style={{ color: '#494957' }}>
         Add one or both pool tokens to a curated MarketEngine. Your shares track a quote-valued pool portfolio;
         withdraw pro-rata in both tokens.
       </p>
 
       {/* stats strip */}
       <div className="flex gap-8 mt-6 flex-wrap">
-        <Stat k="Pools screened" v={loading ? '—' : String(pools.length)} />
-        <Stat k="Total TVL" v={loading ? '—' : usd(totalTvl)} />
-        <Stat k="24h Volume" v={loading ? '—' : usd(totalVol)} />
-        <Stat k="Network" v="Robinhood Testnet" />
+        <Stat k="Live markets" v={markets == null ? '—' : String(markets.length)} />
+        <Stat k="Live market value" v={markets == null ? '—' : `${liveNav.toLocaleString('en-US', { maximumFractionDigits: 0 })} test USD`} />
+        <Stat k="Live on" v={markets == null ? '—' : liveChains.length ? liveChains.join(' · ') : 'Testnets'} />
+        <Stat k="Watchlist 24h volume" v={loading ? '—' : usd(totalVol)} />
       </div>
+
+      {/* LIVE MARKETS — ours, on-chain, depositable (testnets) */}
+      <SectionHead
+        title="Live markets"
+        tag="Testnet"
+        sub="Mintware markets running today. Deposit one or both tokens, withdraw pro-rata any time."
+      />
+      {markets == null ? (
+        <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>
+          {[0, 1].map((i) => <div key={i} className="h-[132px] rounded-[14px] mw-shimmer" />)}
+        </div>
+      ) : markets.length === 0 ? (
+        <div className="mt-3 rounded-[14px] px-5 py-6 text-[13.5px]" style={{ ...CARD, color: '#494957' }}>
+          No market is open right now. New markets open here as each one is deployed and verified on-chain.
+        </div>
+      ) : (
+        <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>
+          {markets.map((mk) => <LiveMarketCard key={`${mk.chainId}:${mk.poolAddress}`} m={mk} />)}
+        </div>
+      )}
+
+      {/* WATCHLIST — real mainnet pools we screen */}
+      <SectionHead
+        title="Watchlist"
+        tag="Robinhood mainnet"
+        sub="Real pools we screen on depth, age and trading. Markets open on these after the audited mainnet launch."
+      />
 
       {/* spotlight — curated screened picks */}
       {!loading && spotlight.length > 0 && (
-        <div className="mt-7">
-          <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-2.5" style={{ color: '#63636F' }}>
-            Screened picks <span style={{ color: '#4A4A55' }}>· lowest-risk, most-established of the feed</span>
+        <div className="mt-4">
+          <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-2.5" style={{ color: '#8A8A9E' }}>
+            Screened picks <span style={{ color: '#A6A6B8' }}>· lowest-risk, most-established of the feed</span>
           </div>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))' }}>
             {spotlight.map((p) => {
@@ -140,26 +180,27 @@ export function V1Discover() {
               return (
                 <Link
                   key={p.poolAddress}
-                  href={`/markets/${slug(p)}`}
+                  href={`/markets/${slug(p)}?pair=${encodeURIComponent(p.pairLabel)}`}
                   className="rounded-[14px] p-4 no-underline transition-transform hover:-translate-y-0.5"
-                  style={{ background: '#12121C', border: '1px solid rgba(255,255,255,0.07)', color: '#F4F4FA', display: 'block' }}
+                  style={{ background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)', color: '#191923', display: 'block' }}
                 >
                   <div className="flex items-center gap-2.5">
-                    <TokenPair baseLogo={p.baseLogo} quoteLogo={p.quoteLogo} baseSymbol={p.baseSymbol} quoteSymbol={p.quoteSymbol} size={26} ring="#12121C" />
+                    <TokenPair baseLogo={p.baseLogo} quoteLogo={p.quoteLogo} baseSymbol={p.baseSymbol} quoteSymbol={p.quoteSymbol} size={26} ring="#FFFFFF" />
                     <span className="font-semibold text-[14px] truncate">{pairName(p)}</span>
-                    <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={p.live ? { color: '#34D399', background: 'rgba(52,211,153,0.14)' } : { color: r.color, background: `${r.color}1A` }}>
+                    <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={p.live ? { color: '#16A34A', background: 'rgba(22,163,74,0.14)' } : { color: r.color, background: `${r.color}1A` }}>
                       {p.live ? 'Live' : r.label}
                     </span>
                   </div>
                   <div className="flex items-end justify-between mt-3">
                     <div>
-                      <div className="font-mono font-bold text-[19px]" style={{ color: p.estFeeAprPct != null ? '#34D399' : '#F4F4FA' }}>{aprFmt(p.estFeeAprPct)}</div>
-                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#63636F' }}>Est. Fee APR</div>
-                      {(() => { const y = projFeesYr(p, sim); return y != null ? <div className="font-mono text-[11px] mt-1" style={{ color: '#7E7E8C' }}>≈ {projFmt(y)}/yr on ${simStr}</div> : null })()}
+                      {/* No fee field upstream ⇒ lead with real 24h volume instead of an empty APR. */}
+                      <div className="font-mono font-bold text-[19px]" style={{ color: p.estFeeAprPct != null ? '#16A34A' : '#191923' }}>{p.estFeeAprPct != null ? aprFmt(p.estFeeAprPct) : usd(p.vol24Usd)}</div>
+                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>{p.estFeeAprPct != null ? 'Est. Fee APR' : '24h Volume'}</div>
+                      {(() => { const y = projFeesYr(p, sim); return y != null ? <div className="font-mono text-[11px] mt-1" style={{ color: '#6E6E80' }}>≈ {projFmt(y)}/yr on ${simStr}</div> : null })()}
                     </div>
                     <div className="text-right">
                       <div className="font-mono text-[13px]">{usd(p.tvlUsd)}</div>
-                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#63636F' }}>TVL</div>
+                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>TVL</div>
                     </div>
                   </div>
                 </Link>
@@ -172,25 +213,25 @@ export function V1Discover() {
       {/* controls: tabs + sort */}
       <div className="flex items-center justify-between gap-3 mt-7 flex-wrap">
         <div className="flex gap-1.5">
-          {([['all', 'All'], ['live', 'Live'], ['new', 'New']] as [Tab, string][]).map(([t, label]) => (
+          {([['all', 'All'], ['new', 'New']] as [Tab, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold cursor-pointer transition-colors"
-              style={tab === t ? { background: 'rgba(255,255,255,0.09)', color: '#F4F4FA' } : { color: '#9B9BAD' }}
+              style={tab === t ? { background: 'rgba(22,22,44,0.09)', color: '#191923' } : { color: '#494957' }}
             >
               {label}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] uppercase tracking-[0.06em] font-semibold mr-0.5" style={{ color: '#63636F' }}>Sort</span>
+          <span className="text-[11px] uppercase tracking-[0.06em] font-semibold mr-0.5" style={{ color: '#8A8A9E' }}>Sort</span>
           {SORTS.map(([k, label]) => (
             <button
               key={k}
               onClick={() => setSortKey(k)}
               className="px-2.5 py-1 max-[640px]:py-1.5 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
-              style={sortKey === k ? { background: 'rgba(138,130,244,0.16)', color: '#C9C6FF' } : { color: '#9B9BAD' }}
+              style={sortKey === k ? { background: 'rgba(138,130,244,0.16)', color: '#4C4CD6' } : { color: '#494957' }}
             >
               {label}
             </button>
@@ -199,25 +240,25 @@ export function V1Discover() {
       </div>
 
       {/* quality-filter note (Krystal's "showing pools ≥…" honesty line) */}
-      <div className="text-[11.5px] mt-2.5" style={{ color: '#4A4A55' }}>
-        Showing screened <span style={{ color: '#63636F' }}>Uniswap v4 · USDG-quoted</span> pools, risk-ranked — never auto-approved.
+      <div className="text-[11.5px] mt-2.5" style={{ color: '#A6A6B8' }}>
+        Showing screened <span style={{ color: '#8A8A9E' }}>Uniswap v4 · USDG-quoted</span> pools, risk-ranked — never auto-approved.
       </div>
 
       {/* earnings simulator */}
-      <div className="mt-4 rounded-[12px] px-4 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap" style={{ background: '#12121C', border: '1px solid rgba(138,130,244,0.2)' }}>
-        <span className="text-[12.5px] font-semibold" style={{ color: '#C9C6FF' }}>Earnings simulator</span>
-        <span className="text-[13px]" style={{ color: '#9B9BAD' }}>If I deposit</span>
-        <span className="inline-flex items-center rounded-[10px] px-2.5 py-1.5" style={{ background: '#0E0E16', border: '1px solid rgba(255,255,255,0.1)' }}>
-          <span className="mr-1 text-[13px]" style={{ color: '#63636F' }}>$</span>
+      <div className="mt-4 rounded-[12px] px-4 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap" style={{ background: 'rgba(255,255,255,0.62)', border: '1px solid rgba(138,130,244,0.2)' }}>
+        <span className="text-[12.5px] font-semibold" style={{ color: '#4C4CD6' }}>Earnings simulator</span>
+        <span className="text-[13px]" style={{ color: '#494957' }}>If I deposit</span>
+        <span className="inline-flex items-center rounded-[10px] px-2.5 py-1.5" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(22,22,44,0.1)' }}>
+          <span className="mr-1 text-[13px]" style={{ color: '#8A8A9E' }}>$</span>
           <input
             inputMode="decimal"
             aria-label="Deposit amount to simulate"
             value={simStr}
             onChange={(e) => setSimStr(e.target.value.replace(/[^0-9.,]/g, ''))}
             className="bg-transparent outline-none font-mono font-semibold text-[14.5px] w-[84px]"
-            style={{ color: '#F4F4FA' }}
+            style={{ color: '#191923' }}
           />
-          <span className="ml-1 text-[12px]" style={{ color: '#63636F' }}>USDG</span>
+          <span className="ml-1 text-[12px]" style={{ color: '#8A8A9E' }}>USDG</span>
         </span>
         <div className="flex gap-1.5">
           {['100', '1,000', '10,000'].map((v) => (
@@ -225,13 +266,13 @@ export function V1Discover() {
               key={v}
               onClick={() => setSimStr(v)}
               className="px-2.5 py-1 max-[640px]:py-1.5 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
-              style={simStr.replace(/[^0-9.]/g, '') === v.replace(/[^0-9.]/g, '') ? { background: 'rgba(138,130,244,0.16)', color: '#C9C6FF' } : { color: '#9B9BAD' }}
+              style={simStr.replace(/[^0-9.]/g, '') === v.replace(/[^0-9.]/g, '') ? { background: 'rgba(138,130,244,0.16)', color: '#4C4CD6' } : { color: '#494957' }}
             >
               ${v}
             </button>
           ))}
         </div>
-        <span className="text-[11.5px] max-[720px]:w-full min-[721px]:ml-auto" style={{ color: '#4A4A55' }}>
+        <span className="text-[11.5px] max-[720px]:w-full min-[721px]:ml-auto" style={{ color: '#A6A6B8' }}>
           → est. fees/yr per pool below · once fully deployed, gross of IL · an estimate, not a projection
         </span>
       </div>
@@ -239,9 +280,9 @@ export function V1Discover() {
       {/* table */}
       {/* the wide table keeps its columns and scrolls inside its own rounded box on mobile — the page never
           scrolls sideways, and the Pool identity column stays readable (min-w floor + horizontal scroll) */}
-      <div className="mt-3 rounded-[16px] overflow-x-auto" style={{ border: '1px solid rgba(255,255,255,0.07)', background: '#12121C' }}>
+      <GlassFrame className="mt-3" innerClassName="overflow-x-auto">
         <div className="grid items-center px-5 py-3 text-[11px] uppercase tracking-[0.07em] font-semibold min-w-[840px]"
-          style={{ gridTemplateColumns: COLS, color: '#63636F', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          style={{ gridTemplateColumns: COLS, color: '#8A8A9E', borderBottom: '1px solid rgba(22,22,44,0.06)' }}>
           <span>Pool</span>
           <span className="text-center">24h Trend</span>
           <span className="text-right">Est. APR</span>
@@ -265,70 +306,116 @@ export function V1Discover() {
             return (
               <Link
                 key={p.poolAddress}
-                href={`/markets/${slug(p)}`}
+                href={`/markets/${slug(p)}?pair=${encodeURIComponent(p.pairLabel)}`}
                 className="grid items-center px-5 py-4 no-underline transition-colors min-w-[840px]"
-                style={{ gridTemplateColumns: COLS, color: '#F4F4FA', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                style={{ gridTemplateColumns: COLS, color: '#191923', borderBottom: '1px solid rgba(22,22,44,0.05)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(22,22,44,0.03)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 <span className="flex items-center gap-3 min-w-0">
-                  <TokenPair baseLogo={p.baseLogo} quoteLogo={p.quoteLogo} baseSymbol={p.baseSymbol} quoteSymbol={p.quoteSymbol} ring="#12121C" />
+                  <TokenPair baseLogo={p.baseLogo} quoteLogo={p.quoteLogo} baseSymbol={p.baseSymbol} quoteSymbol={p.quoteSymbol} ring="#FFFFFF" />
                   <span className="min-w-0">
                     <span className="flex items-center gap-2">
                       <span className="font-semibold text-[15px] truncate">{pairName(p)}</span>
                       {p.feePct != null && (
-                        <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-[6px] shrink-0" style={{ color: '#9B9BAD', background: 'rgba(255,255,255,0.06)' }}>{p.feePct}%</span>
+                        <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-[6px] shrink-0" style={{ color: '#494957', background: 'rgba(22,22,44,0.06)' }}>{p.feePct}%</span>
                       )}
                     </span>
-                    <span className="font-mono text-[11px]" style={{ color: '#63636F' }}>{short(p.poolAddress)}</span>
+                    <span className="font-mono text-[11px]" style={{ color: '#8A8A9E' }}>{short(p.poolAddress)}</span>
                   </span>
                 </span>
                 <span className="flex justify-center"><Sparkline series={series[p.poolAddress]} /></span>
                 <span className="text-right leading-tight">
-                  <span className="font-mono text-[14px] font-semibold block" style={{ color: p.estFeeAprPct != null ? '#34D399' : '#63636F' }}>{aprFmt(p.estFeeAprPct)}</span>
-                  {(() => { const y = projFeesYr(p, sim); return y != null ? <span className="font-mono text-[11px] block mt-0.5" style={{ color: '#7E7E8C' }}>≈ {projFmt(y)}/yr</span> : null })()}
+                  <span className="font-mono text-[14px] font-semibold block" style={{ color: p.estFeeAprPct != null ? '#16A34A' : '#8A8A9E' }}>{aprFmt(p.estFeeAprPct)}</span>
+                  {(() => { const y = projFeesYr(p, sim); return y != null ? <span className="font-mono text-[11px] block mt-0.5" style={{ color: '#6E6E80' }}>≈ {projFmt(y)}/yr</span> : null })()}
                 </span>
                 <span className="text-right font-mono text-[14px]">{usd(p.vol24Usd)}</span>
                 <span className="text-right font-mono text-[14px]">{usd(p.tvlUsd)}</span>
-                <span className="text-right font-mono text-[13.5px]" style={{ color: '#9B9BAD' }}>
+                <span className="text-right font-mono text-[13.5px]" style={{ color: '#494957' }}>
                   {p.volTvlRatio != null ? `${p.volTvlRatio.toFixed(1)}×` : '—'}
                 </span>
                 <span className="flex justify-center">
                   <span className="text-[11.5px] font-semibold px-2 py-0.5 rounded-full" style={{ color: r.color, background: `${r.color}1A` }}>
-                    {r.label} · {p.riskScore}
+                    {r.label}{p.riskScore > 0 ? ` · ${p.riskScore}` : ''}
                   </span>
                 </span>
                 <span className="text-right whitespace-nowrap">
                   {p.live ? (
-                    <span className="text-[13.5px] font-semibold" style={{ color: '#8A82F4' }}>Deposit →</span>
+                    <span className="text-[13.5px] font-semibold" style={{ color: '#5A57DE' }}>Deposit →</span>
                   ) : (
-                    <span className="text-[12px] font-semibold" style={{ color: '#63636F' }}>Curating <span style={{ color: '#8A82F4' }}>›</span></span>
+                    <span className="text-[12px] font-semibold" style={{ color: '#8A8A9E' }}>Curating <span style={{ color: '#5A57DE' }}>›</span></span>
                   )}
                 </span>
               </Link>
             )
           })
         )}
-      </div>
+      </GlassFrame>
 
-      <p className="text-[12px] mt-5" style={{ color: '#63636F' }}>
-        Robinhood testnet · metrics live from GeckoTerminal · est. APR = trailing-24h fees ÷ TVL, annualized
+      <p className="text-[12px] mt-5" style={{ color: '#8A8A9E' }}>
+        Live markets read from chain (testnets, test tokens) · watchlist metrics live from GeckoTerminal (Robinhood mainnet) · est. APR = trailing-24h fees ÷ TVL, annualized
         (an estimate, not a projection) · the score ranks, humans curate.{' '}
-        <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
+        <Link href="/legal" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>
+  )
+}
+
+const CARD = { background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)' }
+
+function SectionHead({ title, tag, sub }: { title: string; tag: string; sub: string }) {
+  return (
+    <div className="mt-9">
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <h2 className="font-atx-display font-semibold text-[19px] tracking-[-0.02em]">{title}</h2>
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] px-2 py-0.5 rounded-full" style={{ color: '#5A57DE', background: 'rgba(138,130,244,0.14)' }}>{tag}</span>
+      </div>
+      <p className="text-[13px] mt-1" style={{ color: '#6E6E80' }}>{sub}</p>
+    </div>
+  )
+}
+
+function LiveMarketCard({ m }: { m: LiveMarket }) {
+  const chain = marketChain(m.chainId)
+  const pair = m.pairLabel ?? `${m.poolAddress.slice(0, 8)}…`
+  const [base, quote] = pair.split('/').map((x) => x.trim())
+  return (
+    <Link
+      href={`/markets/${encodeURIComponent(m.poolAddress)}?pair=${encodeURIComponent(pair)}`}
+      className="block rounded-[14px] p-4 no-underline transition-transform hover:-translate-y-0.5"
+      style={{ ...CARD, color: '#191923' }}
+    >
+      <div className="flex items-center gap-2.5">
+        <TokenPair baseLogo={null} quoteLogo={null} baseSymbol={base ?? pair} quoteSymbol={quote ?? ''} size={28} ring="#FFFFFF" />
+        <span className="font-semibold text-[15px] truncate">{pair}</span>
+        <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ color: '#16A34A', background: 'rgba(22,163,74,0.12)' }}>● Live</span>
+      </div>
+      <div className="flex items-end justify-between mt-4">
+        <div>
+          <div className="font-mono font-bold text-[20px]">{m.navQuote == null ? 'Reading…' : m.navQuote.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
+          <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>Market value{m.quoteSymbol ? ` · ${m.quoteSymbol}` : ''}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[12.5px] font-semibold">{chain?.short ?? `Chain ${m.chainId}`}</div>
+          <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>{m.feePct != null ? `${m.feePct}% fee · ` : ''}testnet</div>
+        </div>
+      </div>
+      <div className="mt-3 pt-3 text-[12.5px] font-semibold flex justify-between" style={{ borderTop: '1px solid rgba(22,22,44,0.06)', color: '#5A57DE' }}>
+        <span>{m.depositable ? 'Deposit or withdraw' : 'View market'}</span><span>→</span>
+      </div>
+    </Link>
   )
 }
 
 function Stat({ k, v }: { k: string; v: string }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{k}</div>
+      <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>{k}</div>
       <div className="font-mono font-bold text-[16px] mt-1">{v}</div>
     </div>
   )
 }
 
 function Msg({ children }: { children: React.ReactNode }) {
-  return <div className="px-5 py-8 text-[14px]" style={{ color: '#9B9BAD' }}>{children}</div>
+  return <div className="px-5 py-8 text-[14px]" style={{ color: '#494957' }}>{children}</div>
 }

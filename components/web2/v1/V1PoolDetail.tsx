@@ -29,6 +29,9 @@ import { createWalletClient, createPublicClient, custom, http, parseUnits, forma
 import { useAccount } from 'wagmi'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
+import { chainLabel, marketChain } from '@/lib/chains/marketChains'
+import type { LiveMarket } from '@/app/api/gateway/markets/route'
+import { GlassFrame } from './GlassFrame'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { buildGatewayDepositMessage, buildGatewayWithdrawMessage } from '@/lib/web3/signedActionMessages'
@@ -48,7 +51,7 @@ type Meta = {
   // is held ready but not yet earning, 'unknown' when the probe couldn't read it (never guess which).
   adapterKind?: 'idle' | 'real' | 'unknown'
 }
-type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; live: boolean }
+type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; feePct?: number | null; live: boolean }
 type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
 type Position = { shares: string; positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; recorded?: boolean; costBasisComplete?: boolean; history?: Snapshot[] }
 type PositionResponse = { position: Position; poolState: null; totalNav?: string; totalSupply?: string }
@@ -72,13 +75,13 @@ const fmtUnits = (a: bigint, decimals: number | null, symbol: string) =>
   decimals == null ? `${a.toString()} ${symbol} (raw units)` : `${Number(formatUnits(a, decimals)).toLocaleString('en-US', { maximumFractionDigits: 6 })} ${symbol}`
 const fmtShares = (a: bigint) => Number(formatUnits(a, 18)).toLocaleString('en-US', { maximumFractionDigits: 6 })
 
-const PANEL = { background: '#12121C', border: '1px solid rgba(255,255,255,0.07)' }
-const INNER = { background: '#0E0E16', border: '1px solid rgba(255,255,255,0.06)' }
+const PANEL = { background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)' }
+const INNER = { background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(22,22,44,0.06)' }
 
 function riskChip(score: number) {
-  if (score < 20) return { label: 'Low', color: '#34D399' }
-  if (score < 50) return { label: 'Med', color: '#F0B45E' }
-  return { label: 'High', color: '#F0736E' }
+  if (score < 20) return { label: 'Low', color: '#16A34A' }
+  if (score < 50) return { label: 'Med', color: '#B7791F' }
+  return { label: 'High', color: '#DC4A44' }
 }
 
 export function V1PoolDetail({ slug }: { slug: string }) {
@@ -88,6 +91,9 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const [meta, setMeta] = useState<Meta | null>(null)
   const [metaState, setMetaState] = useState<'loading' | 'ok' | 'not_live' | 'unavailable'>('loading')
   const [m, setM] = useState<Metrics | null>(null)
+  // Our own live market (registry + chain NAV) — the source of TVL for testnet markets, which no
+  // market-data site indexes.
+  const [live, setLive] = useState<LiveMarket | null>(null)
   const [pos, setPos] = useState<Position | null>(null)
   const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit')
   const [amount, setAmount] = useState('')
@@ -107,10 +113,12 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const searchParams = useSearchParams()
   const pmParam = searchParams.get('pm')
   const pmQuery = pmParam ? `&pm=${encodeURIComponent(pmParam)}` : ''
-  const pairLabel = m?.pairLabel ?? meta?.pairLabel ?? (decoded.startsWith('0x') ? 'Pool' : decoded.replace(/-/g, ' / ').toUpperCase())
+  // Discover passes the pair in the link (`?pair=`) so the header never falls back to a raw id.
+  const pairParam = searchParams.get('pair')
+  const pairLabel = m?.pairLabel ?? meta?.pairLabel ?? pairParam ?? (decoded.startsWith('0x') ? 'Unlisted pool' : decoded.replace(/-/g, ' / ').toUpperCase())
   const [base, quote] = useMemo(() => {
     const parts = pairLabel.split('/').map((s) => s.trim().replace(/\s*\d[\d.]*\s*%\s*$/, ''))
-    return [parts[0] || 'TOKEN', parts[1] || 'USDG']
+    return pairLabel.includes('/') ? [parts[0] || 'TOKEN', parts[1] || 'USDG'] : ['TOKEN', 'USDG']
   }, [pairLabel])
 
   useEffect(() => {
@@ -119,6 +127,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       if (r.ok && d?.success) { setMeta(d.meta); setMetaState('ok') }
       else { setMeta(null); setMetaState(r.status === 404 ? 'not_live' : 'unavailable') }
     }).catch(() => { setMeta(null); setMetaState('unavailable') })
+    fetch('/api/gateway/markets').then((r) => r.json()).then((d) => {
+      const list: LiveMarket[] = d?.success && Array.isArray(d.markets) ? d.markets : []
+      setLive(list.find((x) => x.poolAddress.toLowerCase() === decoded) ?? null)
+    }).catch(() => {})
     fetch('/api/gateway/discover').then((r) => r.json()).then((d) => {
       const list: Metrics[] = d?.success && Array.isArray(d.pools) ? d.pools : []
       setM(list.find((p) => p.poolAddress?.toLowerCase() === decoded) ?? list.find((p) => norm(p.pairLabel) === decoded) ?? null)
@@ -147,7 +159,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const feeRate = meta?.feePips != null ? meta.feePips / 1e6 : null
   const dayFeesUsd = feeRate != null && m ? m.vol24Usd * feeRate : null
   const estAprPct = feeRate != null && m && m.tvlUsd > 0 ? (m.vol24Usd * feeRate) / m.tvlUsd * 365 * 100 : null
-  const feeTierLabel = meta?.feePips != null ? `${(meta.feePips / 1e4).toFixed(2)}%` : meta?.dynamicFee ? 'Dynamic' : '—'
+  const feeTierLabel = meta?.feePips != null ? `${(meta.feePips / 1e4).toFixed(2)}%` : meta?.dynamicFee ? 'Dynamic' : m?.feePct != null ? `${m.feePct.toFixed(2)}%` : live?.feePct != null ? `${live.feePct.toFixed(2)}%` : 'Not published'
   // Fee-tier band (Krystal cost/vol read): ≤0.05 low · 0.05–0.30 standard · >0.30 high.
   const feePct = meta?.feePips != null ? meta.feePips / 1e4 : null
   const feeBand = feePct == null ? '' : feePct <= 0.05 ? ' · low' : feePct <= 0.3 ? ' · standard' : ' · high'
@@ -194,7 +206,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     return (await connector.getProvider()) as import('viem').EIP1193Provider
   }
   function chainObj(mm: Meta) {
-    const name = mm.chainId === 84532 ? 'Base Sepolia' : mm.chainId === 46630 ? 'Robinhood Chain Testnet' : `Chain ${mm.chainId}`
+    const name = chainLabel(mm.chainId)
     return { id: mm.chainId, name, nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [mm.rpcUrl] } } } as const
   }
   async function ensureChain(eth: Awaited<ReturnType<typeof getSignerProvider>>, mm: Meta) {
@@ -341,8 +353,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   }
   function cancelReview() { setReview(null); setStatus('idle'); setErr('') }
 
+  // The quote token's symbol (USDG on Robinhood, USDC on Base) — never assume USDG.
+  const quoteSym = live?.quoteSymbol ?? (quote && quote !== 'TOKEN' ? quote : 'USDG')
   const stepLabel: Record<Status, string> = {
-    idle: '', quote: 'Pricing…', review: 'Confirm', switch: 'Confirm network…', approve: 'Approve USDG…', deposit: 'Depositing…', withdraw: 'Withdrawing…',
+    idle: '', quote: 'Pricing…', review: 'Confirm', switch: 'Confirm network…', approve: `Approve ${quoteSym}…`, deposit: 'Depositing…', withdraw: 'Withdrawing…',
     record: 'Confirmed on-chain · recording…', recorded: 'Recorded ✓', record_failed: 'Retry recording',
   }
   const depBtn = !isConnected ? 'Connect Wallet' : status === 'idle' ? 'Review deposit' : status === 'review' ? 'Confirm deposit' : status === 'recorded' ? 'Deposited · recorded ✓' : stepLabel[status]
@@ -350,86 +364,94 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const chip = m ? riskChip(m.riskScore) : null
   const pairedSym = m?.baseSymbol ?? base
 
-  const liveChip = meta?.live
-    ? { text: 'Live', style: { color: '#34D399', background: 'rgba(52,211,153,0.12)' } }
+  // A registry market on a chain this deployment doesn't route deposits through still IS live — label it so.
+  const chainId = meta?.chainId ?? live?.chainId ?? null
+  const otherChainLive = metaState === 'not_live' && live != null
+  const liveChip = meta?.live || otherChainLive
+    ? { text: 'Live', style: { color: '#16A34A', background: 'rgba(22,163,74,0.12)' } }
     : isDevRig
-      ? { text: 'Single-instance dev rig', style: { color: '#F0B45E', background: 'rgba(240,180,94,0.12)' } }
+      ? { text: 'Single-instance dev rig', style: { color: '#B7791F', background: 'rgba(194,122,0,0.12)' } }
       : metaState === 'not_live'
-        ? { text: 'Not live', style: { color: '#9B9BAD', background: 'rgba(255,255,255,0.06)' } }
-        : { text: 'Curating', style: { color: '#9B9BAD', background: 'rgba(255,255,255,0.06)' } }
+        ? { text: 'Not live', style: { color: '#494957', background: 'rgba(22,22,44,0.06)' } }
+        : { text: 'Curating', style: { color: '#494957', background: 'rgba(22,22,44,0.06)' } }
 
   return (
     <div>
-      <Link href="/v1" className="text-[13px] no-underline" style={{ color: '#9B9BAD' }}>← Discover</Link>
+      <Link href="/v1" className="text-[13px] no-underline" style={{ color: '#494957' }}>← Discover</Link>
 
       {/* header */}
       <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <TokenPair baseLogo={m?.baseLogo ?? null} quoteLogo={m?.quoteLogo ?? null} baseSymbol={m?.baseSymbol ?? base} quoteSymbol={m?.quoteSymbol ?? quote} size={36} ring="#0B0B14" />
+            <TokenPair baseLogo={m?.baseLogo ?? null} quoteLogo={m?.quoteLogo ?? null} baseSymbol={m?.baseSymbol ?? base} quoteSymbol={m?.quoteSymbol ?? quote} size={36} ring="#FFFFFF" />
             <h1 className="font-atx-display font-semibold tracking-[-0.03em] text-[28px]">{pairLabel}</h1>
           </div>
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-            <Tag>Uniswap V4</Tag><Tag>Curated</Tag><Tag>Robinhood Testnet</Tag>
+            <Tag>Uniswap V4</Tag><Tag>Curated</Tag><Tag>{chainId != null ? chainLabel(chainId) : 'Robinhood mainnet'}</Tag>
             <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={liveChip.style}>{liveChip.text}</span>
             {meta?.inRange != null && (
-              <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={meta.inRange ? { color: '#34D399', background: 'rgba(52,211,153,0.12)' } : { color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>
+              <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={meta.inRange ? { color: '#16A34A', background: 'rgba(22,163,74,0.12)' } : { color: '#B7791F', background: 'rgba(194,122,0,0.12)' }}>
                 {meta.inRange ? 'In range · earning fees' : 'Out of range · fees paused'}
               </span>
             )}
           </div>
         </div>
-        <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
-          <div className="font-mono font-bold text-[22px]" style={{ color: '#8A82F4' }}>{aprLabel ?? (m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(1)}×` : '—')}</div>
-          <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{aprLabel ? 'Est. Fee APR · 24h' : '24h Vol / TVL'}</div>
-        </div>
+        {(aprLabel || m?.volTvlRatio != null) && (
+          <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
+            <div className="font-mono font-bold text-[22px]" style={{ color: '#5A57DE' }}>{aprLabel ?? `${m!.volTvlRatio!.toFixed(1)}×`}</div>
+            <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>{aprLabel ? 'Est. Fee APR · 24h' : '24h Vol / TVL'}</div>
+          </div>
+        )}
       </div>
 
       {isDevRig && (
-        <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
+        <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(194,122,0,0.1)', border: '1px solid rgba(194,122,0,0.25)', color: '#B7791F' }}>
           <span style={{ fontWeight: 600 }}>Single-instance dev rig.</span>{' '}
-          <span style={{ color: '#9B9BAD' }}>No curated instances are registered yet. This view uses a configured MarketEngine ({shortId(meta!.positionManager)}); it is not currently registered for deposits.</span>
+          <span style={{ color: '#494957' }}>No curated instances are registered yet. This view uses a configured MarketEngine ({shortId(meta!.positionManager)}); it is not currently registered for deposits.</span>
         </div>
       )}
-      {metaState === 'not_live' && (
-        <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#9B9BAD' }}>
-          This pool has no active MarketEngine — nothing here accepts funds.{' '}
-          <Link href="/v1" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Pick a live pool from Discover →</Link>
+      {metaState === 'not_live' && !otherChainLive && (
+        <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(22,22,44,0.04)', border: '1px solid rgba(22,22,44,0.08)', color: '#494957' }}>
+          This pool is still in curation — no market is open on it yet.{' '}
+          <Link href="/v1" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Pick a live pool from Discover →</Link>
         </div>
       )}
 
       <div className="grid gap-5 mt-6 grid-cols-1 min-[900px]:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]">
         {/* LEFT: pool info */}
-        <div className="rounded-[16px] p-6 min-[900px]:order-1 order-2" style={PANEL}>
-          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>Total Value Locked</div>
-          <div className="font-mono font-bold text-[30px] mt-1.5">{m ? usd(m.tvlUsd) : '—'}</div>
-          <div className="text-[12.5px] mt-1" style={{ color: '#8A82F4' }}>Curated + spun up by Mintware</div>
+        <GlassFrame className="min-[900px]:order-1 order-2" innerClassName="p-6">
+          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#8A8A9E' }}>{m ? 'Total Value Locked' : 'Market value'}</div>
+          <div className="font-mono font-bold text-[30px] mt-1.5">{m ? usd(m.tvlUsd) : live?.navQuote != null ? `${live.navQuote.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${live.quoteSymbol ?? ''}` : '—'}</div>
+          <div className="text-[12.5px] mt-1" style={{ color: '#5A57DE' }}>Curated + spun up by Mintware</div>
 
           {/* allocation */}
-          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold mt-6" style={{ color: '#63636F' }}>How your USDG is put to work</div>
+          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold mt-6" style={{ color: '#8A8A9E' }}>How your {quoteSym} is put to work</div>
           <div className="flex h-4 rounded-full overflow-hidden mt-3">
             <span style={{ width: '100%', background: 'linear-gradient(90deg,#8A82F4,#6C6CF0)' }} />
           </div>
           <div className="flex flex-col gap-2 mt-3 text-[13px]">
-            <AllocRow color="#8A82F4" label={`MarketEngine portfolio · ${base}/${quote}`} sub="resting v4 liquidity plus token adapters" pct="100%" />
+            <AllocRow color="#5A57DE" label={`MarketEngine portfolio · ${base}/${quote}`} sub="resting v4 liquidity plus token adapters" pct="100%" />
           </div>
           <div className="relative h-9 mt-4 rounded-[10px] overflow-hidden" style={INNER}>
             <div className="absolute inset-y-0" style={{ left: '12%', right: '12%', background: 'linear-gradient(180deg,rgba(138,130,244,0.28),rgba(138,130,244,0.08))', borderLeft: '2px solid rgba(138,130,244,0.5)', borderRight: '2px solid rgba(138,130,244,0.5)' }} />
-            <div className="absolute inset-y-0" style={{ left: '50%', width: '2px', background: '#F4F4FA' }} />
+            <div className="absolute inset-y-0" style={{ left: '50%', width: '2px', background: '#191923' }} />
           </div>
-          <div className="text-[11.5px] mt-1.5" style={{ color: '#63636F' }}>The engine holds a resting v4 band and can recenter it under guarded lifecycle rules. Liquidity positions carry impermanent loss.</div>
+          <div className="text-[11.5px] mt-1.5" style={{ color: '#8A8A9E' }}>The engine holds a resting v4 band and can recenter it under guarded lifecycle rules. Liquidity positions carry impermanent loss.</div>
 
           {/* metadata rows */}
           <div className="mt-6 flex flex-col">
-            <Meta2 k="Current Pool Price" v={m?.priceQuotePerBase != null ? `1 ${base} ≈ ${m.priceQuotePerBase < 0.01 ? m.priceQuotePerBase.toPrecision(3) : m.priceQuotePerBase.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${quote}` : '—'} />
-            <Meta2 k="24h Volume" v={m ? usd(m.vol24Usd) : '—'} />
             <Meta2 k="Fee tier" v={feeTierLabel + feeBand} />
-            <Meta2 k="24h Fees (est)" v={dayFeesUsd != null ? usd(dayFeesUsd) : '—'} />
-            <Meta2 k="Est. Fee APR · 24h, gross of IL" v={aprLabel ?? '—'} />
-            <Meta2 k="Activity (Vol / TVL)" v={m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(2)}×` : '—'} />
-            <Meta2 k="24h Trades" v={m?.txCount24 != null ? m.txCount24.toLocaleString() : '—'} />
-            <Meta2 k="Pool age" v={m?.poolAgeDays != null ? `${m.poolAgeDays}d` : '—'} />
-            <Meta2 k="Network" v="Robinhood Testnet (46630)" />
+            {/* Market-data rows come from the mainnet feed; a testnet market has none, so they are omitted, not dashed. */}
+            {m && <>
+              <Meta2 k="Current Pool Price" v={m?.priceQuotePerBase != null ? `1 ${base} ≈ ${m.priceQuotePerBase < 0.01 ? m.priceQuotePerBase.toPrecision(3) : m.priceQuotePerBase.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${quote}` : '—'} />
+              <Meta2 k="24h Volume" v={m ? usd(m.vol24Usd) : '—'} />
+              <Meta2 k="24h Fees (est)" v={dayFeesUsd != null ? usd(dayFeesUsd) : '—'} />
+              <Meta2 k="Est. Fee APR · 24h, gross of IL" v={aprLabel ?? '—'} />
+              <Meta2 k="Activity (Vol / TVL)" v={m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(2)}×` : '—'} />
+              <Meta2 k="24h Trades" v={m?.txCount24 != null ? m.txCount24.toLocaleString() : '—'} />
+              <Meta2 k="Pool age" v={m?.poolAgeDays != null ? `${m.poolAgeDays}d` : '—'} />
+            </>}
+            <Meta2 k="Network" v={chainId != null ? `${chainLabel(chainId)} (${chainId})` : 'Robinhood mainnet (watchlist)'} />
             <Meta2 k="Pool ID" v={shortId(meta?.poolAddress ?? m?.poolAddress ?? decoded)} mono />
             {meta && <Meta2 k="MarketEngine" v={`${shortId(meta.engineAddress ?? meta.positionManager)} · ${meta.source === 'registry' ? 'registry-verified' : 'env-configured'}`} mono />}
           </div>
@@ -438,50 +460,63 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           {chip && (
             <div className="mt-5 rounded-[12px] p-3.5" style={INNER}>
               <div className="flex items-center gap-2">
-                <span className="text-[12px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Trust</span>
+                <span className="text-[12px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>Trust</span>
                 <span className="text-[11.5px] font-semibold px-2 py-0.5 rounded-full" style={{ color: chip.color, background: `${chip.color}1A` }}>{chip.label} · {m!.riskScore}</span>
               </div>
-              {m!.reasons.length > 0 && <div className="text-[12px] mt-2 leading-[1.5]" style={{ color: '#9B9BAD' }}>{m!.reasons.join(' · ')}</div>}
-              <div className="text-[11px] mt-2" style={{ color: '#63636F' }}>The score ranks the queue; it never certifies safety — a human curates every pool.</div>
+              {m!.reasons.length > 0 && <div className="text-[12px] mt-2 leading-[1.5]" style={{ color: '#494957' }}>{m!.reasons.join(' · ')}</div>}
+              <div className="text-[11px] mt-2" style={{ color: '#8A8A9E' }}>The score ranks the queue; it never certifies safety — a human curates every pool.</div>
             </div>
           )}
 
           {/* explorers */}
           {(meta || m) && (() => {
             const id = meta?.poolAddress ?? m!.poolAddress
-            const explorerBase = meta?.chainId === 84532 ? 'https://sepolia.basescan.org' : meta?.chainId === 46630 ? 'https://robinhoodchain.blockscout.com' : null
+            const explorerBase = marketChain(meta?.chainId)?.explorer ?? null
             return (
               <div className="flex gap-3 mt-5 flex-wrap text-[12.5px]">
-                {meta && explorerBase && <a href={`${explorerBase}/address/${meta.positionManager}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Gateway on Explorer ↗</a>}
-                <a href={`https://www.geckoterminal.com/robinhood/pools/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>GeckoTerminal ↗</a>
-                <a href={`https://dexscreener.com/robinhood/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>DEXScreener ↗</a>
+                {meta && explorerBase && <a href={`${explorerBase}/address/${meta.positionManager}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>MarketEngine on Explorer ↗</a>}
+                {/* Market-data sites index Robinhood mainnet only; a testnet market has no page there. */}
+                {!meta && <a href={`https://www.geckoterminal.com/robinhood/pools/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>GeckoTerminal ↗</a>}
+                {!meta && <a href={`https://dexscreener.com/robinhood/${id}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#5A57DE', fontWeight: 600 }}>DEXScreener ↗</a>}
               </div>
             )
           })()}
-        </div>
+        </GlassFrame>
 
         {/* RIGHT: action panel */}
+        {metaState === 'not_live' && !hasPos ? (
+          <div className="rounded-[16px] p-6 min-[900px]:order-2 order-1 self-start" style={PANEL}>
+            <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>Status</div>
+            <div className="font-atx-display font-semibold text-[20px] mt-1.5">{otherChainLive ? `Live on ${chainLabel(chainId)}` : 'In curation'}</div>
+            <p className="text-[13px] leading-[1.6] mt-2" style={{ color: '#494957' }}>
+              {otherChainLive
+                ? 'This market is live and verified on-chain. Deposits from this app open for its network shortly.'
+                : 'Mintware screens a pool on depth, age and real trading before a market opens on it. This one is on the watchlist; deposits open once its market is live.'}
+            </p>
+            <Link href="/v1" className="inline-flex mt-4 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#5A57DE' }}>Browse live markets →</Link>
+          </div>
+        ) : (
         <div className="flex flex-col gap-5 min-[900px]:order-2 order-1">
           {/* position summary */}
           <div className="rounded-[16px] p-5" style={PANEL}>
             <Sum k="Position value" v={usdg(pos?.positionValueAtomic)} />
             {hasPos && pos?.recorded === false && (
-              <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#F0B45E' }}>
+              <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#B7791F' }}>
                 Position read from chain; its deposit was never recorded here, so cost basis and P&amp;L are unknown. Your funds are unaffected.
               </div>
             )}
             {hasPos && pos?.recorded !== false && pos?.costBasisComplete === false && (
-              <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#F0B45E' }}>
+              <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#B7791F' }}>
                 Cost basis may be incomplete — some of your earlier history for this pool is still being recovered. The figures below reflect only what&apos;s currently attributed. Your funds are unaffected.
               </div>
             )}
             {hasPos && pos?.costBasisAtomic != null && (
-              <div className="mt-4 pt-4 flex flex-col gap-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="mt-4 pt-4 flex flex-col gap-1.5" style={{ borderTop: '1px solid rgba(22,22,44,0.06)' }}>
                 <div className="flex justify-between items-baseline text-[13px]">
-                  <span style={{ color: '#9B9BAD' }}>Net vs your deposit <span style={{ color: '#63636F' }}>({usdg(pos.costBasisAtomic)} in)</span></span>
+                  <span style={{ color: '#494957' }}>Net vs your deposit <span style={{ color: '#8A8A9E' }}>({usdg(pos.costBasisAtomic)} in)</span></span>
                   {(() => {
                     const up = num(pos.unrealizedPnlAtomic) >= 0
-                    return <span className="font-mono font-bold" style={{ color: up ? '#34D399' : '#F0736E' }}>{up ? '+' : ''}{usdg(pos.unrealizedPnlAtomic)}</span>
+                    return <span className="font-mono font-bold" style={{ color: up ? '#16A34A' : '#DC4A44' }}>{up ? '+' : ''}{usdg(pos.unrealizedPnlAtomic)}</span>
                   })()}
                 </div>
                 {(() => {
@@ -491,8 +526,8 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                   const up = d7 >= 0
                   return (
                     <div className="flex justify-between items-baseline text-[12px]">
-                      <span style={{ color: '#63636F' }}>Change · 7d</span>
-                      <span className="font-mono" style={{ color: up ? '#34D399' : '#F0736E' }}>{up ? '+' : ''}${Math.abs(d7).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span style={{ color: '#8A8A9E' }}>Change · 7d</span>
+                      <span className="font-mono" style={{ color: up ? '#16A34A' : '#DC4A44' }}>{up ? '+' : ''}${Math.abs(d7).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   )
                 })()}
@@ -504,172 +539,173 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="rounded-[16px] p-5" style={PANEL}>
             <div className="flex gap-1.5 mb-4">
               {(['deposit', 'withdraw'] as const).map((t) => (
-                <button key={t} onClick={() => { if (busy) return; setTab(t); setErr(''); setReview(null); if (status !== 'record_failed') setStatus('idle') }} className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold cursor-pointer capitalize" style={tab === t ? { background: 'rgba(255,255,255,0.09)', color: '#F4F4FA' } : { color: '#9B9BAD' }}>{t}</button>
+                <button key={t} onClick={() => { if (busy) return; setTab(t); setErr(''); setReview(null); if (status !== 'record_failed') setStatus('idle') }} className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold cursor-pointer capitalize" style={tab === t ? { background: 'rgba(22,22,44,0.09)', color: '#191923' } : { color: '#494957' }}>{t}</button>
               ))}
-              <Link href="/v1/swap" className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold no-underline" style={{ color: '#9B9BAD' }}>Swap ↗</Link>
+              <Link href="/v1/swap" className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold no-underline" style={{ color: '#494957' }}>Swap ↗</Link>
             </div>
 
             {/* O-1: a failed record is surfaced with a retry — never hidden behind a ✓ */}
             {status === 'record_failed' && pending && (
-              <div className="mb-3 rounded-[12px] p-3.5 text-[12.5px] leading-[1.5]" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
+              <div className="mb-3 rounded-[12px] p-3.5 text-[12.5px] leading-[1.5]" style={{ background: 'rgba(194,122,0,0.1)', border: '1px solid rgba(194,122,0,0.25)', color: '#B7791F' }}>
                 <div style={{ fontWeight: 600 }}>{pending.kind === 'deposit' ? 'Deposited on-chain' : 'Withdrawn on-chain'} — not yet recorded here.</div>
-                <div style={{ color: '#9B9BAD' }} className="mt-1">Your funds are safe on-chain (tx {shortId(pending.txHash)}). Recording only updates your cost basis on this dashboard.</div>
-                <button onClick={retryRecord} className="mt-2.5 text-[12.5px] font-semibold px-3 py-1.5 rounded-[10px] cursor-pointer" style={{ background: 'rgba(240,180,94,0.18)', color: '#F4F4FA' }}>Retry recording</button>
+                <div style={{ color: '#494957' }} className="mt-1">Your funds are safe on-chain (tx {shortId(pending.txHash)}). Recording only updates your cost basis on this dashboard.</div>
+                <button onClick={retryRecord} className="mt-2.5 text-[12.5px] font-semibold px-3 py-1.5 rounded-[10px] cursor-pointer" style={{ background: 'rgba(194,122,0,0.18)', color: '#191923' }}>Retry recording</button>
               </div>
             )}
 
             {tab === 'deposit' ? (
               <>
                 <div className="rounded-[14px] p-4" style={INNER}>
-                  <div className="flex justify-between text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}><span>Enter amount</span><span>USDG</span></div>
-                  <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => { setAmount(sanitizeAmountInput(e.target.value)); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="bg-transparent outline-none font-mono font-bold text-[26px] w-full mt-2" style={{ color: '#F4F4FA' }} />
+                  <div className="flex justify-between text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}><span>Enter amount</span><span>{quoteSym}</span></div>
+                  <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => { setAmount(sanitizeAmountInput(e.target.value)); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="bg-transparent outline-none font-mono font-bold text-[26px] w-full mt-2" style={{ color: '#191923' }} />
                 </div>
                 {Number(amount) > 0 && estAprPct != null && status !== 'review' && (
                   <div className="mt-3 rounded-[12px] p-3" style={INNER}>
                     <div className="flex justify-between text-[12.5px]">
-                      <span style={{ color: '#9B9BAD' }}>Est. fees / yr at current pace</span>
-                      <span className="font-mono font-bold" style={{ color: '#34D399' }}>~{usd(Number(amount) * (estAprPct / 100))}</span>
+                      <span style={{ color: '#494957' }}>Est. fees / yr at current pace</span>
+                      <span className="font-mono font-bold" style={{ color: '#16A34A' }}>~{usd(Number(amount) * (estAprPct / 100))}</span>
                     </div>
-                    <div className="text-[11px] mt-1.5 leading-[1.5]" style={{ color: '#63636F' }}>
+                    <div className="text-[11px] mt-1.5 leading-[1.5]" style={{ color: '#8A8A9E' }}>
                       On your full deposit once deployed, at the trailing-24h fee rate — an estimate, not a projection. Fees are gross of impermanent loss; 100% of any IL is yours.
                     </div>
                   </div>
                 )}
                 {status === 'review' && review?.kind === 'deposit' && (
                   <div className="mt-3 rounded-[12px] p-3.5" style={{ ...INNER, border: '1px solid rgba(138,130,244,0.35)' }}>
-                    <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A82F4' }}>Review</div>
+                    <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#5A57DE' }}>Review</div>
                     <Row k="You send" v={usdg(review.amountAtomic)} />
                     <Row k="Est. shares (current NAV)" v={review.withMin ? fmtShares(review.estShares) : '— (no live pool state)'} />
                     {review.withMin ? (
                       <Row k={`Min. shares floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={fmtShares(review.minShares)} accent />
                     ) : (
-                      <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#F0B45E' }}>This deployment has no slippage-bounded deposit — the transaction has no floor. Proceed only if you accept that.</div>
+                      <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#B7791F' }}>This deployment has no slippage-bounded deposit — the transaction has no floor. Proceed only if you accept that.</div>
                     )}
-                    <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#63636F' }}>
-                      Shares are an estimate off the current block. {review.withMin ? 'If fewer than the floor would be minted, the transaction reverts and nothing moves.' : ''} Approve USDG, then deposit.
+                    <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#8A8A9E' }}>
+                      Shares are an estimate off the current block. {review.withMin ? 'If fewer than the floor would be minted, the transaction reverts and nothing moves.' : ''} Approve {quoteSym}, then deposit.
                     </div>
                   </div>
                 )}
                 <div className="flex gap-2 mt-3.5">
-                  {status === 'review' && <button onClick={cancelReview} className="text-[14px] font-semibold py-3.5 px-4 rounded-[14px] cursor-pointer" style={{ background: 'rgba(255,255,255,0.06)', color: '#9B9BAD' }}>Back</button>}
+                  {status === 'review' && <button onClick={cancelReview} className="text-[14px] font-semibold py-3.5 px-4 rounded-[14px] cursor-pointer" style={{ background: 'rgba(22,22,44,0.06)', color: '#494957' }}>Back</button>}
                   <button
                     onClick={status === 'review' ? confirmDeposit : status === 'record_failed' ? retryRecord : reviewDeposit}
                     disabled={busy || (isConnected && !canDeposit && status !== 'record_failed')}
                     className="flex-1 text-[14px] font-semibold py-3.5 rounded-[14px] cursor-pointer disabled:cursor-default"
-                    style={busy || (isConnected && !canDeposit && status !== 'record_failed') ? { background: 'rgba(255,255,255,0.06)', color: '#9B9BAD' } : { background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', color: '#fff', boxShadow: '0 6px 20px rgba(108,108,240,0.35)' }}
+                    style={busy || (isConnected && !canDeposit && status !== 'record_failed') ? { background: 'rgba(22,22,44,0.06)', color: '#494957' } : { background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', color: '#fff', boxShadow: '0 6px 20px rgba(108,108,240,0.35)' }}
                   >
                     {isConnected && !canDeposit && status !== 'record_failed' ? (metaState === 'loading' ? 'Loading…' : 'Not live for deposits') : depBtn}
                   </button>
                 </div>
-                <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#9B9BAD' }}><span>Locks anything?</span><span style={{ color: '#34D399', fontWeight: 600 }}>No — withdraw anytime</span></div>
+                <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#494957' }}><span>Locks anything?</span><span style={{ color: '#16A34A', fontWeight: 600 }}>No — withdraw anytime</span></div>
               </>
             ) : (
               <>
                 <div className="rounded-[14px] p-4" style={INNER}>
-                  <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Withdraw</div>
+                  <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>Withdraw</div>
                   <div className="flex gap-2 mt-3">
                     {[25, 50, 100].map((p) => (
-                      <button key={p} onClick={() => { setWpct(p); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="flex-1 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer" style={wpct === p ? { background: 'rgba(138,130,244,0.18)', color: '#F4F4FA', border: '1px solid rgba(138,130,244,0.4)' } : { background: 'transparent', color: '#9B9BAD', border: '1px solid rgba(255,255,255,0.1)' }}>{p === 100 ? 'Max' : `${p}%`}</button>
+                      <button key={p} onClick={() => { setWpct(p); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="flex-1 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer" style={wpct === p ? { background: 'rgba(138,130,244,0.18)', color: '#191923', border: '1px solid rgba(138,130,244,0.4)' } : { background: 'transparent', color: '#494957', border: '1px solid rgba(22,22,44,0.1)' }}>{p === 100 ? 'Max' : `${p}%`}</button>
                     ))}
                   </div>
-                  <div className="text-[12px] mt-3" style={{ color: '#9B9BAD' }}>Returns your pro-rata share of both legs at the current price (subject to impermanent loss).</div>
+                  <div className="text-[12px] mt-3" style={{ color: '#494957' }}>Returns your pro-rata share of both legs at the current price (subject to impermanent loss).</div>
                 </div>
                 {status === 'review' && review?.kind === 'withdraw' && (
                   <div className="mt-3 rounded-[12px] p-3.5" style={{ ...INNER, border: '1px solid rgba(138,130,244,0.35)' }}>
-                    <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A82F4' }}>Review</div>
+                    <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#5A57DE' }}>Review</div>
                     <Row k="Shares to burn" v={fmtShares(review.sharesToBurn)} />
                     {review.withMin ? (
                       <>
-                        <Row k="Est. USDG out" v={usdg(review.estQuote)} />
-                        <Row k={`Min. USDG floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={usdg(review.minQuote)} accent />
+                        <Row k={`Est. ${quoteSym} out`} v={usdg(review.estQuote)} />
+                        <Row k={`Min. ${quoteSym} floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={usdg(review.minQuote)} accent />
                         <Row k={`Est. ${pairedSym} out`} v={review.lpQuotable ? fmtUnits(review.estPaired, meta?.pairedDecimals ?? null, pairedSym) : 'unquotable (spot unreadable)'} />
                         <Row k={`Min. ${pairedSym} floor`} v={review.lpQuotable ? fmtUnits(review.minPaired, meta?.pairedDecimals ?? null, pairedSym) : 'none set'} accent />
-                        <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#63636F' }}>
+                        <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#8A8A9E' }}>
                           Estimates off the current block; the on-chain floors are the protection. If the pool can’t deliver at least the floors, the transaction reverts and nothing moves.
                           {!review.lpQuotable && ' The LP leg could not be priced, so its floor is 0 — only the idle leg is protected on this attempt.'}
                         </div>
                       </>
                     ) : (
-                      <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#F0B45E' }}>This deployment has no slippage-bounded withdraw — the transaction has no floor. Proceed only if you accept that.</div>
+                      <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#B7791F' }}>This deployment has no slippage-bounded withdraw — the transaction has no floor. Proceed only if you accept that.</div>
                     )}
                   </div>
                 )}
                 <div className="flex gap-2 mt-3.5">
-                  {status === 'review' && <button onClick={cancelReview} className="text-[14px] font-semibold py-3.5 px-4 rounded-[14px] cursor-pointer" style={{ background: 'rgba(255,255,255,0.06)', color: '#9B9BAD' }}>Back</button>}
+                  {status === 'review' && <button onClick={cancelReview} className="text-[14px] font-semibold py-3.5 px-4 rounded-[14px] cursor-pointer" style={{ background: 'rgba(22,22,44,0.06)', color: '#494957' }}>Back</button>}
                   <button
                     onClick={status === 'review' ? confirmWithdraw : status === 'record_failed' ? retryRecord : reviewWithdraw}
                     disabled={busy || (!hasPos && status !== 'record_failed')}
                     className="flex-1 text-[14px] font-semibold py-3.5 rounded-[14px] cursor-pointer disabled:cursor-default"
-                    style={busy || (!hasPos && status !== 'record_failed') ? { background: 'rgba(255,255,255,0.06)', color: '#9B9BAD' } : { background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', color: '#fff' }}
+                    style={busy || (!hasPos && status !== 'record_failed') ? { background: 'rgba(22,22,44,0.06)', color: '#494957' } : { background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', color: '#fff' }}
                   >
                     {!hasPos && status !== 'record_failed' ? 'No position' : wBtn}
                   </button>
                 </div>
               </>
             )}
-            {err && <div className="text-[12.5px] mt-2.5 leading-[1.5]" style={{ color: '#F0736E' }}>{err}</div>}
+            {err && <div className="text-[12.5px] mt-2.5 leading-[1.5]" style={{ color: '#DC4A44' }}>{err}</div>}
           </div>
 
           {/* the loop */}
           <div className="rounded-[16px] p-5" style={PANEL}>
-            <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>The loop</div>
+            <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#8A8A9E' }}>The loop</div>
             <div className="flex flex-col gap-3 mt-3">
               <Loop n="01" t="Deposit into the engine" d="Deposit one or both pool tokens with a minimum-shares floor; shares are valued in the quote asset." />
-              <Loop n="02" t="Liquidity plus adapters" d="The portfolio is held across a resting v4 band and per-token adapters. Robinhood testnet adapters hold assets ready without earning yield." />
+              <Loop n="02" t="Liquidity plus adapters" d="The portfolio is held across a resting v4 band and per-token adapters. On testnet the adapters hold assets ready without earning yield." />
               <Loop n="03" t="Withdraw in kind" d="Withdraw pro-rata in both pool tokens, with minimum-output limits." />
             </div>
           </div>
         </div>
+        )}
       </div>
 
-      <p className="text-[12px] mt-6" style={{ color: '#63636F' }}>
-        Robinhood Chain testnet · unaudited · metrics from GeckoTerminal · every figure above is an estimate, not a projection ·{' '}
-        <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
+      <p className="text-[12px] mt-6" style={{ color: '#8A8A9E' }}>
+        {chainId != null ? chainLabel(chainId) : 'Robinhood Chain mainnet'} · unaudited · {m ? 'metrics from GeckoTerminal' : 'values read from chain'} · every figure above is an estimate, not a projection ·{' '}
+        <Link href="/legal" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>
   )
 }
 
 function Tag({ children }: { children: React.ReactNode }) {
-  return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ color: '#9B9BAD', background: 'rgba(255,255,255,0.05)' }}>{children}</span>
+  return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ color: '#494957', background: 'rgba(22,22,44,0.05)' }}>{children}</span>
 }
 function Meta2({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
   return (
-    <div className="flex justify-between items-center py-2.5 text-[13px]" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-      <span style={{ color: '#9B9BAD' }}>{k}</span>
-      <span className={mono ? 'font-mono' : 'font-medium'} style={{ color: '#F4F4FA' }}>{v}</span>
+    <div className="flex justify-between items-center py-2.5 text-[13px]" style={{ borderTop: '1px solid rgba(22,22,44,0.05)' }}>
+      <span style={{ color: '#494957' }}>{k}</span>
+      <span className={mono ? 'font-mono' : 'font-medium'} style={{ color: '#191923' }}>{v}</span>
     </div>
   )
 }
 function Row({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
   return (
     <div className="flex justify-between items-baseline gap-3 text-[12.5px] mt-2">
-      <span style={{ color: '#9B9BAD' }}>{k}</span>
-      <span className="font-mono font-semibold text-right" style={{ color: accent ? '#34D399' : '#F4F4FA' }}>{v}</span>
+      <span style={{ color: '#494957' }}>{k}</span>
+      <span className="font-mono font-semibold text-right" style={{ color: accent ? '#16A34A' : '#191923' }}>{v}</span>
     </div>
   )
 }
 function AllocRow({ color, label, sub, pct }: { color: string; label: string; sub: string; pct: string }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="flex items-center gap-2.5"><span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: color }} /><span><span className="font-medium">{label}</span> <span style={{ color: '#63636F' }}>· {sub}</span></span></span>
-      <span className="font-mono" style={{ color: '#9B9BAD' }}>{pct}</span>
+      <span className="flex items-center gap-2.5"><span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: color }} /><span><span className="font-medium">{label}</span> <span style={{ color: '#8A8A9E' }}>· {sub}</span></span></span>
+      <span className="font-mono" style={{ color: '#494957' }}>{pct}</span>
     </div>
   )
 }
 function Sum({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{k}</div>
-      <div className="font-mono font-bold text-[20px] mt-1" style={{ color: accent ? '#34D399' : '#F4F4FA' }}>{v}</div>
+      <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>{k}</div>
+      <div className="font-mono font-bold text-[20px] mt-1" style={{ color: accent ? '#16A34A' : '#191923' }}>{v}</div>
     </div>
   )
 }
 function Loop({ n, t, d }: { n: string; t: string; d: string }) {
   return (
     <div className="flex gap-3">
-      <span className="font-mono text-[12px] font-bold shrink-0" style={{ color: '#8A82F4' }}>{n}</span>
-      <span><span className="font-semibold text-[13.5px]">{t}</span><div className="text-[12.5px] mt-0.5 leading-[1.5]" style={{ color: '#9B9BAD' }}>{d}</div></span>
+      <span className="font-mono text-[12px] font-bold shrink-0" style={{ color: '#5A57DE' }}>{n}</span>
+      <span><span className="font-semibold text-[13.5px]">{t}</span><div className="text-[12.5px] mt-0.5 leading-[1.5]" style={{ color: '#494957' }}>{d}</div></span>
     </div>
   )
 }

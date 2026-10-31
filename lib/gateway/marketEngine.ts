@@ -2,9 +2,10 @@ import { keccak256, isAddress } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { computePoolId, type ReadClient, type MarketPoolKey } from '@/lib/gateway/registry'
+import { MARKET_CHAINS } from '@/lib/chains/marketChains'
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
-export const BASE_SEPOLIA_MARKET_ENGINE = '0x18c22836c71ae2dc6f483ab9ac41b4503e18c384' as const
+export const BASE_SEPOLIA_MARKET_ENGINE = '0x961534db8c0ebb7ceb729e74cab698a83a9c827e' as const
 export type MarketEngineConfig = { chainId: number; rpcUrl: string; defaultEngine: `0x${string}` | null }
 export type MarketEngineInstance = { id: string; poolAddress: string; chainId: number; pairLabel: string | null; engineAddress: `0x${string}`; quoteAsset: `0x${string}`; token0: `0x${string}`; token1: `0x${string}`; status: 'active' | 'inactive'; verified: boolean }
 
@@ -91,4 +92,25 @@ export async function resolveMarketEngine(db: SupabaseClient, cfg: MarketEngineC
   if (!verified.ok) return null
   const poolAddress = computePoolId(verified.poolKey).toLowerCase()
   return { id: 'env-market-engine', poolAddress, chainId: cfg.chainId, pairLabel: null, engineAddress: cfg.defaultEngine, quoteAsset: verified.quoteAsset, token0: verified.token0, token1: verified.token1, status: 'active', verified: true, source: 'env-fallback', live: false }
+}
+
+/** Every market chain this deployment reads: its configured chain (its own RPC) plus the other market chains
+ *  (Base + Robinhood) on their public RPCs. */
+export function marketEngineConfigs(env: Record<string, string | undefined> = process.env): MarketEngineConfig[] {
+  const cfg = marketEngineConfig(env)
+  const others = Object.values(MARKET_CHAINS).filter((c) => c.id !== cfg?.chainId).map((c) => ({ chainId: c.id, rpcUrl: c.rpc, defaultEngine: null }))
+  return cfg ? [cfg, ...others] : others
+}
+
+/** The chain a pool's market lives on, from the registry (a v4 poolId commits to its tokens, so it is unique
+ *  across chains). Falls back to the configured chain when the pool is unregistered or ambiguous, which keeps
+ *  every pre-existing single-chain behaviour (incl. the env-configured engine) unchanged. */
+export async function marketEngineConfigForPool(db: SupabaseClient, pool: string | null | undefined, env: Record<string, string | undefined> = process.env): Promise<MarketEngineConfig | null> {
+  const cfg = marketEngineConfig(env)
+  if (!pool) return cfg
+  const { data, error } = await db.from('gateway_instances').select('chain_id').eq('pool_address', pool.toLowerCase()).not('market_engine_address', 'is', null)
+  if (error) throw new Error(`market engine registry read failed: ${error.message}`)
+  const chains = [...new Set((data ?? []).map((r: { chain_id: number }) => Number(r.chain_id)))]
+  if (chains.length !== 1 || chains[0] === cfg?.chainId) return cfg
+  return marketEngineConfigs(env).find((c) => c.chainId === chains[0]) ?? cfg
 }

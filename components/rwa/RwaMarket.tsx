@@ -1,7 +1,7 @@
 'use client'
 
 // V2-RWAs — the live market for one RWA liquidity unit. Every number is read from the chain via /api/rwa/unit
-// (useRwaUnit, polled). The lifecycle proof + contracts live on /app/rwa/proof. Light-only.
+// (useRwaUnit, polled). The lifecycle proof + contracts live on /v1/rwas/proof. Light-only.
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -32,11 +32,11 @@ export function RwaMarket({ slug }: { slug: string }) {
               <span className="rounded-full border border-hair bg-white px-2.5 py-0.5 text-[11.5px] font-semibold text-ink-mid">Testnet · unaudited · fictional property</span>
               <LiveDot block={unit?.block} failed={failed} />
             </div>
-            <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
+            {RWA_UNITS.length > 1 && <div className="inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
               {RWA_UNITS.map((x) => (
                 <Link
                   key={x.slug}
-                  href={`/app/rwa/${x.slug}`}
+                  href={`/v1/rwas/${x.slug}`}
                   role="tab"
                   aria-selected={x.slug === u.slug}
                   className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}
@@ -44,7 +44,7 @@ export function RwaMarket({ slug }: { slug: string }) {
                   {x.chain.name}
                 </Link>
               ))}
-            </div>
+            </div>}
           </div>
           <h1 className="mt-5 font-atx-display text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.04] tracking-[-0.035em]">{p.name.replace(' (demo)', '')}</h1>
           <p className="mt-2 text-[14px] text-ink-mid">{p.symbol} / dUSD · Uniswap v4{D.poolManagerDeployedByUs ? ' (our v4-core deployment)' : ''} · {u.chain.name}</p>
@@ -97,7 +97,7 @@ export function RwaMarket({ slug }: { slug: string }) {
               <div className={EY}>Trades</div>
               <h2 className={`${H2} mt-1.5`}>Settled on-chain{unit ? ` · ${unit.tradeCount}` : ''}</h2>
             </div>
-            <Link href={`/app/rwa/proof?unit=${u.slug}`} className="text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">Lifecycle proof + contracts →</Link>
+            <Link href={`/v1/rwas/proof?unit=${u.slug}`} className="text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">Lifecycle proof + contracts →</Link>
           </div>
           <div className="mt-5 overflow-x-auto rounded-[22px] border border-hair bg-white">
             <table className="w-full min-w-[640px] text-[13.5px]">
