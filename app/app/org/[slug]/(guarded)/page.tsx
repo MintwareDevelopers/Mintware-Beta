@@ -1,7 +1,7 @@
 'use client'
 
-// Org home (authenticated) — leads with the MEMBER CARD: your role and what you can spend right now (par while
-// covered), then the two ways to grow the treasury, then role-gated action tiles (pay · payroll · roles · control ·
+// Org home (authenticated) — leads with the MEMBER CARD: your role and what you've supplied to the org's Treasury
+// yield vault, then the two ways to grow the treasury, then role-gated action tiles (pay · payroll · roles · control ·
 // cards · activity). Mineral: a raised member card lit by the sheen, raised tiles with disc icons. Not a dashboard.
 // Chrome comes from the shared TeamTerminalShell layout — this is the real "Overview" once an org is active.
 
@@ -19,8 +19,8 @@ interface TreasuryResp {
   treasuryChainId: number | null
   memberCount: number
   funded: boolean
-  snapshot: { navUsdc: string; coverageBps: number | null; deployedUsdc: string; juniorBufferUsdc: string; fullyCovered: boolean } | null
-  member: { address: string; spendableUsdc: string; role: string | null; status: string | null; easUid: string | null } | null
+  snapshot: { navUsdc: string } | null
+  member: { address: string; suppliedUsdc: string; role: string | null; status: string | null; easUid: string | null } | null
 }
 
 const usd = (a: string | undefined) => {
@@ -29,7 +29,6 @@ const usd = (a: string | undefined) => {
   if (n >= 1_000) return `$${(n / 1e3).toFixed(1)}k`
   return `$${n.toFixed(2)}`
 }
-const covPctOf = (s: TreasuryResp['snapshot']) => (!s ? '—' : s.coverageBps === null ? '∞' : `${(s.coverageBps / 100).toFixed(0)}%`)
 
 export default function OrgHome({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
@@ -86,14 +85,14 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
                 {data.member?.easUid && <span className="text-[12.5px] font-medium" style={{ color: 'var(--mw-gain)' }}>Attested on-chain ✓</span>}
               </div>
               <div className="relative mt-6">
-                <div className="text-[14px] text-ink-mid">Spendable right now</div>
+                <div className="text-[14px] text-ink-mid">You&apos;ve supplied</div>
                 <div className="font-geist-mono text-[clamp(40px,6vw,60px)] tracking-[-0.04em] leading-none mt-2">
-                  {isConnected ? usd(data.member?.spendableUsdc) : '—'}
+                  {isConnected ? usd(data.member?.suppliedUsdc) : '—'}
                 </div>
-                <div className="text-[14px] text-ink-mid mt-3">Redeemable at par while the treasury covers it.</div>
+                <div className="text-[14px] text-ink-mid mt-3">Your position in this org&apos;s Treasury yield vault, held by your own wallet.</div>
               </div>
-              <div className="relative mt-7 grid grid-cols-3 max-[520px]:grid-cols-1 gap-3">
-                {[['Treasury coverage', covPctOf(data.snapshot)], ['Total backing', data.snapshot ? usd(data.snapshot.navUsdc) : '—'], ['Members', String(data.memberCount)]].map(([k, v]) => (
+              <div className="relative mt-7 grid grid-cols-2 max-[520px]:grid-cols-1 gap-3">
+                {[['In Treasury yield', data.snapshot ? usd(data.snapshot.navUsdc) : '—'], ['Members', String(data.memberCount)]].map(([k, v]) => (
                   <div key={k} className="rounded-[16px] px-4 py-3" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
                     <div className="text-[12.5px] text-ink-soft">{k}</div>
                     <div className="font-geist-mono text-[19px] mt-1">{v}</div>
@@ -108,7 +107,7 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
               <Link href={`/app/org/${slug}/fund`} className="mw-raise mw-lift rounded-[22px] p-5 no-underline block">
                 <div className="flex items-start justify-between gap-3"><IconTile><IconGrow /></IconTile><StatusChip tone="live">Testnet</StatusChip></div>
                 <div className="font-semibold text-[18px] tracking-[-0.02em] text-ink mt-4">Treasury yield</div>
-                <p className="text-[14px] text-ink-mid mt-1.5 leading-[1.5]">Supply one asset (USDC) to a yield vault. Variable lending rate, withdraw any time.</p>
+                <p className="text-[14px] text-ink-mid mt-1.5 leading-[1.5]">Supply one asset (USDC) to a yield vault. The lending rate varies, and withdrawals depend on the vault&apos;s available liquidity.</p>
                 <div className="inline-flex items-center gap-1.5 text-[14px] font-semibold mt-3" style={{ color: 'var(--mw-peri-deep)' }}>Open Treasury yield →</div>
               </Link>
               <div className="mw-inset mw-tex-hatch rounded-[22px] p-5">

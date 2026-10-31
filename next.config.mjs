@@ -70,6 +70,10 @@ const nextConfig = {
       { source: '/v1/rwas/:path*', destination: '/app/rwas/:path*', permanent: false },
       { source: '/v1/portfolio', destination: '/app/portfolio', permanent: false },
       { source: '/v1/referrals', destination: '/app/portfolio?tab=invite', permanent: false },
+      // Team placeholders with no real page behind them were removed (2026-10-31).
+      { source: '/app/team/vaults', destination: '/app/team', permanent: false },
+      { source: '/app/team/developers', destination: '/app/team', permanent: false },
+      { source: '/app/team/swap', destination: '/app/swap', permanent: false },
       // Account, Profile and Referrals folded into Portfolio (2026-10-31).
       { source: '/app/account', destination: '/app/portfolio', permanent: false },
       { source: '/app/profile', destination: '/app/portfolio', permanent: false },
@@ -92,7 +96,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // Everything EXCEPT the read-only public solvency badge stays frame-blocked.
+        // Everything EXCEPT the read-only public treasury badge stays frame-blocked.
         source: '/((?!org/[^/]+/badge).*)',
         headers: [
           // Prevent clickjacking

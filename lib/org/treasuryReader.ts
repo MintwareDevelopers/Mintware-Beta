@@ -1,21 +1,17 @@
-// Read-only treasury snapshot off a converged MintwareTreasuryVault via eth_call — no wallet, no writes.
-// Mirrors lib/x402/vaultReader. Senior is PAR (community/member USDC redeemable ~1:1, spendable); the
-// junior tranche (the org itself) earns the spread. So a member's `seniorShares` realize at par via
-// `convertToAssets`, and the treasury's health is `coverageBps` (junior coverage of at-risk senior).
+// Read-only snapshot of an org's Treasury yield vault (MintwareYieldVault, a standard ERC-4626 Earn vault) via
+// eth_call — no wallet, no writes. Positions are held by members' own wallets (the fund page deposits with
+// receiver = the connected wallet), so the snapshot is the vault's total assets plus a member's own redeemable
+// value. The retired Treasury senior/junior vault (coverage, junior buffer, par-while-covered) is no longer read.
 //
-// Selectors verified with `cast sig` against contracts-v4/src/payments/MintwareTreasuryVault.sol.
+// Selectors are the standard ERC-4626 / ERC-20 / Ownable ones (contracts-v4/src/payments/MintwareYieldVault.sol).
 
 const SEL = {
-  totalSeniorAssets: '0xdf43a90f', // totalSeniorAssets()   — par-backed senior NAV (atomic 6dp)
-  coverageBps: '0x48ebfe9c', //       coverageBps()          — junior coverage of at-risk senior
-  deployedFromSenior: '0x9655bfbc', //deployedFromSenior()
-  juniorUsdcBuffer: '0xfa0f2b74', //  juniorUsdcBuffer()
-  seniorShares: '0x6e4a7e08', //      seniorShares(address)
-  convertToAssets: '0x07a2d13a', //   convertToAssets(uint256)
-  owner: '0x8da5cb5b', //             owner()                — Ownable config authority
+  asset: '0x38d52e0f', //           asset()                — the vault's underlying (USDC)
+  totalAssets: '0x01e1d114', //     totalAssets()          — everything supplied to the vault (atomic 6dp)
+  balanceOf: '0x70a08231', //       balanceOf(address)     — a member's vault shares
+  convertToAssets: '0x07a2d13a', // convertToAssets(uint256)
+  owner: '0x8da5cb5b', //           owner()                — Ownable config authority
 } as const
-
-const MAX_UINT = (1n << 256n) - 1n
 
 function padAddr(a: string): string {
   return a.toLowerCase().replace(/^0x/, '').padStart(64, '0')
@@ -25,16 +21,8 @@ function padWord(hex: string): string {
 }
 
 export interface TreasurySnapshot {
-  /** Par-backed senior NAV (what all member claims sum to), atomic USDC 6dp. */
+  /** Total supplied to the Treasury yield vault, atomic USDC 6dp. */
   navUsdc: bigint
-  /** Junior coverage of the at-risk senior, in bps. MAX_UINT when nothing is deployed (fully covered). */
-  coverageBps: bigint
-  /** At-risk senior currently deployed to LP, atomic 6dp. */
-  deployedUsdc: bigint
-  /** Junior first-loss USDC buffer, atomic 6dp. */
-  juniorBufferUsdc: bigint
-  /** coverage >= 100% (or nothing deployed). The "backed & solvent" signal. */
-  fullyCovered: boolean
 }
 
 /** RPC per chain for public reads. Base Sepolia → publicnode (dodges the stale-mempool node).
@@ -93,21 +81,10 @@ export function makeTreasuryReader(cfg: { rpcUrl: string; vault: string; fetchIm
     return BigInt(j.result)
   }
   return {
-    /** Treasury-wide snapshot: NAV, coverage, deployed, junior buffer. */
+    /** Vault-wide snapshot. Also proves the address answers as an ERC-4626 vault (asset() + totalAssets()). */
     async snapshot(): Promise<TreasurySnapshot> {
-      const [nav, cov, dep, jr] = await Promise.all([
-        call(SEL.totalSeniorAssets),
-        call(SEL.coverageBps),
-        call(SEL.deployedFromSenior),
-        call(SEL.juniorUsdcBuffer),
-      ])
-      return {
-        navUsdc: nav,
-        coverageBps: cov,
-        deployedUsdc: dep,
-        juniorBufferUsdc: jr,
-        fullyCovered: cov === MAX_UINT || cov >= 10_000n,
-      }
+      const [, nav] = await Promise.all([call(SEL.asset), call(SEL.totalAssets)])
+      return { navUsdc: nav }
     },
     /** The on-chain config owner (Ownable). Lets the app VERIFY the treasury is actually
      *  controlled by the org owner's (Privy) wallet — the P3 control check. */
@@ -115,9 +92,9 @@ export function makeTreasuryReader(cfg: { rpcUrl: string; vault: string; fetchIm
       const raw = await call(SEL.owner)
       return '0x' + raw.toString(16).padStart(40, '0')
     },
-    /** A member's par-safe realizable balance = convertToAssets(seniorShares(member)), atomic 6dp. */
-    async memberRealizableUsdc(member: string): Promise<bigint> {
-      const sh = await call(SEL.seniorShares + padAddr(member))
+    /** A member's own redeemable value = convertToAssets(balanceOf(member)), atomic 6dp. */
+    async memberSuppliedUsdc(member: string): Promise<bigint> {
+      const sh = await call(SEL.balanceOf + padAddr(member))
       if (sh === 0n) return 0n
       return call(SEL.convertToAssets + padWord('0x' + sh.toString(16)))
     },

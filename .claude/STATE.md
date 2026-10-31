@@ -16,7 +16,9 @@ and `/markets/[pool]` redirect into `/app`. The app has two workspaces in one si
 (`/app/portfolio`: positions, organizations, wallet holdings and the invite link; `/app/account`, `/app/profile` and
 `/app/referrals` redirect here), Swap (`/app/swap`, LI.FI), the RWA property demo (`/app/rwas`), and Previews: Card, Agents and
 Issuers (`/app/previews/*`, Simulated, tagged on screen). **Team** (`/app/team`, `/app/org/*`) stays behind the V2
-access code. Earn (the stablecoin vault) is presented as the card's
+access code. An org's treasury is its Treasury yield vault (`MintwareYieldVault`, ERC-4626 Earn) read by
+`lib/org/treasuryReader.ts`; the retired senior/junior coverage figures and the card Settle action were removed
+(2026-10-31). The `/app/team/*` overview, cards, policy and roles pages are illustrative until an org exists. Earn (the stablecoin vault) is presented as the card's
 earning balance, not a standalone page. Legacy `/about`, `/earn`, `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
 `/solutions/:path*`, `/yield-payment-network`, and `/explorer` redirect to their current destinations. Legal and
 risk content remain on their existing routes. Canonical route inventory is generated in the AUTO block below.
@@ -197,11 +199,8 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/swap` | `app/app/(personal)/swap/page.tsx` |
 | `/app/team` | `app/app/team/page.tsx` |
 | `/app/team/cards` | `app/app/team/cards/page.tsx` |
-| `/app/team/developers` | `app/app/team/developers/page.tsx` |
 | `/app/team/policy` | `app/app/team/policy/page.tsx` |
-| `/app/team/swap` | `app/app/team/swap/page.tsx` |
 | `/app/team/team` | `app/app/team/team/page.tsx` |
-| `/app/team/vaults` | `app/app/team/vaults/page.tsx` |
 | `/cards` | `app/cards/page.tsx` |
 | `/curate` | `app/curate/page.tsx` |
 | `/dataroom` | `app/dataroom/page.tsx` |
