@@ -102,6 +102,8 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const [review, setReview] = useState<Review | null>(null)
   const [pending, setPending] = useState<PendingRecord | null>(null)
   const [err, setErr] = useState('')
+  // 24h price closes for pools that have public market data (GeckoTerminal indexes mainnet only).
+  const [spark, setSpark] = useState<number[] | undefined>(undefined)
 
   // The route param is the pool's registry key (poolId). Legacy label slugs still render metrics but
   // can never resolve a deposit target (meta 404s) — the page says so instead of guessing.
@@ -136,6 +138,18 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       setM(list.find((p) => p.poolAddress?.toLowerCase() === decoded) ?? list.find((p) => norm(p.pairLabel) === decoded) ?? null)
     }).catch(() => {})
   }, [slug, decoded, pmQuery])
+
+  useEffect(() => {
+    if (!m?.poolAddress) return
+    const id = m.poolAddress.toLowerCase()
+    fetch(`/api/gateway/sparklines?pools=${encodeURIComponent(id)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const series = d?.success && d.series ? (Object.entries(d.series) as [string, number[]][]).find(([k]) => k.toLowerCase() === id)?.[1] : undefined
+        setSpark(series)
+      })
+      .catch(() => {})
+  }, [m?.poolAddress])
 
   // Chain-first position read (+ the live pool state the dry quotes need). Returns the payload so the
   // money path can price off a FRESH read rather than stale render state.
@@ -375,34 +389,14 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         ? { text: 'Not live', style: { color: '#454552', background: 'rgba(22,22,44,0.06)' } }
         : { text: 'Curating', style: { color: '#454552', background: 'rgba(22,22,44,0.06)' } }
 
+  const priceNow = m?.priceQuotePerBase ?? null
+  const value = pos?.positionValueAtomic ?? null
+  const basis = pos?.costBasisAtomic ?? null
+  const change = pos?.unrealizedPnlAtomic ?? null
+
   return (
     <div>
       <Link href="/app/markets" className="text-[13px] no-underline" style={{ color: '#454552' }}>← Markets</Link>
-
-      {/* header */}
-      <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
-        <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <TokenPair baseLogo={m?.baseLogo ?? null} quoteLogo={m?.quoteLogo ?? null} baseSymbol={m?.baseSymbol ?? base} quoteSymbol={m?.quoteSymbol ?? quote} size={36} ring="#FFFFFF" />
-            <h1 className="font-geist font-semibold tracking-[-0.03em] text-[28px]">{pairLabel}</h1>
-          </div>
-          <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-            <Tag>Uniswap V4</Tag><Tag>Curated</Tag><Tag>{chainId != null ? chainLabel(chainId) : 'Robinhood mainnet'}</Tag>
-            <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={liveChip.style}>{liveChip.text}</span>
-            {meta?.inRange != null && (
-              <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={meta.inRange ? { color: '#0F7A43', background: 'rgba(22,163,74,0.12)' } : { color: '#8A5300', background: 'rgba(194,122,0,0.12)' }}>
-                {meta.inRange ? 'In range · earning fees' : 'Out of range · fees paused'}
-              </span>
-            )}
-          </div>
-        </div>
-        {(aprLabel || m?.volTvlRatio != null) && (
-          <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
-            <div className="font-mono font-bold text-[22px]" style={{ color: '#4643D1' }}>{aprLabel ?? `${m!.volTvlRatio!.toFixed(1)}×`}</div>
-            <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#62626F' }}>{aprLabel ? 'Est. Fee APR · 24h' : '24h Vol / TVL'}</div>
-          </div>
-        )}
-      </div>
 
       {isDevRig && (
         <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(194,122,0,0.1)', border: '1px solid rgba(194,122,0,0.25)', color: '#8A5300' }}>
@@ -417,13 +411,194 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         </div>
       )}
 
-      <div className="grid gap-5 mt-6 grid-cols-1 min-[900px]:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]">
-        {/* LEFT: pool info */}
-        <GlassFrame className="min-[900px]:order-1 order-2" innerClassName="p-6">
-          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#62626F' }}>{m ? 'Total Value Locked' : 'Market value'}</div>
-          <div className="font-mono font-bold text-[30px] mt-1.5">{m ? usd(m.tvlUsd) : live?.navQuote != null ? `${live.navQuote.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${live.quoteSymbol ?? ''}` : '—'}</div>
-          <div className="text-[12.5px] mt-1" style={{ color: '#4643D1' }}>Curated + spun up by Mintware</div>
 
+      {/* THE MARKET — one card, like the homepage's "Inside a market": price, the action, your position. */}
+      <section className="mw-raise-lg relative mt-4 rounded-[28px] p-[clamp(16px,2.4vw,24px)] flex flex-col gap-5">
+        <div className="flex justify-between items-start gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <TokenPair baseLogo={m?.baseLogo ?? null} quoteLogo={m?.quoteLogo ?? null} baseSymbol={m?.baseSymbol ?? base} quoteSymbol={m?.quoteSymbol ?? quote} size={40} ring="#FFFFFF" />
+            <div className="min-w-0">
+              <h1 className="font-geist font-semibold tracking-[-0.03em] text-[24px] leading-tight">{base} <span style={{ color: 'var(--mw-ink-3)', fontWeight: 500 }}>/ {quote}</span></h1>
+              <div className="text-[12.5px] mt-0.5" style={{ color: 'var(--mw-ink-3)' }}>{chainId != null ? chainLabel(chainId) : 'Robinhood mainnet'} · Uniswap v4 · curated</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-[5px] rounded-full" style={liveChip.style}>{liveChip.text === 'Live' && <span className="w-1.5 h-1.5 rounded-full bg-[#22A45D]" />}{liveChip.text}</span>
+            {meta?.inRange != null && (
+              <span className="text-[12px] font-semibold px-2.5 py-[5px] rounded-full" style={meta.inRange ? { color: '#0F7A43', background: 'rgba(22,163,74,0.12)' } : { color: '#8A5300', background: 'rgba(194,122,0,0.12)' }}>
+                {meta.inRange ? 'In range · earning fees' : 'Out of range · fees paused'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-5 items-start">
+          {/* price (or market value when the pool has no public price) + chart */}
+          <div className="flex-[1.3_1_300px] min-w-0">
+            {priceNow != null ? (
+              <>
+                <div className="font-geist-mono text-[clamp(26px,3.4vw,34px)] tracking-[-0.03em] leading-none">{priceNow < 0.01 ? priceNow.toPrecision(3) : priceNow.toLocaleString('en-US', { maximumFractionDigits: 6 })} <span className="text-[14px] tracking-normal" style={{ color: 'var(--mw-ink-3)' }}>{quote} per {base}</span></div>
+                <div className="text-[12.5px] mt-1.5" style={{ color: 'var(--mw-ink-3)' }}>Pool price</div>
+              </>
+            ) : (
+              <>
+                <div className="font-geist-mono text-[clamp(26px,3.4vw,34px)] tracking-[-0.03em] leading-none">{live?.navQuote != null ? live.navQuote.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'} <span className="text-[14px] tracking-normal" style={{ color: 'var(--mw-ink-3)' }}>{live?.quoteSymbol ?? quoteSym}</span></div>
+                <div className="text-[12.5px] mt-1.5" style={{ color: 'var(--mw-ink-3)' }}>Market value</div>
+              </>
+            )}
+            <PriceChart series={spark} />
+            <div className="grid grid-cols-3 gap-2 mt-3 text-[12.5px]">
+              <div><div style={{ color: 'var(--mw-ink-3)' }}>Fee tier</div><div className="font-geist-mono mt-0.5">{feeTierLabel}</div></div>
+              <div><div style={{ color: 'var(--mw-ink-3)' }}>{m ? 'TVL' : 'Network'}</div><div className="font-geist-mono mt-0.5 truncate">{m ? usd(m.tvlUsd) : chainId != null ? chainLabel(chainId) : '—'}</div></div>
+              <div><div style={{ color: 'var(--mw-ink-3)' }}>Est. fee APR</div><div className="font-geist-mono mt-0.5">{aprLabel ?? '—'}</div></div>
+            </div>
+          </div>
+
+          {/* the action */}
+          <div className="flex-[1_1_300px] min-w-0 rounded-[20px] p-4" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+            {metaState === 'not_live' && !hasPos ? (
+              <>
+                <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#62626F' }}>Status</div>
+                <div className="font-geist font-semibold text-[20px] mt-1.5">{otherChainLive ? `Live on ${chainLabel(chainId)}` : 'In curation'}</div>
+                <p className="text-[13px] leading-[1.6] mt-2" style={{ color: '#454552' }}>
+                  {otherChainLive
+                    ? 'This market is live and verified on-chain. Deposits from this app open for its network shortly.'
+                    : 'Mintware screens a pool on depth, age and real trading before a market opens on it. This one is on the watchlist; deposits open once its market is live.'}
+                </p>
+                <Link href="/app/markets" className="inline-flex mt-4 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#4643D1' }}>Browse live markets →</Link>
+              </>
+            ) : (
+              <>
+                <div className="mw-inset flex gap-1 p-1 mb-4 rounded-[14px]">
+                  {(['deposit', 'withdraw'] as const).map((t) => (
+                    <button key={t} onClick={() => { if (busy) return; setTab(t); setErr(''); setReview(null); if (status !== 'record_failed') setStatus('idle') }} className="flex-1 min-h-[40px] rounded-[10px] text-[14px] cursor-pointer capitalize" style={tab === t ? { background: '#FFFFFF', color: '#15151D', fontWeight: 600, boxShadow: 'var(--mw-raise-sm)' } : { color: '#454552', fontWeight: 500 }}>{t}</button>
+                  ))}
+                </div>
+
+                {/* O-1: a failed record is surfaced with a retry — never hidden behind a ✓ */}
+                {status === 'record_failed' && pending && (
+                  <div className="mb-3 rounded-[12px] p-3.5 text-[12.5px] leading-[1.5]" style={{ background: 'rgba(194,122,0,0.1)', border: '1px solid rgba(194,122,0,0.25)', color: '#8A5300' }}>
+                    <div style={{ fontWeight: 600 }}>{pending.kind === 'deposit' ? 'Deposited on-chain' : 'Withdrawn on-chain'} — not yet recorded here.</div>
+                    <div style={{ color: '#454552' }} className="mt-1">Your funds are safe on-chain (tx {shortId(pending.txHash)}). Recording only updates your cost basis on this dashboard.</div>
+                    <button onClick={retryRecord} className="mt-2.5 text-[12.5px] font-semibold px-3 py-1.5 rounded-[10px] cursor-pointer" style={{ background: 'rgba(194,122,0,0.18)', color: '#15151D' }}>Retry recording</button>
+                  </div>
+                )}
+
+                {tab === 'deposit' ? (
+                  <>
+                    <div className="rounded-[14px] p-4" style={INNER}>
+                      <div className="flex justify-between text-[13px]" style={{ color: '#62626F' }}><span>You provide</span><span className="font-semibold" style={{ color: '#15151D' }}>{quoteSym}</span></div>
+                      <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => { setAmount(sanitizeAmountInput(e.target.value)); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="bg-transparent outline-none font-mono font-medium tracking-[-0.03em] text-[34px] w-full mt-2" style={{ color: '#15151D' }} />
+                    </div>
+                    {Number(amount) > 0 && estAprPct != null && status !== 'review' && (
+                      <div className="mt-3 rounded-[12px] p-3" style={INNER}>
+                        <div className="flex justify-between text-[12.5px]">
+                          <span style={{ color: '#454552' }}>Est. fees / yr at current pace</span>
+                          <span className="font-mono font-bold" style={{ color: '#0F7A43' }}>~{usd(Number(amount) * (estAprPct / 100))}</span>
+                        </div>
+                        <div className="text-[11px] mt-1.5 leading-[1.5]" style={{ color: '#62626F' }}>
+                          On your full deposit once deployed, at the trailing-24h fee rate — an estimate, not a projection. Fees are gross of impermanent loss; 100% of any IL is yours.
+                        </div>
+                      </div>
+                    )}
+                    {status === 'review' && review?.kind === 'deposit' && (
+                      <div className="mt-3 rounded-[12px] p-3.5" style={{ ...INNER, border: '1px solid rgba(138,130,244,0.35)' }}>
+                        <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#4643D1' }}>Review</div>
+                        <Row k="You send" v={usdg(review.amountAtomic)} />
+                        <Row k="Est. shares (current NAV)" v={review.withMin ? fmtShares(review.estShares) : '— (no live pool state)'} />
+                        {review.withMin ? (
+                          <Row k={`Min. shares floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={fmtShares(review.minShares)} accent />
+                        ) : (
+                          <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#8A5300' }}>This deployment has no slippage-bounded deposit — the transaction has no floor. Proceed only if you accept that.</div>
+                        )}
+                        <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#62626F' }}>
+                          Shares are an estimate off the current block. {review.withMin ? 'If fewer than the floor would be minted, the transaction reverts and nothing moves.' : ''} Approve {quoteSym}, then deposit.
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-2 mt-3.5">
+                      {status === 'review' && <button onClick={cancelReview} className="text-[14px] font-semibold py-3.5 px-4 rounded-[14px] cursor-pointer" style={{ background: 'rgba(22,22,44,0.06)', color: '#454552' }}>Back</button>}
+                      <button
+                        onClick={status === 'review' ? confirmDeposit : status === 'record_failed' ? retryRecord : reviewDeposit}
+                        disabled={busy || (isConnected && !canDeposit && status !== 'record_failed')}
+                        className="flex-1 text-[15px] font-semibold min-h-[52px] rounded-[14px] cursor-pointer disabled:cursor-default"
+                        style={busy || (isConnected && !canDeposit && status !== 'record_failed') ? { background: 'rgba(22,22,44,0.06)', color: '#454552' } : { background: '#5B5BE6', color: '#fff', boxShadow: '0 6px 18px -6px rgba(70,67,209,0.6), 0 0 0 1px rgba(60,57,200,0.9), inset 0 1px 0 rgba(255,255,255,0.22)' }}
+                      >
+                        {isConnected && !canDeposit && status !== 'record_failed' ? (metaState === 'loading' ? 'Loading…' : 'Not live for deposits') : depBtn}
+                      </button>
+                    </div>
+                    <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#454552' }}><span>Lockup?</span><span style={{ color: '#0F7A43', fontWeight: 600 }}>None — withdraw your share in both tokens</span></div>
+                  </>
+                ) : (
+                  <>
+                    <div className="rounded-[14px] p-4" style={INNER}>
+                      <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#62626F' }}>Withdraw</div>
+                      <div className="flex gap-2 mt-3">
+                        {[25, 50, 100].map((p) => (
+                          <button key={p} onClick={() => { setWpct(p); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="flex-1 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer" style={wpct === p ? { background: '#FFFFFF', color: '#15151D', boxShadow: 'var(--mw-raise-sm)' } : { background: 'transparent', color: '#454552' }}>{p === 100 ? 'Max' : `${p}%`}</button>
+                        ))}
+                      </div>
+                      <div className="text-[12px] mt-3" style={{ color: '#454552' }}>Returns your pro-rata share of both legs at the current price (subject to impermanent loss).</div>
+                    </div>
+                    {status === 'review' && review?.kind === 'withdraw' && (
+                      <div className="mt-3 rounded-[12px] p-3.5" style={{ ...INNER, border: '1px solid rgba(138,130,244,0.35)' }}>
+                        <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#4643D1' }}>Review</div>
+                        <Row k="Shares to burn" v={fmtShares(review.sharesToBurn)} />
+                        {review.withMin ? (
+                          <>
+                            <Row k={`Est. ${quoteSym} out`} v={usdg(review.estQuote)} />
+                            <Row k={`Min. ${quoteSym} floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={usdg(review.minQuote)} accent />
+                            <Row k={`Est. ${pairedSym} out`} v={review.lpQuotable ? fmtUnits(review.estPaired, meta?.pairedDecimals ?? null, pairedSym) : 'unquotable (spot unreadable)'} />
+                            <Row k={`Min. ${pairedSym} floor`} v={review.lpQuotable ? fmtUnits(review.minPaired, meta?.pairedDecimals ?? null, pairedSym) : 'none set'} accent />
+                            <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#62626F' }}>
+                              Estimates off the current block; the on-chain floors are the protection. If the pool can’t deliver at least the floors, the transaction reverts and nothing moves.
+                              {!review.lpQuotable && ' The LP leg could not be priced, so its floor is 0 — only the idle leg is protected on this attempt.'}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#8A5300' }}>This deployment has no slippage-bounded withdraw — the transaction has no floor. Proceed only if you accept that.</div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex gap-2 mt-3.5">
+                      {status === 'review' && <button onClick={cancelReview} className="text-[14px] font-semibold py-3.5 px-4 rounded-[14px] cursor-pointer" style={{ background: 'rgba(22,22,44,0.06)', color: '#454552' }}>Back</button>}
+                      <button
+                        onClick={status === 'review' ? confirmWithdraw : status === 'record_failed' ? retryRecord : reviewWithdraw}
+                        disabled={busy || (!hasPos && status !== 'record_failed')}
+                        className="flex-1 text-[15px] font-semibold min-h-[52px] rounded-[14px] cursor-pointer disabled:cursor-default"
+                        style={busy || (!hasPos && status !== 'record_failed') ? { background: 'rgba(22,22,44,0.06)', color: '#454552' } : { background: '#5B5BE6', color: '#fff' }}
+                      >
+                        {!hasPos && status !== 'record_failed' ? 'No position' : wBtn}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {err && <div className="text-[12.5px] mt-2.5 leading-[1.5]" style={{ color: '#B42318' }}>{err}</div>}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* your position */}
+        <div className="grid grid-cols-2 min-[640px]:grid-cols-4 gap-3 px-4 py-3.5 rounded-2xl text-[13px]" style={{ background: 'var(--mw-band)' }}>
+          <div><div style={{ color: 'var(--mw-ink-3)' }}>Value</div><div className="font-geist-mono mt-0.5">{!isConnected ? '—' : value == null ? 'Unavailable' : usdg(value)}</div></div>
+          <div><div style={{ color: 'var(--mw-ink-3)' }}>Put in</div><div className="font-geist-mono mt-0.5">{!isConnected || !hasPos ? '—' : basis == null ? 'Unavailable' : usdg(basis)}</div></div>
+          <div><div style={{ color: 'var(--mw-ink-3)' }}>Change</div><div className="font-geist-mono mt-0.5" style={change != null && hasPos ? { color: num(change) >= 0 ? '#0F7A43' : '#B42318' } : undefined}>{!isConnected || !hasPos || change == null ? '—' : `${num(change) >= 0 ? '+' : '−'}${usdg(String(BigInt(change) < 0n ? -BigInt(change) : BigInt(change)))}`}</div></div>
+          <div><div style={{ color: 'var(--mw-ink-3)' }}>Shares</div><div className="font-geist-mono mt-0.5 truncate">{!isConnected || !pos ? '—' : fmtShares(BigInt(pos.shares))}</div></div>
+        </div>
+        <div className="text-[12px] leading-[1.5] -mt-2" style={{ color: 'var(--mw-ink-3)' }}>
+          {!isConnected
+            ? 'Connect a wallet to see your position.'
+            : hasPos && basis == null
+              ? 'Put in is unavailable: part of this position’s history wasn’t recorded here (for example a deposit made outside the app). Your funds are unaffected.'
+              : 'Change is value minus what you put in. It includes trading fees and price moves, so it can be negative.'}
+        </div>
+      </section>
+
+      {/* MARKET DETAILS */}
+      <div className="text-[12px] uppercase tracking-[0.08em] font-semibold mt-10 mb-3" style={{ color: '#62626F' }}>Market details</div>
+      <div className="grid gap-5 grid-cols-1 min-[900px]:grid-cols-[minmax(0,1.3fr)_minmax(300px,1fr)] items-start">
+        <GlassFrame innerClassName="p-6">
           {/* allocation */}
           <div className="text-[12px] uppercase tracking-[0.08em] font-semibold mt-6" style={{ color: '#62626F' }}>How your {quoteSym} is put to work</div>
           {/* layered: the capital sits in the engine today; the collateral and credit layers are drawn by status, not share */}
@@ -489,180 +664,14 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             )
           })()}
         </GlassFrame>
-
-        {/* RIGHT: action panel */}
-        {metaState === 'not_live' && !hasPos ? (
-          <div className="rounded-[16px] p-6 min-[900px]:order-2 order-1 self-start" style={PANEL}>
-            <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#62626F' }}>Status</div>
-            <div className="font-geist font-semibold text-[20px] mt-1.5">{otherChainLive ? `Live on ${chainLabel(chainId)}` : 'In curation'}</div>
-            <p className="text-[13px] leading-[1.6] mt-2" style={{ color: '#454552' }}>
-              {otherChainLive
-                ? 'This market is live and verified on-chain. Deposits from this app open for its network shortly.'
-                : 'Mintware screens a pool on depth, age and real trading before a market opens on it. This one is on the watchlist; deposits open once its market is live.'}
-            </p>
-            <Link href="/app/markets" className="inline-flex mt-4 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#4643D1' }}>Browse live markets →</Link>
-          </div>
-        ) : (
-        <div className="flex flex-col gap-5 min-[900px]:order-2 order-1">
-          {/* position summary */}
-          <div className="rounded-[16px] p-5" style={PANEL}>
-            <Sum k="Position value" v={pos?.positionValueAtomic == null ? 'Unavailable' : usdg(pos.positionValueAtomic)} />
-            {pos && <Row k="Shares" v={fmtShares(BigInt(pos.shares))} />}
-            {hasPos && pos?.recorded === false && (
-              <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#8A5300' }}>
-                Position read from chain; its deposit was never recorded here, so cost basis and P&amp;L are unknown. Your funds are unaffected.
-              </div>
-            )}
-            {hasPos && pos?.recorded !== false && pos?.costBasisComplete === false && (
-              <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#8A5300' }}>
-                Cost basis may be incomplete — some of your earlier history for this pool is still being recovered. The figures below reflect only what&apos;s currently attributed. Your funds are unaffected.
-              </div>
-            )}
-            {hasPos && pos?.positionValueAtomic != null && pos?.costBasisAtomic != null && (
-              <div className="mt-4 pt-4 flex flex-col gap-1.5" style={{ borderTop: '1px solid rgba(22,22,44,0.06)' }}>
-                <div className="flex justify-between items-baseline text-[13px]">
-                  <span style={{ color: '#454552' }}>Net vs your deposit <span style={{ color: '#62626F' }}>({usdg(pos.costBasisAtomic)} in)</span></span>
-                  {(() => {
-                    const up = num(pos.unrealizedPnlAtomic) >= 0
-                    return <span className="font-mono font-bold" style={{ color: up ? '#0F7A43' : '#B42318' }}>{up ? '+' : ''}{usdg(pos.unrealizedPnlAtomic)}</span>
-                  })()}
-                </div>
-                {(() => {
-                  const wk = (pos.history ?? []).find((h) => Date.now() - Date.parse(h.takenAt) >= 7 * 864e5)
-                  if (!wk) return null
-                  const d7 = num(pos.positionValueAtomic) - num(wk.positionValueAtomic)
-                  const up = d7 >= 0
-                  return (
-                    <div className="flex justify-between items-baseline text-[12px]">
-                      <span style={{ color: '#62626F' }}>Change · 7d</span>
-                      <span className="font-mono" style={{ color: up ? '#0F7A43' : '#B42318' }}>{up ? '+' : ''}${Math.abs(d7).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                  )
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* deposit / withdraw */}
-          <div className="rounded-[16px] p-5" style={PANEL}>
-            <div className="mw-inset flex gap-1 p-1 mb-4 rounded-[14px]">
-              {(['deposit', 'withdraw'] as const).map((t) => (
-                <button key={t} onClick={() => { if (busy) return; setTab(t); setErr(''); setReview(null); if (status !== 'record_failed') setStatus('idle') }} className="flex-1 min-h-[40px] rounded-[10px] text-[14px] cursor-pointer capitalize" style={tab === t ? { background: '#FFFFFF', color: '#15151D', fontWeight: 600, boxShadow: 'var(--mw-raise-sm)' } : { color: '#454552', fontWeight: 500 }}>{t}</button>
-              ))}
-            </div>
-
-            {/* O-1: a failed record is surfaced with a retry — never hidden behind a ✓ */}
-            {status === 'record_failed' && pending && (
-              <div className="mb-3 rounded-[12px] p-3.5 text-[12.5px] leading-[1.5]" style={{ background: 'rgba(194,122,0,0.1)', border: '1px solid rgba(194,122,0,0.25)', color: '#8A5300' }}>
-                <div style={{ fontWeight: 600 }}>{pending.kind === 'deposit' ? 'Deposited on-chain' : 'Withdrawn on-chain'} — not yet recorded here.</div>
-                <div style={{ color: '#454552' }} className="mt-1">Your funds are safe on-chain (tx {shortId(pending.txHash)}). Recording only updates your cost basis on this dashboard.</div>
-                <button onClick={retryRecord} className="mt-2.5 text-[12.5px] font-semibold px-3 py-1.5 rounded-[10px] cursor-pointer" style={{ background: 'rgba(194,122,0,0.18)', color: '#15151D' }}>Retry recording</button>
-              </div>
-            )}
-
-            {tab === 'deposit' ? (
-              <>
-                <div className="rounded-[14px] p-4" style={INNER}>
-                  <div className="flex justify-between text-[13px]" style={{ color: '#62626F' }}><span>You provide</span><span className="font-semibold" style={{ color: '#15151D' }}>{quoteSym}</span></div>
-                  <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => { setAmount(sanitizeAmountInput(e.target.value)); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="bg-transparent outline-none font-mono font-medium tracking-[-0.03em] text-[34px] w-full mt-2" style={{ color: '#15151D' }} />
-                </div>
-                {Number(amount) > 0 && estAprPct != null && status !== 'review' && (
-                  <div className="mt-3 rounded-[12px] p-3" style={INNER}>
-                    <div className="flex justify-between text-[12.5px]">
-                      <span style={{ color: '#454552' }}>Est. fees / yr at current pace</span>
-                      <span className="font-mono font-bold" style={{ color: '#0F7A43' }}>~{usd(Number(amount) * (estAprPct / 100))}</span>
-                    </div>
-                    <div className="text-[11px] mt-1.5 leading-[1.5]" style={{ color: '#62626F' }}>
-                      On your full deposit once deployed, at the trailing-24h fee rate — an estimate, not a projection. Fees are gross of impermanent loss; 100% of any IL is yours.
-                    </div>
-                  </div>
-                )}
-                {status === 'review' && review?.kind === 'deposit' && (
-                  <div className="mt-3 rounded-[12px] p-3.5" style={{ ...INNER, border: '1px solid rgba(138,130,244,0.35)' }}>
-                    <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#4643D1' }}>Review</div>
-                    <Row k="You send" v={usdg(review.amountAtomic)} />
-                    <Row k="Est. shares (current NAV)" v={review.withMin ? fmtShares(review.estShares) : '— (no live pool state)'} />
-                    {review.withMin ? (
-                      <Row k={`Min. shares floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={fmtShares(review.minShares)} accent />
-                    ) : (
-                      <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#8A5300' }}>This deployment has no slippage-bounded deposit — the transaction has no floor. Proceed only if you accept that.</div>
-                    )}
-                    <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#62626F' }}>
-                      Shares are an estimate off the current block. {review.withMin ? 'If fewer than the floor would be minted, the transaction reverts and nothing moves.' : ''} Approve {quoteSym}, then deposit.
-                    </div>
-                  </div>
-                )}
-                <div className="flex gap-2 mt-3.5">
-                  {status === 'review' && <button onClick={cancelReview} className="text-[14px] font-semibold py-3.5 px-4 rounded-[14px] cursor-pointer" style={{ background: 'rgba(22,22,44,0.06)', color: '#454552' }}>Back</button>}
-                  <button
-                    onClick={status === 'review' ? confirmDeposit : status === 'record_failed' ? retryRecord : reviewDeposit}
-                    disabled={busy || (isConnected && !canDeposit && status !== 'record_failed')}
-                    className="flex-1 text-[15px] font-semibold min-h-[52px] rounded-[14px] cursor-pointer disabled:cursor-default"
-                    style={busy || (isConnected && !canDeposit && status !== 'record_failed') ? { background: 'rgba(22,22,44,0.06)', color: '#454552' } : { background: '#5B5BE6', color: '#fff', boxShadow: '0 6px 18px -6px rgba(70,67,209,0.6), 0 0 0 1px rgba(60,57,200,0.9), inset 0 1px 0 rgba(255,255,255,0.22)' }}
-                  >
-                    {isConnected && !canDeposit && status !== 'record_failed' ? (metaState === 'loading' ? 'Loading…' : 'Not live for deposits') : depBtn}
-                  </button>
-                </div>
-                <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#454552' }}><span>Lockup?</span><span style={{ color: '#0F7A43', fontWeight: 600 }}>None — withdraw your share in both tokens</span></div>
-              </>
-            ) : (
-              <>
-                <div className="rounded-[14px] p-4" style={INNER}>
-                  <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#62626F' }}>Withdraw</div>
-                  <div className="flex gap-2 mt-3">
-                    {[25, 50, 100].map((p) => (
-                      <button key={p} onClick={() => { setWpct(p); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="flex-1 py-2 rounded-[10px] text-[13px] font-semibold cursor-pointer" style={wpct === p ? { background: '#FFFFFF', color: '#15151D', boxShadow: 'var(--mw-raise-sm)' } : { background: 'transparent', color: '#454552' }}>{p === 100 ? 'Max' : `${p}%`}</button>
-                    ))}
-                  </div>
-                  <div className="text-[12px] mt-3" style={{ color: '#454552' }}>Returns your pro-rata share of both legs at the current price (subject to impermanent loss).</div>
-                </div>
-                {status === 'review' && review?.kind === 'withdraw' && (
-                  <div className="mt-3 rounded-[12px] p-3.5" style={{ ...INNER, border: '1px solid rgba(138,130,244,0.35)' }}>
-                    <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#4643D1' }}>Review</div>
-                    <Row k="Shares to burn" v={fmtShares(review.sharesToBurn)} />
-                    {review.withMin ? (
-                      <>
-                        <Row k={`Est. ${quoteSym} out`} v={usdg(review.estQuote)} />
-                        <Row k={`Min. ${quoteSym} floor (−${SLIPPAGE_TOLERANCE_BPS / 100}%)`} v={usdg(review.minQuote)} accent />
-                        <Row k={`Est. ${pairedSym} out`} v={review.lpQuotable ? fmtUnits(review.estPaired, meta?.pairedDecimals ?? null, pairedSym) : 'unquotable (spot unreadable)'} />
-                        <Row k={`Min. ${pairedSym} floor`} v={review.lpQuotable ? fmtUnits(review.minPaired, meta?.pairedDecimals ?? null, pairedSym) : 'none set'} accent />
-                        <div className="text-[11px] mt-2 leading-[1.5]" style={{ color: '#62626F' }}>
-                          Estimates off the current block; the on-chain floors are the protection. If the pool can’t deliver at least the floors, the transaction reverts and nothing moves.
-                          {!review.lpQuotable && ' The LP leg could not be priced, so its floor is 0 — only the idle leg is protected on this attempt.'}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-[11.5px] mt-2 leading-[1.5]" style={{ color: '#8A5300' }}>This deployment has no slippage-bounded withdraw — the transaction has no floor. Proceed only if you accept that.</div>
-                    )}
-                  </div>
-                )}
-                <div className="flex gap-2 mt-3.5">
-                  {status === 'review' && <button onClick={cancelReview} className="text-[14px] font-semibold py-3.5 px-4 rounded-[14px] cursor-pointer" style={{ background: 'rgba(22,22,44,0.06)', color: '#454552' }}>Back</button>}
-                  <button
-                    onClick={status === 'review' ? confirmWithdraw : status === 'record_failed' ? retryRecord : reviewWithdraw}
-                    disabled={busy || (!hasPos && status !== 'record_failed')}
-                    className="flex-1 text-[15px] font-semibold min-h-[52px] rounded-[14px] cursor-pointer disabled:cursor-default"
-                    style={busy || (!hasPos && status !== 'record_failed') ? { background: 'rgba(22,22,44,0.06)', color: '#454552' } : { background: '#5B5BE6', color: '#fff' }}
-                  >
-                    {!hasPos && status !== 'record_failed' ? 'No position' : wBtn}
-                  </button>
-                </div>
-              </>
-            )}
-            {err && <div className="text-[12.5px] mt-2.5 leading-[1.5]" style={{ color: '#B42318' }}>{err}</div>}
-          </div>
-
-          {/* the loop */}
-          <div className="rounded-[16px] p-5" style={PANEL}>
+        <div className="rounded-[16px] p-5" style={PANEL}>
             <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#62626F' }}>The loop</div>
             <div className="flex flex-col gap-3 mt-3">
               <Loop n="01" t="Deposit into the engine" d="Deposit one or both pool tokens with a minimum-shares floor; shares are valued in the quote asset." />
               <Loop n="02" t="Liquidity plus adapters" d="The portfolio is held across a resting v4 band and per-token adapters. On testnet the adapters hold assets ready without earning yield." />
               <Loop n="03" t="Withdraw in kind" d="Withdraw pro-rata in both pool tokens, with minimum-output limits." />
             </div>
-          </div>
         </div>
-        )}
       </div>
 
       <p className="text-[12px] mt-6" style={{ color: '#62626F' }}>
@@ -673,9 +682,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   )
 }
 
-function Tag({ children }: { children: React.ReactNode }) {
-  return <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ color: '#454552', background: 'rgba(22,22,44,0.05)' }}>{children}</span>
-}
 function Meta2({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
   return (
     <div className="flex justify-between items-center py-2.5 text-[13px]" style={{ borderTop: '1px solid rgba(22,22,44,0.05)' }}>
@@ -700,19 +706,41 @@ function AllocRow({ color, label, sub, pct }: { color: string; label: string; su
     </div>
   )
 }
-function Sum({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
-  return (
-    <div>
-      <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#62626F' }}>{k}</div>
-      <div className="font-mono font-bold text-[20px] mt-1" style={{ color: accent ? '#0F7A43' : '#15151D' }}>{v}</div>
-    </div>
-  )
-}
 function Loop({ n, t, d }: { n: string; t: string; d: string }) {
   return (
     <div className="flex gap-3">
       <span className="font-mono text-[12px] font-bold shrink-0" style={{ color: '#4643D1' }}>{n}</span>
       <span><span className="font-semibold text-[13.5px]">{t}</span><div className="text-[12.5px] mt-0.5 leading-[1.5]" style={{ color: '#454552' }}>{d}</div></span>
+    </div>
+  )
+}
+/** The market card's price chart: the pool's 24h closes, drawn like the homepage illustration. Testnet pools have
+ *  no public price feed, so they get a plain note instead of a made-up line. */
+export function PriceChart({ series }: { series?: number[] }) {
+  if (!series || series.length < 3) {
+    return (
+      <div className="mt-3 h-[96px] rounded-[14px] grid place-items-center px-4 text-center text-[12.5px]" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)', color: 'var(--mw-ink-3)' }}>
+        No price history to chart. Public price feeds don’t track testnet pools.
+      </div>
+    )
+  }
+  const W = 300, H = 110
+  const min = Math.min(...series), max = Math.max(...series), span = max - min || 1
+  const pts = series.map((v, i) => [(i / (series.length - 1)) * W, H - 8 - ((v - min) / span) * (H - 16)] as const)
+  const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const up = series[series.length - 1] >= series[0]
+  const pct = ((series[series.length - 1] - series[0]) / series[0]) * 100
+  return (
+    <div className="mt-3">
+      <div className="text-[12.5px] font-geist-mono" style={{ color: up ? '#0F7A43' : '#B42318' }}>{up ? '+' : ''}{pct.toFixed(2)}% <span style={{ color: 'var(--mw-ink-3)' }}>24h</span></div>
+      <svg aria-label={`24h price ${up ? 'up' : 'down'}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block w-full h-[110px] mt-1">
+        <defs>
+          <linearGradient id="pd-line" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#5B5BE6" /><stop offset="1" stopColor="#E8794F" /></linearGradient>
+          <linearGradient id="pd-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#A9A7FA" stopOpacity=".35" /><stop offset="1" stopColor="#A9A7FA" stopOpacity="0" /></linearGradient>
+        </defs>
+        <path d={`${line} L${W},${H} L0,${H} Z`} fill="url(#pd-area)" />
+        <path d={line} fill="none" stroke="url(#pd-line)" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+      </svg>
     </div>
   )
 }

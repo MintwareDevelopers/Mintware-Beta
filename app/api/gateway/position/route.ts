@@ -4,6 +4,7 @@ import { marketEnginePublicClient } from '@/lib/gateway/chain'
 import { marketEngineConfigForPool, resolveMarketEngine } from '@/lib/gateway/marketEngine'
 import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
+import { computeCostBasis, type EngineEvent } from '@/lib/gateway/costBasis'
 
 export const dynamic = 'force-dynamic'
 const ipBucket = createTokenBucket({ capacity: 30, refillPerSec: 0.5, maxKeys: 5_000 })
@@ -33,8 +34,24 @@ export const GET = createHandler(async (req, ctx) => {
     ])
     const valuationAvailable = totalSupply !== null && totalNav !== null
     const value = !valuationAvailable ? null : BigInt(totalSupply) === 0n ? 0n : BigInt(shares) * BigInt(totalNav) / BigInt(totalSupply)
-    const { data: event } = await ctx.supabase.from('market_engine_tx_events').select('tx_hash').eq('user_wallet', address).eq('pool_address', inst.poolAddress).eq('chain_id', inst.chainId).eq('market_engine_address', inst.engineAddress).limit(1).maybeSingle()
-    return ctx.json({ success: true, position: { shares: String(shares), positionValueAtomic: value?.toString() ?? null, costBasisAtomic: null, unrealizedPnlAtomic: null, recorded: event != null, costBasisComplete: true, sourceReadable: true, valuationAvailable, history: [] }, poolState: null, totalNav: totalNav?.toString() ?? null, totalSupply: totalSupply?.toString() ?? null, source: inst.source, live: inst.live })
+    // "Put in" is rebuilt from the receipt-verified events (lib/gateway/costBasis.ts); a read failure or any
+    // mismatch with on-chain shares reports it as unavailable rather than guessing.
+    const { data: rows, error: eventsError } = await ctx.supabase.from('market_engine_tx_events')
+      .select('action, shares_atomic, amount0_atomic, amount1_atomic, block_number, transaction_index')
+      .eq('user_wallet', address).eq('pool_address', inst.poolAddress).eq('chain_id', inst.chainId).eq('market_engine_address', inst.engineAddress)
+    const events: EngineEvent[] = (rows ?? []).map((r: Record<string, unknown>) => ({
+      action: r.action === 'withdraw' ? 'withdraw' : 'deposit',
+      sharesAtomic: BigInt(String(r.shares_atomic)),
+      amount0Atomic: BigInt(String(r.amount0_atomic ?? '0')),
+      amount1Atomic: BigInt(String(r.amount1_atomic ?? '0')),
+      blockNumber: BigInt(String(r.block_number)),
+      txIndex: Number(r.transaction_index),
+    }))
+    const quoteSideKnown = Boolean(inst.quoteAsset && inst.token0)
+    const quoteIs0 = quoteSideKnown && inst.quoteAsset.toLowerCase() === inst.token0.toLowerCase()
+    const basis = eventsError || !quoteSideKnown ? { basisAtomic: null, complete: false } : computeCostBasis(events, BigInt(shares), quoteIs0)
+    const pnl = basis.basisAtomic !== null && value !== null ? value - basis.basisAtomic : null
+    return ctx.json({ success: true, position: { shares: String(shares), positionValueAtomic: value?.toString() ?? null, costBasisAtomic: basis.basisAtomic?.toString() ?? null, unrealizedPnlAtomic: pnl?.toString() ?? null, recorded: events.length > 0, costBasisComplete: basis.complete, sourceReadable: true, valuationAvailable, history: [] }, poolState: null, totalNav: totalNav?.toString() ?? null, totalSupply: totalSupply?.toString() ?? null, source: inst.source, live: inst.live })
   } catch (e) {
     ctx.log.warn('market-engine.position', 'chain read failed', { error: String(e) })
     return ctx.json({ success: false, error: 'chain_read_failed' }, 502)

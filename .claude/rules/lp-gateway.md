@@ -31,7 +31,9 @@ the registry. Vercel keeps the old and new code hashes in `MARKET_ENGINE_CODEHAS
 Discover consumes GeckoTerminal pool data and assigns a risk score that ranks candidates; it never certifies a
 pool. Curated instances live in `gateway_instances`; actions/history in `gateway_instance_history`, requests in
 `gateway_pool_requests`, and receipt-verified user actions in `market_engine_tx_events`. Position balances are
-read from the engine on-chain. The legacy routes under `/api/gateway/*` now resolve or act on MarketEngine
+read from the engine on-chain. "Put in" (`costBasisAtomic` on `GET /api/gateway/position`) is replayed from those
+events by `lib/gateway/costBasis.ts` (average cost in the quote asset); it is reported unavailable when a deposit
+included the non-quote token or the replayed shares differ from on-chain shares. The legacy routes under `/api/gateway/*` now resolve or act on MarketEngine
 instances; `POST /api/gateway/position` returns 410 because buffers are unsupported. `/v1/portfolio` and
 `/v1/leaderboard` are retired.
 
