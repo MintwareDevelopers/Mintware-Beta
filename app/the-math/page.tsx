@@ -39,7 +39,7 @@ export default function TheMath() {
     <Section>
       <Eyebrow>Why the blend wins</Eyebrow>
       <H2 soft="beats either one alone.">Fees plus yield</H2>
-      <P>Lending alone is steady but modest. A pool alone earns well when it trades and nothing when it doesn’t. Blending the two means the busy hours earn fees and the quiet hours still earn yield — so the balance is working around the clock, and you can withdraw it whenever you like.</P>
+      <P>Lending alone is steady but modest. A pool alone earns well when it trades and nothing when it doesn’t. Blending the two means the busy hours earn fees and the quiet hours still earn yield — so the balance keeps working through both. Capital in a pool carries price risk, including impermanent loss, and no rate here is promised.</P>
       <Kicker>Market-maker income on the busy days. Lending yield on the quiet ones.</Kicker>
     </Section>
 
