@@ -36,7 +36,6 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
 
   const [orgId, setOrgId] = useState<string | null>(null)
   const [orgName, setOrgName] = useState('')
-  const [isOwner, setIsOwner] = useState(false)
   const [cards, setCards] = useState<CardRow[]>([])
   const [gateway, setGateway] = useState<Gateway>(null)
   const [events, setEvents] = useState<SwipeEvent[]>([])
@@ -46,7 +45,7 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
 
   useEffect(() => {
     fetch(`/api/orgs/${slug}/treasury${address ? `?address=${address}` : ''}`).then((r) => r.json()).then((d) => {
-      if (d?.org) { setOrgId(d.org.id); setOrgName(d.org.name); setIsOwner(d.org.ownerWallet?.toLowerCase() === address?.toLowerCase()) }
+      if (d?.org) { setOrgId(d.org.id); setOrgName(d.org.name) }
     }).catch(() => {})
   }, [slug, address])
 
@@ -96,16 +95,6 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
     } catch (e) { setMsg((e as Error)?.message ?? 'destination update failed') } finally { setBusy('') }
   }
 
-
-  const settle = async (event: SwipeEvent) => {
-    if (!orgId || !address) return
-    setBusy(`settle-${event.id}`); setMsg('')
-    try {
-      const res = await signedOrgFetch({ path: `/api/orgs/${orgId}/cards/settle`, action: 'mintware-org-card-settle', payload: { eventId: event.id }, address, signMessageAsync })
-      const d = await res.json()
-      if (res.ok && d.ok) refreshEvents(); else setMsg(d.error ?? d.detail ?? 'settle failed')
-    } catch (e) { setMsg(String(e)) } finally { setBusy('') }
-  }
 
   return (
     <MwAuthGuard>
@@ -184,9 +173,6 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
                 </div>
               </div>
               <div className="font-geist-mono text-[15px] text-ink shrink-0">{fmtUsd(e.amount_atomic_usdc)}</div>
-              {isOwner && e.decision === 'approved' && !e.settled && (
-                <button onClick={() => settle(e)} disabled={busy === `settle-${e.id}`} className="shrink-0 mw-btn-quiet !min-h-[36px] text-[13px] disabled:opacity-50">{busy === `settle-${e.id}` ? 'Settling…' : 'Settle'}</button>
-              )}
             </div>
           ))}
         </div>

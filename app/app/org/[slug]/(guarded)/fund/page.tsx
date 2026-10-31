@@ -116,7 +116,7 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
             <div className="text-[16px] font-semibold text-ink">One-time setup</div>
             <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Treasury yield runs on an on-chain yield vault that&apos;s provisioned once — then you just supply. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
             <div className="text-[13px] font-semibold text-ink-mid mt-4 mb-1.5">Operator: deploy once</div>
-            <code className="block font-geist-mono text-[12.5px] text-ink-mid rounded-[12px] px-3.5 py-3 overflow-x-auto whitespace-nowrap" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>pnpm forge:deploy:savings:base-sepolia</code>
+            <code className="block font-geist-mono text-[12.5px] text-ink-mid rounded-[12px] px-3.5 py-3 overflow-x-auto whitespace-nowrap" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>forge script contracts-v4/script/DeployEarnSepolia.s.sol --rpc-url base_sepolia</code>
             {isOwner ? (
               <div className="flex gap-2 mt-4 max-[520px]:flex-col">
                 <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… yield vault address" className="flex-1 rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[44px] px-3.5 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[13px] font-mono" />
