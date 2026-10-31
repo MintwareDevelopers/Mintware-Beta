@@ -1,22 +1,19 @@
 'use client'
 
-// /app/rwas — the RWA workspace front door. Leads with the live Base market as ONE instrument (price inside the
-// appraisal band + where the liquidity sits), then the chain's own refusals as the headline proof. Light-only.
+// /app/rwas — the owned RWA engine, its holdings and permission/appraisal rules. Light-only.
 
 import Link from 'next/link'
-import { RWA_UNITS } from '@/lib/rwa/demo'
-import { useRwaUnit, usd, ago, rwaStatus, STATUS_CLS } from './useRwaUnit'
-import { BandGauge, LiquidityMap, RefusalCards, LiveDot, Disclosure, EY, H2 } from './RwaVisuals'
+import { RWA_UNITS } from '@/lib/rwa/units'
+import { useRwaUnit, ago, rwaStatus, STATUS_CLS } from './useRwaUnit'
+import { BandGauge, LiquidityMap, LiveDot, ReadState, amount, observedDate, IconTile, IconRefused, Disclosure, EY, H2 } from './RwaVisuals'
 
 const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
 
 export function RwaOverview() {
   const base = RWA_UNITS[0]
-  const D = base.demo
-  const { unit, failed, now, interest } = useRwaUnit(base.slug)
+  const { unit, failed, now } = useRwaUnit(base.slug)
   const status = rwaStatus(unit)
-  const proofTxs = RWA_UNITS.reduce((n, u) => n + u.demo.deployTxs.length + u.demo.legs.reduce((m, l) => m + l.txs.length, 0), 0)
-  const refusedCount = RWA_UNITS.reduce((n, u) => n + u.demo.legs.flatMap((l) => l.txs).filter((t) => t.status === 'reverted').length, 0)
+  const hook = unit?.hook
 
   return (
     <div className="text-ink">
@@ -25,22 +22,23 @@ export function RwaOverview() {
         <div className={`${WRAP} pt-12 pb-10`}>
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full mw-raise-sm px-3 py-1 text-[12px] font-semibold text-peri-deep">RWA liquidity · demo</span>
-            <LiveDot block={unit?.block} failed={failed} label={`Live on ${base.chain.name}`} />
+            {unit?.source !== 'undeployed' && <LiveDot block={unit?.block} failed={failed} label={base.chainName} />}
           </div>
           <h1 className="mt-5 max-w-[17ch] font-atx-display text-[clamp(2.4rem,5vw,4rem)] font-semibold leading-[1.0] tracking-[-0.04em]">
             The liquidity engine for regulated real-world assets.
           </h1>
           <p className="mt-5 max-w-[60ch] text-[16.5px] leading-[1.6] text-ink-mid">
             Tokenizing a property makes it divisible, not liquid. Mintware gives every asset its own market, anchored to
-            its appraisal, open to any liquidity provider, while ownership stays with verified holders. Idle liquidity
-            keeps earning until a trade needs it.
+            a dated appraisal. Qualified holders contribute property tokens and USDC for one non-transferable share
+            class. The engine owns the pool position and keeps remaining assets in idle adapters.
           </p>
           <div className="mt-8 grid grid-cols-4 gap-px overflow-hidden rounded-[18px] mw-raise-sm bg-hair max-[820px]:grid-cols-2">
-            <Stat k="Liquidity supplied" v={unit ? usd(unit.vault.seniorUsd) : '—'} />
-            <Stat k="Earning while idle" v={unit ? `${Math.round((unit.lending.balanceUsd / Math.max(1, unit.lending.balanceUsd + unit.vault.deployedUsd)) * 100)}%` : '—'} />
-            <Stat k="Proof transactions" v={String(proofTxs)} />
-            <Stat k="Refused by the chain" v={String(refusedCount)} tone="warn" />
+            <Stat k={unit?.source === 'cached' ? 'NAV at snapshot (USDC)' : 'Engine NAV (USDC)'} v={amount(unit?.engine?.nav, 6)} />
+            <Stat k="Share supply" v={amount(unit?.engine?.supply, 18)} />
+            <Stat k="Core band (ticks)" v={hook ? `±${hook.coreBandTicks}` : '—'} />
+            <Stat k="Outer band (ticks)" v={hook ? `±${hook.specBandTicks}` : '—'} />
           </div>
+          <div className="mt-5"><ReadState unit={unit} failed={failed} /></div>
         </div>
       </section>
 
@@ -49,9 +47,9 @@ export function RwaOverview() {
         <div className={`${WRAP} py-12`}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className={EY}>Live market</div>
-              <h2 className={`${H2} mt-1.5`}>{D.property.name.replace(' (demo)', '')}</h2>
-              <p className="mt-1.5 text-[13.5px] text-ink-mid">{D.property.symbol} / dUSD · Uniswap v4 · {base.chain.name} · fictional land parcel</p>
+              <div className={EY}>Owned market</div>
+              <h2 className={`${H2} mt-1.5`}>{base.name}</h2>
+              <p className="mt-1.5 text-[13.5px] text-ink-mid">{base.symbol} / USDC · Uniswap v4 · {base.chainName} · fictional land parcel</p>
             </div>
             <Link href={`/app/rwas/${base.slug}`} className="mw-btn">Open the market →</Link>
           </div>
@@ -60,16 +58,15 @@ export function RwaOverview() {
             <div className="rounded-[24px] mw-raise-lg p-7">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <div className={EY}>Pool price</div>
-                  <div className="mt-2 font-geist-mono text-[clamp(40px,6vw,52px)] leading-none tracking-[-0.04em]">{unit ? usd(unit.spot.usd, 2) : '—'}</div>
+                  <div className={EY}>Appraisal (USDC per unit)</div>
+                  <div className="mt-2 font-geist-mono text-[clamp(40px,6vw,52px)] leading-none tracking-[-0.04em] break-words">{amount(hook?.priceWad, 18)}</div>
                   <div className="mt-2 text-[13px] text-ink-mid">
-                    vs appraisal <span className="font-semibold text-peri-deep">{unit ? usd(unit.appraisal.usd, 2) : '—'}</span>
-                    {unit && <> · appraised {ago(now - unit.appraisal.at)}</>}
+                    {hook ? <><time dateTime={new Date(hook.observedAt * 1000).toISOString()}>{observedDate(hook.observedAt)}</time> · {ago(now - hook.observedAt)}</> : 'Awaiting a dated appraisal.'}
                   </div>
                 </div>
                 {status && <span className={`rounded-full px-3 py-1 text-[12.5px] font-semibold ${STATUS_CLS[status.tone]}`}>{status.t}</span>}
               </div>
-              <div className="mt-8">{unit ? <BandGauge unit={unit} demo={D} /> : <div className="h-[110px] mw-shimmer rounded-[14px]" />}</div>
+              <div className="mt-8">{unit ? <BandGauge unit={unit} /> : <div className="h-[110px] bg-[var(--mw-ground)] rounded-[14px]" />}</div>
               <p className="mt-5 border-t border-hair-soft pt-4 text-[12.5px] leading-[1.55] text-ink-soft">
                 A swap that would end outside the hard band is refused by the pool&apos;s hook, unless it moves the price back
                 toward the appraisal. The issuer cannot move the appraisal faster than a capped step and a daily drift limit.
@@ -78,8 +75,8 @@ export function RwaOverview() {
 
             <div className="rounded-[24px] mw-raise p-7">
               <div className={EY}>Where the liquidity sits</div>
-              <h3 className="mt-1.5 font-atx-display text-[19px] font-semibold tracking-[-0.01em]">Never idle, never in the way</h3>
-              <div className="mt-6">{unit ? <LiquidityMap unit={unit} interest={interest} symbol={D.property.symbol} /> : <div className="h-[180px] mw-shimmer rounded-[14px]" />}</div>
+              <h3 className="mt-1.5 font-atx-display text-[19px] font-semibold tracking-[-0.01em]">One position. One share class.</h3>
+              <div className="mt-6">{unit ? <LiquidityMap unit={unit} symbol={base.symbol} /> : <div className="h-[180px] bg-[var(--mw-ground)] rounded-[14px]" />}</div>
             </div>
           </div>
         </div>
@@ -88,13 +85,20 @@ export function RwaOverview() {
       {/* ENFORCED BY THE CHAIN */}
       <section className="border-b border-hair-soft bg-[#F6F6FA]">
         <div className={`${WRAP} py-12`}>
-          <div className={EY}>Enforced by the chain, not by a policy document</div>
-          <h2 className={`${H2} mt-1.5 max-w-[30ch]`}>We asked the contracts to break the rules. They refused.</h2>
-          <p className="mt-2 max-w-[66ch] text-[14px] leading-[1.6] text-ink-mid">
-            Both of these were real transactions, mined and reverted on {base.chain.name}, with the exact rule decoded from the chain.
-          </p>
-          <div className="mt-7"><RefusalCards unit={base} /></div>
-          <Link href="/app/rwas/proof" className="mt-6 inline-flex text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">See the full lifecycle, every transaction →</Link>
+          <div className={EY}>Rules enforced by the hook</div>
+          <h2 className={`${H2} mt-1.5 max-w-[30ch]`}>Permissions and appraisal travel with the pool.</h2>
+          <p className="mt-2 max-w-[66ch] text-[14px] leading-[1.6] text-ink-mid">The engine and hook check new activity on-chain. Full in-kind exits need no appraisal; issuer transfer restrictions still apply.</p>
+          <div className="mt-7 grid grid-cols-2 gap-4 max-[760px]:grid-cols-1">
+            {[
+              ['Issuer permissions', 'Each trader needs swap permission. New shares require holder and engine liquidity permission, plus engine wrapper approval.'],
+              ['Dated appraisal', 'Stale observations and guardian pauses stop new trades. A permitted trade outside the band must narrow the gap without crossing the opposite boundary.'],
+            ].map(([title, body]) => <div key={title} className="mw-raise rounded-[22px] p-6" style={{ outline: '1.5px solid rgba(201,87,43,.28)', outlineOffset: -1.5 }}>
+              <IconTile tone="coral"><IconRefused /></IconTile>
+              <h3 className="mt-4 text-[19px] font-semibold tracking-[-0.02em]">{title}</h3>
+              <p className="mt-1.5 text-[14px] leading-[1.55] text-ink-mid">{body}</p>
+            </div>)}
+          </div>
+          <Link href="/app/rwas/proof" className="mt-6 inline-flex text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">View archived transactions from the previous model →</Link>
         </div>
       </section>
 
@@ -102,18 +106,18 @@ export function RwaOverview() {
       <section className="border-b border-hair-soft">
         <div className={`${WRAP} py-12`}>
           <div className={EY}>How it clears</div>
-          <h2 className={`${H2} mt-1.5`}>Permissionless liquidity. Compliant ownership.</h2>
+          <h2 className={`${H2} mt-1.5`}>Qualified holders. Proportional ownership.</h2>
           <div className="mt-8 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-3 max-[900px]:grid-cols-1">
-            <RoleCard n="01" tag="Open to anyone" title="Liquidity providers" body="Supply dollars to the asset’s market. They never hold the property token, so its transfer rules never reach them, and they exit in dollars." tone="teal" />
+            <RoleCard n="01" tag="Issuer permission" title="Liquidity providers" body="Contribute property tokens and USDC. One non-transferable share class tracks proportional holdings, with exits paid in kind." tone="teal" />
             <Arrow />
-            <RoleCard n="02" tag="Enrolled once" title="Vault + pool" body="The vault puts a slice into a standard Uniswap v4 pool and lends the rest. The issuer's own inventory sits underneath as first-loss." tone="peri" />
+            <RoleCard n="02" tag="Enrolled once" title="Engine + pool" body="The engine owns a direct Uniswap v4 position and holds idle assets through adapters. The hook checks permissions and the appraisal band." tone="peri" />
             <Arrow />
-            <RoleCard n="03" tag="Verified" title="Traders" body="Checked by the issuer's token at the moment they receive it. An unverified wallet is refused by the token itself." tone="coral" />
+            <RoleCard n="03" tag="Verified" title="Traders" body="Trades use the permissioned router. The hook checks trader permission and the property token enforces its own recipient restrictions." tone="coral" />
           </div>
         </div>
       </section>
 
-      <section><div className={`${WRAP} py-8`}><Disclosure chainName={base.chain.name} symbol={D.property.symbol} /></div></section>
+      <section><div className={`${WRAP} py-8`}><Disclosure chainName={base.chainName} symbol={base.symbol} /></div></section>
     </div>
   )
 }

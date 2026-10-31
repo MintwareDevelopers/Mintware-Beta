@@ -9,6 +9,8 @@ import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {IPermissionsAdapter} from "@uniswap/v4-periphery-permissioned/src/hooks/permissionedPools/interfaces/IPermissionsAdapter.sol";
+
 /// @notice Shared PoolManager settlement for V4 liquidity deltas.
 /// @dev Internal functions inline into each caller; this creates no linked-library deployment or
 ///      new runtime authority. Token payments use the same SafeERC20 transfer semantics as the
@@ -26,6 +28,33 @@ library MWV4Settlement {
 
         if (amount1 < 0) pay(poolManager, key.currency1, uint256(uint128(-amount1)));
         else if (amount1 > 0) poolManager.take(key.currency1, address(this), uint256(uint128(amount1)));
+    }
+
+    error InexactAdapterFunding();
+
+    /// @dev Assets are in PoolKey order, validated by the owned engine at construction.
+    function settleAssetDelta(
+        IPoolManager manager, PoolKey memory key, BalanceDelta delta, IERC20 asset0, IERC20 asset1
+    ) internal {
+        _settleAsset(manager, key.currency0, delta.amount0(), asset0);
+        _settleAsset(manager, key.currency1, delta.amount1(), asset1);
+    }
+
+    function _settleAsset(IPoolManager manager, Currency currency, int128 delta, IERC20 asset) private {
+        if (delta > 0) manager.take(currency, address(this), uint256(uint128(delta)));
+        else if (delta < 0) {
+            uint256 amount = uint256(uint128(-delta));
+            address adapter = Currency.unwrap(currency);
+            if (address(asset) == adapter) { pay(manager, currency, amount); return; }
+            manager.sync(currency);
+            uint256 beforeSelf = asset.balanceOf(address(this));
+            uint256 beforeAdapter = asset.balanceOf(adapter);
+            asset.safeTransfer(adapter, amount);
+            if (beforeSelf - asset.balanceOf(address(this)) != amount
+                || asset.balanceOf(adapter) - beforeAdapter != amount) revert InexactAdapterFunding();
+            IPermissionsAdapter(adapter).wrapToPoolManager(amount);
+            manager.settle();
+        }
     }
 
     /// @notice Settle a swap delta and report the output asset actually received.

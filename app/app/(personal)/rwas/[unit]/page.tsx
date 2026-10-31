@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { RwaMarket } from '@/components/rwa/RwaMarket'
-import { getUnit } from '@/lib/rwa/demo'
+import { getUnit } from '@/lib/rwa/units'
 
 // /app/rwas/[unit] — the live market for one RWA liquidity unit (`wcp7` on Base Sepolia).
 export default async function RwaUnitPage({ params }: { params: Promise<{ unit: string }> }) {
