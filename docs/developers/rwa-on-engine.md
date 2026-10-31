@@ -99,7 +99,7 @@ It never activates or supplies liquidity. Issuer custody/LP approvals, qualified
 trusted Universal Router approval and the swap switch must be reviewed before activation.
 
 Lifecycle runtime pin in both wrappers, module installer, verifier and fork rehearsal:
-`0x8dc8c9b181f9dc54d50a53e9cbe3d68cda78f54ffe3add11e9ea6113166b8d5d`.
+`0x9fb68029d316c682a41b625177cc8a7431cd03df38ee5878e3c045edb634bc01`.
 The checked-in module creation hex is refreshed from the matching compiled artifact too.
 Foundry auto-discovered remappings enter Solidity metadata: initializing the router dependencies
 changed the module hash from `0x92db…7e56` without changing executable bytecode. All consumers

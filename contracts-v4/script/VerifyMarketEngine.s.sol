@@ -13,7 +13,7 @@ import { PoolId, PoolIdLibrary } from "@uniswap/v4-core/src/types/PoolId.sol";
 contract VerifyMarketEngine is Script {
     using PoolIdLibrary for PoolKey;
     bytes32 constant EXPECTED_MODULE_HASH =
-        0x8dc8c9b181f9dc54d50a53e9cbe3d68cda78f54ffe3add11e9ea6113166b8d5d;
+        0x9fb68029d316c682a41b625177cc8a7431cd03df38ee5878e3c045edb634bc01;
 
     function run() external {
         address engineAddress = vm.envAddress("MARKET_ENGINE");

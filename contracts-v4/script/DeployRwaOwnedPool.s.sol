@@ -37,7 +37,7 @@ contract DeployRwaOwnedPool is Script {
     function install(Install memory p) public returns (MintwareOwnedPoolMarketEngine engine, MintwareRwaAppraisalHook hook) {
         require(block.chainid == 84532 && MANAGER.code.length != 0 && USDC.code.length != 0, "Base Sepolia only");
         require(p.owner != address(0) && p.property != USDC && p.property.code.length != 0 && p.checker.code.length != 0, "issuer configuration");
-        require(p.module.codehash == 0x8dc8c9b181f9dc54d50a53e9cbe3d68cda78f54ffe3add11e9ea6113166b8d5d, "lifecycle hash");
+        require(p.module.codehash == 0x9fb68029d316c682a41b625177cc8a7431cd03df38ee5878e3c045edb634bc01, "lifecycle hash");
         require(p.appraisalTick % 60 == 0 && p.appraisalTick >= TickMath.MIN_TICK+600 && p.appraisalTick <= TickMath.MAX_TICK-600, "tick range/spacing");
         if (p.factory != address(0)) {
             address referenceFactory = vm.deployCode("PermissionsAdapterFactory.sol:PermissionsAdapterFactory",abi.encode(MANAGER));

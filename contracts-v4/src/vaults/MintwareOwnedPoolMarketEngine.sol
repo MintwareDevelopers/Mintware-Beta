@@ -12,7 +12,7 @@ import {PermissionFlags} from "@uniswap/v4-periphery-permissioned/src/hooks/perm
 /// @notice Direct PoolManager owner with underlying custody and non-transferable RWA claims.
 contract MintwareOwnedPoolMarketEngine is MintwareMarketEngineCore {
     bytes32 private constant EXPECTED_LIFECYCLE_MODULE_CODEHASH =
-        0x8dc8c9b181f9dc54d50a53e9cbe3d68cda78f54ffe3add11e9ea6113166b8d5d;
+        0x9fb68029d316c682a41b625177cc8a7431cd03df38ee5878e3c045edb634bc01;
     MintwareRwaAppraisalHook public immutable appraisalHook;
     IPermissionsAdapter public immutable permissionsAdapter;
     error SharesNonTransferable();

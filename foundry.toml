@@ -8,6 +8,10 @@ solc           = "0.8.26"
 optimizer      = true
 optimizer_runs = 200
 via_ir         = true
+# Code hashes are pinned (engine ↔ lifecycle module), so keep metadata out of bytecode:
+# otherwise remappings auto-detected from whatever submodules are checked out change the hash.
+bytecode_hash  = "none"
+cbor_metadata  = false
 fs_permissions = [{ access = "read", path = "./contracts-v4/script/data" }, { access = "read", path = "./contracts-v4/out" }]
 
 # Foundry remappings — V4 core + periphery + OZ
