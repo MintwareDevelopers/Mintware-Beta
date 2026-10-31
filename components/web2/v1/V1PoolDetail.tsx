@@ -54,7 +54,7 @@ type Meta = {
 type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; feePct?: number | null; live: boolean }
 type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
 type Position = { shares: string; positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; recorded?: boolean; costBasisComplete?: boolean; history?: Snapshot[] }
-type PositionResponse = { position: Position; poolState: null; totalNav?: string; totalSupply?: string }
+type PositionResponse = { position: Position; poolState: null; totalNav?: string | null; totalSupply?: string | null }
 type Status = 'idle' | 'quote' | 'review' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'recorded' | 'record_failed'
 type Review =
   | { kind: 'deposit'; amountAtomic: bigint; estShares: bigint; minShares: bigint; withMin: boolean }
@@ -506,7 +506,8 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         <div className="flex flex-col gap-5 min-[900px]:order-2 order-1">
           {/* position summary */}
           <div className="rounded-[16px] p-5" style={PANEL}>
-            <Sum k="Position value" v={usdg(pos?.positionValueAtomic)} />
+            <Sum k="Position value" v={pos?.positionValueAtomic == null ? 'Unavailable' : usdg(pos.positionValueAtomic)} />
+            {pos && <Row k="Shares" v={fmtShares(BigInt(pos.shares))} />}
             {hasPos && pos?.recorded === false && (
               <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#8A5300' }}>
                 Position read from chain; its deposit was never recorded here, so cost basis and P&amp;L are unknown. Your funds are unaffected.
@@ -517,7 +518,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                 Cost basis may be incomplete — some of your earlier history for this pool is still being recovered. The figures below reflect only what&apos;s currently attributed. Your funds are unaffected.
               </div>
             )}
-            {hasPos && pos?.costBasisAtomic != null && (
+            {hasPos && pos?.positionValueAtomic != null && pos?.costBasisAtomic != null && (
               <div className="mt-4 pt-4 flex flex-col gap-1.5" style={{ borderTop: '1px solid rgba(22,22,44,0.06)' }}>
                 <div className="flex justify-between items-baseline text-[13px]">
                   <span style={{ color: '#454552' }}>Net vs your deposit <span style={{ color: '#62626F' }}>({usdg(pos.costBasisAtomic)} in)</span></span>

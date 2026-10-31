@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { formatUnits } from 'viem'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { marketChain } from '@/lib/chains/marketChains'
@@ -12,7 +13,7 @@ import type { LiveMarket } from '@/app/api/gateway/markets/route'
 import { LaneHeader, PLAIN } from './LaneHeader'
 import { GlassFrame } from './GlassFrame'
 
-type Position = { poolAddress: string; marketEngine: string; pairLabel: string; chainId: number; shares: string; positionValueAtomic: string; live: boolean }
+type Position = { poolAddress: string; marketEngine: string; pairLabel: string; chainId: number; shares: string; positionValueAtomic: string | null; live: boolean }
 
 export function V1Portfolio() {
   const { address, isConnected } = useMintwareIdentity()
@@ -37,7 +38,7 @@ export function V1Portfolio() {
   const rows = useMemo(() => (positions ?? []).map((p) => {
     const mk = markets.find((x) => x.poolAddress.toLowerCase() === p.poolAddress.toLowerCase() && x.chainId === p.chainId)
     const dec = mk?.quoteDecimals ?? null
-    const value = dec == null ? null : Number(BigInt(p.positionValueAtomic)) / 10 ** dec
+    const value = dec == null || p.positionValueAtomic == null ? null : Number(BigInt(p.positionValueAtomic)) / 10 ** dec
     return { ...p, value, symbol: mk?.quoteSymbol ?? null }
   }), [positions, markets])
 
@@ -70,7 +71,7 @@ export function V1Portfolio() {
             <Link key={`${p.chainId}:${p.marketEngine}`} href={`/markets/${encodeURIComponent(p.poolAddress)}?pair=${encodeURIComponent(p.pairLabel)}&pm=${p.marketEngine}`} className="grid items-center px-5 py-4 no-underline hover:bg-white/60" style={{ gridTemplateColumns: '2fr 1fr 1fr 0.8fr', color: '#15151D', borderBottom: '1px solid rgba(22,22,44,0.05)' }}>
               <span className="font-semibold text-[14.5px]">{p.pairLabel}{!p.live && <span className="ml-2 text-[11px] font-semibold" style={{ color: '#8A5300' }}>closed · exit available</span>}</span>
               <span className="text-[13px]" style={{ color: '#454552' }}>{marketChain(p.chainId)?.short ?? `Chain ${p.chainId}`} · testnet</span>
-              <span className="text-right font-mono font-semibold text-[14px]">{p.value == null ? `${p.shares} shares` : `${p.value.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${p.symbol ?? ''}`}</span>
+              <span className="text-right font-mono font-semibold text-[14px]">{p.value == null ? `Value unavailable · ${formatUnits(BigInt(p.shares), 18)} shares` : `${p.value.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${p.symbol ?? ''}`}</span>
               <span className="text-right text-[13px] font-semibold" style={{ color: '#4643D1' }}>Manage →</span>
             </Link>
           ))}

@@ -28,8 +28,8 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
   const chain = live && live.source !== 'recorded' ? live : null
   const lockDays = chain ? Math.max(0, Math.round((chain.vault.lockExpiry - now) / 86400)) : null
   const cover = chain && chain.vault.deployedUsd > 0 ? chain.vault.juniorUsd / chain.vault.deployedUsd : null
-  const nextUpdate = live && live.appraisal.minUpdateSecs ? Math.max(0, live.appraisal.at + live.appraisal.minUpdateSecs - now) : null
-  const ageLeft = live && live.appraisal.maxAgeSecs ? live.appraisal.at + live.appraisal.maxAgeSecs - now : null
+  const nextUpdate = live?.source === 'live' && live.appraisal.minUpdateSecs ? Math.max(0, live.appraisal.at + live.appraisal.minUpdateSecs - now) : null
+  const ageLeft = live?.source === 'live' && live.appraisal.maxAgeSecs ? live.appraisal.at + live.appraisal.maxAgeSecs - now : null
 
   return (
     <div className="rounded-[22px] p-6 max-[640px]:p-4 mw-raise">
@@ -52,7 +52,7 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-3 max-[820px]:grid-cols-1">
-        <Tile k="Current appraisal" v={live ? usd(live.appraisal.usd, 2) : '—'} s={live ? `posted ${ago(now - live.appraisal.at)}` : ''} />
+        <Tile k={live?.source === 'live' ? 'Current appraisal' : 'Appraisal at snapshot'} v={live ? usd(live.appraisal.usd, 2) : '—'} s={live ? `posted ${ago(now - live.appraisal.at)}` : ''} />
         <Tile k="Next update allowed" v={nextUpdate === null ? '—' : nextUpdate === 0 ? 'now' : `in ${ago(nextUpdate).replace(' ago', '')}`} s="the contract rate-limits appraisals" />
         <Tile k="Appraisal valid for" v={ageLeft === null ? '—' : ageLeft <= 0 ? 'expired' : `${Math.round(ageLeft / 86400)} more days`} s="after that trading halts and LPs get an exit window" tone={ageLeft !== null && ageLeft < 7 * 86400 ? 'warn' : undefined} />
       </div>

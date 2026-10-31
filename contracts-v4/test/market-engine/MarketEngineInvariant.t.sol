@@ -124,11 +124,33 @@ contract MarketEngineHandler {
     }
 
     function _withdraw(MarketEngineActor who,uint256 shares) internal {
-        MarketEngineActor other=who==holderA?holderB:holderA;
-        (uint256 before0,uint256 before1)=_claim(other);
+        uint256 supplyBefore=engine.totalSupply();
+        uint256 navBefore=engine.totalNav();
+        uint256 claimBefore=navBefore*engine.balanceOf(address(who))/supplyBefore;
+        bool frozen=token0.frozenRecipient()==address(who) || token1.frozenRecipient()==address(who);
+        uint256 wallet0=token0.balanceOf(address(who));
+        uint256 wallet1=token1.balanceOf(address(who));
+        (uint256 price,)=mark.latestMark();
         try who.withdraw(shares) {
-            withdraws++; (uint256 after0,uint256 after1)=_claim(other);
-            if(after0+1<before0 || after1+1<before1) fairnessBroken=true;
+            withdraws++;
+            uint256 supplyAfter=engine.totalSupply();
+            uint256 navAfter=engine.totalNav();
+            // Compare NAV per share without division, allowing three atomic quote units.
+            if(supplyAfter!=0 && (navAfter+3)*supplyBefore<navBefore*supplyAfter) fairnessBroken=true;
+            if(frozen) {
+                uint256 paid=token0.balanceOf(address(who))-wallet0
+                    +(token1.balanceOf(address(who))-wallet1)*price/UNIT;
+                uint256 retained=supplyAfter==0?0:navAfter*engine.balanceOf(address(who))/supplyAfter;
+                // Include unoffered shares in both claims, so partial requests are covered too.
+                if(paid>claimBefore) fairnessBroken=true;
+                else {
+                    uint256 undelivered=claimBefore-paid;
+                    // Burning rounds up by at most one atomic share; yield can make that
+                    // worth more than one quote unit. Allow two additional quote-unit floors.
+                    uint256 rounding=(navBefore+supplyBefore-1)/supplyBefore+2;
+                    if(retained>undelivered || undelivered-retained>rounding) fairnessBroken=true;
+                }
+            }
         } catch {}
     }
     function _checkDeposit(uint256 nav,uint256 supply) internal {

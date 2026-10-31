@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename)
 const CSP_ENFORCED = [
   "default-src 'self'",
   "connect-src 'self' blob: data: https://attribution-scorer.ceo-1f9.workers.dev " +
-    'https://mainnet.base.org https://sepolia.base.org https://arb1.arbitrum.io https://ethereum-rpc.publicnode.com ' +
+    'https://mainnet.base.org https://sepolia.base.org https://base-sepolia-rpc.publicnode.com https://arb1.arbitrum.io https://ethereum-rpc.publicnode.com ' +
     // LP Gateway (audit O-5 / HO-3): the /earn money UI reads receipts + position state straight from the
     // Robinhood Chain RPC (`meta.rpcUrl`). Testnet (46630) + mainnet (4663) origins only — nothing else loosened.
     'https://rpc.testnet.chain.robinhood.com https://rpc.mainnet.chain.robinhood.com ' +

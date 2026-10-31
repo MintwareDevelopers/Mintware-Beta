@@ -181,9 +181,10 @@ contract MarketEngineCoreTest is MarketEngineFixture {
         uint256 shares = engine.balanceOf(bob);
         uint256 supply = engine.totalSupply();
         uint256 aShares = engine.balanceOf(alice);
-        (uint256 assets0,uint256 assets1) = _heldAssets();
-        uint256 claim0 = assets0 * aShares / supply;
-        uint256 claim1 = assets1 * aShares / supply;
+        uint256 navBefore = engine.totalNav();
+        uint256 withdrawerClaim = navBefore * shares / supply;
+        uint256 otherClaim = navBefore * aShares / supply;
+        (uint256 price,) = mark.latestMark();
         vm.prank(bob);
         (uint256 burned,uint256 out0,uint256 out1) = engine.withdraw(shares,bob,0,0);
         assertGt(out0,0);
@@ -191,9 +192,14 @@ contract MarketEngineCoreTest is MarketEngineFixture {
         assertGt(burned,0);
         assertLt(burned,shares);
         uint256 nextSupply = engine.totalSupply();
-        (assets0,assets1) = _heldAssets();
-        assertGe(assets0 * aShares / nextSupply + 1,claim0);
-        assertGe(assets1 * aShares / nextSupply + 1,claim1);
+        uint256 navAfter = engine.totalNav();
+        // A one-leg payout changes token composition, but cannot dilute marked NAV per share.
+        assertGe((navAfter + 3) * supply,navBefore * nextSupply);
+        assertApproxEqAbs(navAfter * aShares / nextSupply,otherClaim,3);
+        uint256 undelivered = withdrawerClaim - out0 - out1 * price / 1e18;
+        uint256 retained = navAfter * engine.balanceOf(bob) / nextSupply;
+        assertLe(retained,undelivered); // rounding must be against the withdrawer
+        assertApproxEqAbs(retained,undelivered,3);
         assertEq(engine.balanceOf(bob),shares-burned);
     }
 

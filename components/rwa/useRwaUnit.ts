@@ -28,11 +28,16 @@ export function useRwaUnit(slug: string, pollMs = 12_000) {
   const [failed, setFailed] = useState(false)
   const [now, setNow] = useState(() => Date.now() / 1000)
 
+  const unavailable = useCallback(() => {
+    setFailed(true)
+    setUnit((previous) => previous?.source === 'live' ? { ...previous, source: 'cached' } : previous)
+  }, [])
+
   const load = useCallback((fresh = false) =>
     fetch(`/api/rwa/unit?unit=${slug}${fresh ? '&fresh=1' : ''}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d: RwaUnitLive) => { if (d.ok) { setUnit(d); setFailed(d.source !== 'live') } else setFailed(true) })
-      .catch(() => setFailed(true)), [slug])
+      .then((r) => { if (!r.ok) throw new Error('RWA read unavailable'); return r.json() })
+      .then((d: RwaUnitLive) => { if (d.ok) { setUnit(d); setFailed(d.source !== 'live') } else unavailable() })
+      .catch(unavailable), [slug, unavailable])
 
   useEffect(() => {
     load()
@@ -44,9 +49,10 @@ export function useRwaUnit(slug: string, pollMs = 12_000) {
   // Interest keeps accruing between polls: extrapolate client-side at the venue's rate.
   const interest = useMemo(() => {
     if (!unit) return null
+    if (failed || unit.source !== 'live') return unit.lending.interestMintedUsd + unit.lending.pendingUsd
     const perSec = (unit.lending.balanceUsd * unit.lending.aprPct) / 100 / (365 * 86400)
     return unit.lending.interestMintedUsd + unit.lending.pendingUsd + perSec * Math.max(0, now - unit.blockTime)
-  }, [unit, now])
+  }, [unit, now, failed])
 
   return { unit, failed, now, interest, reload: load }
 }
@@ -63,6 +69,7 @@ export type RwaStatus = { t: string; tone: 'good' | 'info' | 'warn' }
 export function rwaStatus(unit: RwaUnitLive | null): RwaStatus | null {
   if (!unit) return null
   if (unit.source === 'recorded') return { t: 'Recorded run', tone: 'info' }
+  if (unit.source === 'cached') return { t: 'Current appraisal status unavailable — cached data', tone: 'warn' }
   if (unit.tradingPaused) return { t: 'Trading paused', tone: 'warn' }
   if (!unit.appraisal.fresh && unit.appraisal.oracleReady) return { t: 'Appraisal stale — trading halted, exit window open', tone: 'warn' }
   if (!unit.appraisal.fresh) return { t: 'Appraisal expired — awaiting a new appraisal', tone: 'warn' }

@@ -28,12 +28,13 @@ export const GET = createHandler(async (req, ctx) => {
     const client = marketEnginePublicClient(cfg)
     const [shares, totalSupply, totalNav] = await Promise.all([
       client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'balanceOf', args: [address as `0x${string}`] }),
-      client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalSupply' }),
-      client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalNav' }),
+      client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalSupply' }).catch(() => null),
+      client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalNav' }).catch(() => null),
     ])
-    const value = BigInt(totalSupply) === 0n ? 0n : BigInt(shares) * BigInt(totalNav) / BigInt(totalSupply)
+    const valuationAvailable = totalSupply !== null && totalNav !== null
+    const value = !valuationAvailable ? null : BigInt(totalSupply) === 0n ? 0n : BigInt(shares) * BigInt(totalNav) / BigInt(totalSupply)
     const { data: event } = await ctx.supabase.from('market_engine_tx_events').select('tx_hash').eq('user_wallet', address).eq('pool_address', inst.poolAddress).eq('chain_id', inst.chainId).eq('market_engine_address', inst.engineAddress).limit(1).maybeSingle()
-    return ctx.json({ success: true, position: { shares: String(shares), positionValueAtomic: value.toString(), costBasisAtomic: null, unrealizedPnlAtomic: null, recorded: event != null, costBasisComplete: true, sourceReadable: true, history: [] }, poolState: null, totalNav: String(totalNav), totalSupply: String(totalSupply), source: inst.source, live: inst.live })
+    return ctx.json({ success: true, position: { shares: String(shares), positionValueAtomic: value?.toString() ?? null, costBasisAtomic: null, unrealizedPnlAtomic: null, recorded: event != null, costBasisComplete: true, sourceReadable: true, valuationAvailable, history: [] }, poolState: null, totalNav: totalNav?.toString() ?? null, totalSupply: totalSupply?.toString() ?? null, source: inst.source, live: inst.live })
   } catch (e) {
     ctx.log.warn('market-engine.position', 'chain read failed', { error: String(e) })
     return ctx.json({ success: false, error: 'chain_read_failed' }, 502)

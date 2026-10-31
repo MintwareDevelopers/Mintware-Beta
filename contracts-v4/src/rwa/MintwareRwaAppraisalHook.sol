@@ -97,8 +97,13 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
     bool    public hasAppraisal;
     address public keeper;
 
-    int24   public driftAnchorTick;   // appraisal at the start of the current 24 h drift window
+    int24   public driftAnchorTick;   // appraisal at the last update outside the rolling 24 h window
     uint64  public driftWindowStart;
+
+    // Cumulative absolute movement, searched by timestamp: no window-boundary reset,
+    // no linear pruning loop when many updates expire after a keeper outage.
+    struct DriftCheckpoint { uint64 at; int24 tick; uint128 movement; }
+    DriftCheckpoint[] private _driftHistory;
 
     Config  public config;
 
@@ -223,6 +228,7 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
         appraisedAt      = uint64(block.timestamp);
         driftAnchorTick  = tick;
         driftWindowStart = uint64(block.timestamp);
+        _driftHistory.push(DriftCheckpoint(uint64(block.timestamp), tick, 0));
         emit AppraisalPosted(tick, tick, uint64(block.timestamp), msg.sender);
     }
 
@@ -235,11 +241,23 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step {
         Config memory c = config;
         if (block.timestamp < uint256(appraisedAt) + c.minUpdateInterval) revert UpdateTooSoon();
         if (_absDiff(tick, appraisalTick) > c.maxStepTicks) revert StepTooLarge();
-        if (block.timestamp >= uint256(driftWindowStart) + 1 days) {
-            driftAnchorTick  = appraisalTick; // new window anchors at the appraisal it starts from
-            driftWindowStart = uint64(block.timestamp);
+        uint256 cutoff = block.timestamp > 1 days ? block.timestamp - 1 days : 0;
+        uint256 low;
+        uint256 high = _driftHistory.length;
+        // Upper bound: the last checkpoint at or before the window start supplies
+        // the cumulative movement to subtract. Moves at the start have expired.
+        while (low < high) {
+            uint256 mid = (low + high) / 2;
+            if (_driftHistory[mid].at <= cutoff) low = mid + 1;
+            else high = mid;
         }
-        if (_absDiff(tick, driftAnchorTick) > c.maxDriftTicksPerDay) revert DailyDriftExceeded();
+        DriftCheckpoint memory anchor = _driftHistory[low == 0 ? 0 : low - 1];
+        uint128 movement = _driftHistory[_driftHistory.length - 1].movement
+            + uint128(_absDiff(tick, appraisalTick));
+        if (movement - anchor.movement > c.maxDriftTicksPerDay) revert DailyDriftExceeded();
+        driftAnchorTick = anchor.tick;
+        driftWindowStart = uint64(cutoff);
+        _driftHistory.push(DriftCheckpoint(uint64(block.timestamp), tick, movement));
         int24 prev    = appraisalTick;
         appraisalTick = tick;
         appraisedAt   = uint64(block.timestamp);
