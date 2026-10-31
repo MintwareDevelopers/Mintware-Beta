@@ -6,6 +6,8 @@
 //   • The trade core is the real <SwapWidget/> (LI.FI fee-injection), front and centre.
 //   • Beside it, the three things to know before you sign, then the other way to put a token to work
 //     (providing liquidity to a market).
+//   • The one real-money surface in an otherwise testnet app (Ethereum, Base, Arbitrum mainnet), so it says so
+//     above the widget.
 //
 // Campaigns were shelved (2026-08-12) — this is a plain swap, no campaign context, points, or reward
 // crediting. The human-facing "Attribution score" framing was removed 2026-08-28 (see
@@ -34,6 +36,10 @@ function SwapContent() {
             Trade any token, <span className="text-ink-soft">at the best route.</span>
           </h1>
           <p className="mt-3 mb-0 text-[16px] leading-[1.55] text-ink-mid">LI.FI searches routes across chains and DEXs. You see the price, the fees and the network before you sign.</p>
+          <div className="mt-5 flex gap-3 items-start rounded-[16px] px-4 py-3.5 text-[14px] leading-[1.5]" style={{ background: '#FBEEE7', color: '#7A3416' }} role="note">
+            <span className="mt-[3px] w-2 h-2 rounded-full shrink-0" style={{ background: '#C9572B' }} aria-hidden />
+            <span><b className="font-semibold">Real funds, on mainnet.</b> This swap trades real tokens on Ethereum, Base and Arbitrum. Markets elsewhere in the app run on testnet with mock tokens; this does not.</span>
+          </div>
         </div>
 
         <div className="mt-8 grid gap-6 items-start grid-cols-1 min-[980px]:grid-cols-[minmax(0,1fr)_340px]">
