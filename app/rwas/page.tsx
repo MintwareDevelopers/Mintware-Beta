@@ -2,6 +2,8 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { FlowDiagram } from '@/components/ui2/FlowDiagram'
+import { RWA_STACK, RWA_STACK_DISCLOSURE } from '@/lib/rwa/units'
 import { Page, Section, SectionHead, Hero, IconTile, Arrow, CTA } from '@/components/marketing/Story'
 import { IconStocks, IconLand, IconTreasury, IconHours, IconFailClosed, IconRules, IconOwned, IconExit, IconPrice } from '@/components/ui2/MineralIcons'
 
@@ -14,7 +16,7 @@ export const metadata = { title: 'Real-world assets — Mintware', description: 
 // solid = on testnet, dotted = next, hatched = later.
 const ASSETS: { t: string; d: string; icon: ReactNode; tint: string; status: string; tex?: 'dots' | 'hatch' }[] = [
   { t: 'Stocks', d: 'Tokenized equities, trading around the clock', icon: <IconStocks key="s" size={22} />, tint: 'linear-gradient(160deg,#E4E4FE,#A9A7FA)', status: 'Testnet' },
-  { t: 'Property', d: 'A land parcel with issuer-checked ownership', icon: <IconLand key="l" size={22} />, tint: 'linear-gradient(160deg,#EAF4E4,#B9D9A6)', status: 'Installation pending', tex: 'dots' },
+  { t: 'Property', d: 'A fictional parcel · trading not yet enabled', icon: <IconLand key="l" size={22} />, tint: 'linear-gradient(160deg,#EAF4E4,#B9D9A6)', status: 'Testnet' },
   { t: 'Gold', d: 'A gold engine, with first credit', icon: <IconTreasury key="g" size={22} />, tint: 'linear-gradient(160deg,#FBF1D6,#E8C979)', status: 'Next', tex: 'dots' },
   { t: 'Land & water', d: 'More real assets, one engine each', icon: <IconLand key="w" size={22} />, tint: 'linear-gradient(160deg,#E2F0FB,#A9CDEE)', status: 'Later', tex: 'hatch' },
 ]
@@ -64,6 +66,17 @@ export default function RwasPage() {
       actions={<><Link href="/markets" className="mw-btn mw-btn-lg">Explore markets <Arrow /></Link><a href="#demo" className="mw-btn-quiet mw-btn-lg">See the property demo</a></>}
       aside={<AssetRoster />}
     />
+
+    <Section>
+      <SectionHead eyebrow="How it’s built" title="One standard." soft="Three clear roles." />
+      <FlowDiagram className="mt-8" steps={RWA_STACK.map((layer) => ({
+        label: layer.label,
+        n: <span className={`inline-flex rounded-full px-2 py-1 font-geist text-[11.5px] font-semibold ${layer.status === 'Live on testnet' ? 'bg-[#E3F4EA] text-[#0F7A43]' : 'bg-white text-ink-mid'}`}>{layer.status}</span>,
+        sub: <span className="grid gap-1.5">{layer.lines.map((line) => <span key={line}>{line}</span>)}</span>,
+      }))} />
+      <p className="mt-5 mb-0 max-w-[78ch] text-[13px] leading-[1.6] text-ink-mid">{RWA_STACK_DISCLOSURE}</p>
+      <Link href="/app/rwas/how" className="mt-4 inline-flex text-[14px] font-semibold text-peri-deep hover:underline">Explore the stack and live contracts <Arrow size={16} /></Link>
+    </Section>
 
     {/* 1 — tokenized isn't liquid */}
     <Section tint>
@@ -118,7 +131,7 @@ export default function RwasPage() {
       <div className="mx-auto max-w-[1200px] px-[clamp(16px,4vw,40px)] py-[clamp(64px,8vw,120px)] grid lg:grid-cols-[1fr_1.1fr] gap-12 items-center">
         <div>
           <SectionHead eyebrow="The property engine" title="A tokenized property," soft="with a market of its own." />
-          <p className="mt-6 mb-0 text-[17px] leading-[1.6] text-ink-mid max-w-[50ch]">The owned property engine is awaiting installation on Base Sepolia. Qualified holders contribute property tokens and USDC for non-transferable shares. A dated appraisal and issuer permissions govern trading. The earlier model’s transaction proof remains in the archive.</p>
+          <p className="mt-6 mb-0 text-[17px] leading-[1.6] text-ink-mid max-w-[50ch]">The owned property engine is live on Base Sepolia: activated and seeded. Trading is not enabled yet. A dated appraisal and issuer permissions govern the market. The earlier model’s transaction proof remains in the archive.</p>
           <Link href="/app/rwas" className="mw-btn mw-btn-lg mt-8">Open the property demo <Arrow /></Link>
         </div>
         <GradientPanel tone="lavender" className="p-[clamp(16px,3vw,32px)]">
@@ -128,7 +141,7 @@ export default function RwasPage() {
                 <span className="w-10 h-10 rounded-[12px] grid place-items-center" style={{ background: 'linear-gradient(160deg,#EAF4E4,#B9D9A6)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.8)' }}><IconLand size={20} /></span>
                 <span><span className="block text-[15px] font-semibold">Willow Creek Parcel 7</span><span className="block text-[12px] text-ink-soft">Fictional land parcel · Base Sepolia</span></span>
               </span>
-              <span className="text-[12px] font-semibold text-ink-mid">Installation pending</span>
+              <span className="rounded-full bg-[#E3F4EA] px-2 py-1 text-[12px] font-semibold text-[#0F7A43]">Live on testnet</span>
             </div>
             <div className="grid grid-cols-2 gap-3 mt-5 text-[13px]">
               {([['Priced against', 'Dated appraisal', <IconPrice key="p" size={16} />], ['Outside the band', 'Gap-closing trades only', <IconFailClosed key="f" size={16} />], ['Who can hold it', 'Qualified holders', <IconOwned key="o" size={16} />], ['Leaving', 'Assets paid in kind', <IconExit key="e" size={16} />]] as [string, string, ReactNode][]).map(([k, v, icon]) => (
