@@ -59,6 +59,10 @@ refresh all consumers and the checked-in creation hex together when build inputs
 - `/api/rwa/unit` reads the configured `RWA_OWNED_ENGINE_ADDRESS` on Base Sepolia at one block.
 - Shared ABI/readers: `lib/web3/artifacts/marketEngine.ts`, `lib/gateway/marketEngine.ts`.
 - Reads expose NAV, share supply, holdings, position, dated appraisal, band and permission flags.
+- **Deployed (Base Sepolia, 2026-10-31):** engine `0xf47c…198c`, hook `0x2109…EAC0`, adapter `0x256b…6390`
+  (addresses + tx hashes in `config/deployments.json`, installer `scripts/ops/deploy-rwa-owned-pool.sh`).
+  Fixture property token and allowlist are TEST-ONLY (open setters). Swaps stay disabled until a
+  permissioned Universal Router is deployed and allowed.
 - No engine configured means **Not deployed yet**. RPC failures are unavailable or explicitly cached.
 - Archived snapshots never substitute for live state. No projected interest or simulated rates.
 - `MARKET_OWNED_ENGINE_CODEHASHES_84532` approves concrete owned wrapper runtimes.

@@ -249,6 +249,78 @@
         "note": "Fixed WETH/USDC test mark at the pool price (2359.038 USDC); max mark age is set on the engine (1 year). TEST ONLY.",
         "verified": "2026-10-30",
         "source": "Base Sepolia RPC reads (owner, activated, tokens, mark, totalNav)"
+      },
+      "RwaOwnedPool_Engine": {
+        "address": "0xf47c43eCb582cD05D5CDCEc7f8949b2fc437198c",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "MintwareOwnedPoolMarketEngine for RWA unit wcp7 on our hooked Uniswap Permissioned Pools pool (adapter/USDC, dynamic fee, spacing 60). Owner/keeper/guardian 0x9c64…33AD. Runtime codehash 0x91180765cf267a529f4027840f73239683b8767d1191fd488fb507847079f86b. Activated 0x53a70fbde21766043e2ee9920a1fa431723b17ba8c28dab32e6775ed9cde93c9; seed deposit 0x9eba074d82132d623870ccabbd1f103accf68ebc389fc5503180e69f6bff90e4; deployLiquidity 0xbe6fc87a3b58851e70b4f3d29cd550d07417d5efe55491a84ede8734ec96b1e4. NAV ≈ $4,995.51 at launch. Swaps disabled (adapter swap switch off, no router allowed).",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
+      },
+      "RwaOwnedPool_AppraisalHook": {
+        "address": "0x21094805d6176cC47E76C94d266D274E5439EAC0",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "MintwareRwaAppraisalHook (CREATE2-mined, flags 0x2AC0); engine mark + permission checks + band. Appraisal tick 230280 (≈ $99.90 per fictional property token), observation-dated; config 500/1500/1000/1h/30d/3000/10000/2000/7d.",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
+      },
+      "RwaOwnedPool_PermissionsAdapterFactory": {
+        "address": "0xBE3367b32Ef35FB51400f7afe6eC7B93b1ed61a1",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Official Uniswap PermissionsAdapterFactory (v4-periphery 3245c3cb) deployed by us — no Uniswap deployment exists on Base Sepolia. Tx 0xe38f0d9c329cd760747692d9f0697c4dffebe5be34668babbfdd4fe4a04a6a27.",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
+      },
+      "RwaOwnedPool_PermissionsAdapter": {
+        "address": "0x256b86557F21fcFbF1ddd36713C2883fCd2c6390",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Verified PermissionsAdapter for the fixture property token; the pool trades this against Base Sepolia USDC.",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
+      },
+      "RwaOwnedPool_PropertyTokenFixture": {
+        "address": "0x0bf77eeF6C09E864523AF81a09DD6601A77090e0",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "TEST-ONLY OwnedIssuerToken fixture (18 dp, restricted). Fictional property; open setters — not an issuer contract. Tx 0xe78d63fd99c1a8cf7b5b9f8c653b1a8088c4354098b231c0e9f7c660c6fe0f45.",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
+      },
+      "RwaOwnedPool_AllowlistFixture": {
+        "address": "0x8392C40579E3162404831A7df6D67d099714CE10",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "TEST-ONLY IssuerAllowlist fixture (open setters). Deployer ALL_ALLOWED; engine LIQUIDITY_ALLOWED. Tx 0x15a0ea1e858aaf74d788e25c468985e525d736e4dbdca891362ebaf61c2005ad.",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
+      },
+      "MintwareMarketLifecycleModule_v3": {
+        "address": "0x84Bd0E2D676722a4a9affE6D69081a79281555D2",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Lifecycle module with runtime codehash 0x9fb68029d316c682a41b625177cc8a7431cd03df38ee5878e3c045edb634bc01 (metadata-free build, PR #557). Used by the RWA owned engine; existing hookless engines keep their previous module.",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
+      },
+      "RwaOwnedPool_IdleAdapter0": {
+        "address": "0x914391D80C03c22F1F2f887Bc0e420CE52115cE3",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Idle custody adapter for engine token0.",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
+      },
+      "RwaOwnedPool_IdleAdapter1": {
+        "address": "0xd5FAaB30074cadf165e79dB919684E484Ec79B05",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Idle custody adapter for engine token1.",
+        "verified": "2026-10-31",
+        "source": "scripts/ops/deploy-rwa-owned-pool.sh --broadcast (2026-10-31); rehearsed on an anvil fork first"
       }
     },
     "robinhood-testnet": {

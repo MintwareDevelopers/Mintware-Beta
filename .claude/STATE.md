@@ -114,6 +114,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `MintwareMarketEngine_v2_superseded` | testnet · base-sepolia | `0x961534db8C0EbB7cEb729E74CaB698A83A9c827e` | superseded |
 | `MintwareMarketEngine_v2_superseded` | testnet · robinhood-testnet | `0x38E426D6671FB2c07C07a468e59f954Dcd0eDeb8` | superseded |
 | `MintwareMarketLifecycleModule` | testnet · robinhood-testnet | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` | testnet |
+| `MintwareMarketLifecycleModule_v3` | testnet · base-sepolia | `0x84Bd0E2D676722a4a9affE6D69081a79281555D2` | testnet |
 | `MintwareStagedLiquidityRouter` | testnet · base-sepolia | `0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3` | deprecated |
 | `MintwareTreasuryGatewayDeployer` | testnet · base-sepolia | `0xfbf781676fe93cd8d8d8e17716461c29f549a644` | testnet |
 | `MintwareTreasuryJitHookDeployer` | testnet · base-sepolia | `0x42a32787595d9f47a369b3b11ac24b8d0552c4a7` | testnet |
@@ -123,10 +124,18 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `MintwareYieldVault` | testnet · base-sepolia | `0x09cda8519737a60fd16d263f94fb56237cdb7e42` | testnet |
 | `MWAmAuction` | testnet · base-sepolia | `0x11d7bda166a62ac9edb65152f8cf035c219c5e00` | testnet |
 | `MwTreasuryAddress` | testnet · base-sepolia | `0xcf2EA99639C038a475B710b2Be82b974D777C306` | testnet |
+| `RwaOwnedPool_AllowlistFixture` | testnet · base-sepolia | `0x8392C40579E3162404831A7df6D67d099714CE10` | testnet |
+| `RwaOwnedPool_AppraisalHook` | testnet · base-sepolia | `0x21094805d6176cC47E76C94d266D274E5439EAC0` | testnet |
+| `RwaOwnedPool_Engine` | testnet · base-sepolia | `0xf47c43eCb582cD05D5CDCEc7f8949b2fc437198c` | testnet |
+| `RwaOwnedPool_IdleAdapter0` | testnet · base-sepolia | `0x914391D80C03c22F1F2f887Bc0e420CE52115cE3` | testnet |
+| `RwaOwnedPool_IdleAdapter1` | testnet · base-sepolia | `0xd5FAaB30074cadf165e79dB919684E484Ec79B05` | testnet |
+| `RwaOwnedPool_PermissionsAdapter` | testnet · base-sepolia | `0x256b86557F21fcFbF1ddd36713C2883fCd2c6390` | testnet |
+| `RwaOwnedPool_PermissionsAdapterFactory` | testnet · base-sepolia | `0xBE3367b32Ef35FB51400f7afe6eC7B93b1ed61a1` | testnet |
+| `RwaOwnedPool_PropertyTokenFixture` | testnet · base-sepolia | `0x0bf77eeF6C09E864523AF81a09DD6601A77090e0` | testnet |
 | `ULVHook` | testnet · base-sepolia | `0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8` | deprecated |
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | deprecated |
 
-**40 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**49 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
 **16 of 20 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
