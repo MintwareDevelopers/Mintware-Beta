@@ -86,7 +86,7 @@ export default function HomePage() {
 
     {/* Hero */}
     <section className="relative">
-      <svg aria-hidden="true" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" className="absolute inset-x-0 -top-10 w-full h-[900px] pointer-events-none">
+      <svg aria-hidden="true" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" className="absolute inset-x-0 -top-10 w-full h-[calc(100%+40px)] pointer-events-none" style={{ maskImage: 'linear-gradient(to bottom, #000 72%, transparent)', WebkitMaskImage: 'linear-gradient(to bottom, #000 72%, transparent)' }}>
         <defs><radialGradient id="halo" cx="70%" cy="62%" r="40%"><stop offset="0" stopColor="#C9C0F4" stopOpacity=".55" /><stop offset=".55" stopColor="#F2CBC2" stopOpacity=".18" /><stop offset="1" stopColor="#F6F6FA" stopOpacity="0" /></radialGradient></defs>
         <rect width="1400" height="900" fill="url(#halo)" />
         <g fill="none" stroke="#5B5BE6" strokeOpacity="0.07">
