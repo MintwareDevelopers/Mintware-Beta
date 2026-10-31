@@ -145,7 +145,7 @@ export function V1Discover() {
       <SectionHead
         title="Live markets"
         tag="Testnet"
-        sub="Mintware markets running today. Deposit one or both tokens, withdraw pro-rata any time."
+        sub="Mintware markets running today. Deposit one or both tokens and withdraw your share in both, with no lockup."
       />
       {markets == null ? (
         <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))' }}>

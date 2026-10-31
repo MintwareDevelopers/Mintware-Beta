@@ -603,7 +603,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                     {isConnected && !canDeposit && status !== 'record_failed' ? (metaState === 'loading' ? 'Loading…' : 'Not live for deposits') : depBtn}
                   </button>
                 </div>
-                <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#454552' }}><span>Locks anything?</span><span style={{ color: '#0F7A43', fontWeight: 600 }}>No — withdraw anytime</span></div>
+                <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#454552' }}><span>Lockup?</span><span style={{ color: '#0F7A43', fontWeight: 600 }}>None — withdraw your share in both tokens</span></div>
               </>
             ) : (
               <>
