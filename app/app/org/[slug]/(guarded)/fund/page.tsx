@@ -1,7 +1,7 @@
 'use client'
 
 // Treasury yield (renamed from "Savings" — copy rule, 2026-10-02) — a single-asset (USDC) yield account backed by MintwareYieldVault: idle USDC earns in Aave
-// via the vault's adapter, a live buffer keeps deposits spendable, and redeem() is buffer-first then
+// via the vault's adapter, a live buffer covers small withdrawals, and redeem() is buffer-first then
 // pulls from Aave for the shortfall (large withdrawals stay seamless). No tranches here — that's the
 // treasury/Vaults surface. Deposit: approve → deposit(assets, to). Withdraw: redeem(sharesForAmount).
 // Chrome comes from the shared TeamTerminalShell layout.
@@ -20,7 +20,7 @@ const ERC20_ABI = [{ type: 'function', name: 'approve', stateMutability: 'nonpay
 const CHAINS = [{ id: 84532, name: 'Base Sepolia' }]
 const fmtUsd = (atomic?: bigint) => atomic === undefined ? '—' : `$${Number(formatUnits(atomic, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
-export default function SavingsPage({ params }: { params: Promise<{ slug: string }> }) {
+export default function TreasuryYieldPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
   const { address } = useMintwareIdentity()
   const { chainId: walletChain } = useAccount()
@@ -116,7 +116,7 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
             <div className="text-[16px] font-semibold text-ink">One-time setup</div>
             <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Treasury yield runs on an on-chain yield vault that&apos;s provisioned once — then you just supply. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
             <div className="text-[13px] font-semibold text-ink-mid mt-4 mb-1.5">Operator: deploy once</div>
-            <code className="block font-geist-mono text-[12.5px] text-ink-mid rounded-[12px] px-3.5 py-3 overflow-x-auto whitespace-nowrap" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>pnpm forge:deploy:savings:base-sepolia</code>
+            <code className="block font-geist-mono text-[12.5px] text-ink-mid rounded-[12px] px-3.5 py-3 overflow-x-auto whitespace-nowrap" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>forge script contracts-v4/script/DeployEarnSepolia.s.sol --rpc-url base_sepolia</code>
             {isOwner ? (
               <div className="flex gap-2 mt-4 max-[520px]:flex-col">
                 <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… yield vault address" className="flex-1 rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[44px] px-3.5 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[13px] font-mono" />
@@ -141,7 +141,7 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
                 <button onClick={() => withdraw(false)} className="flex-1 mw-btn-quiet !min-h-[48px]">Withdraw</button>
               </div>
               <button onClick={() => withdraw(true)} className="text-[13px] text-ink-mid mt-3 bg-transparent border-0 cursor-pointer hover:text-ink">Withdraw all →</button>
-              <p className="text-[12.5px] text-ink-soft mt-3 leading-[1.5]">Supplied USDC earns the lending adapter&apos;s variable rate (not fixed, not guaranteed). Withdrawals pull from the buffer first, then unwind from the adapter for anything larger — no lockup. Testnet only.</p>
+              <p className="text-[12.5px] text-ink-soft mt-3 leading-[1.5]">Supplied USDC earns whatever the vault&apos;s lending adapter pays. The rate varies, isn&apos;t guaranteed, and is zero when a vault uses a no-yield adapter, as some testnet vaults do. Withdrawals come from the buffer first, then the adapter. There&apos;s no lockup, but a large exit can wait on the adapter&apos;s liquidity. Testnet only.</p>
             </div>
           </>
         ) : null}

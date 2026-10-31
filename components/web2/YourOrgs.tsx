@@ -22,7 +22,7 @@ export function YourOrgs({ address }: { address?: string | null }) {
   if (orgs.length === 0) return null
 
   return (
-    <section className="max-w-[1040px] mx-auto px-6 max-sm:px-4 mt-8">
+    <section className="mt-10">
       <div className="text-[13px] font-semibold uppercase tracking-[0.08em] text-ink-soft mb-3">Your organizations</div>
       <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3">
         {orgs.map((o) => {

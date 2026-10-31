@@ -8,7 +8,10 @@
 // Dry run by default (verifies and prints the row). `--apply` writes.
 //
 //   node --env-file=.env.local scripts/ops/register-market-engine.mjs \
-//     --chain 84532 --engine 0x… --pool 0x…(32 bytes) --label "WETH / USDC" [--apply]
+//     --chain 84532 --engine 0x… --pool 0x…(32 bytes) --label "WETH / USDC" [--replace] [--apply]
+//
+// --replace deactivates any other active engine row for the same pool first (status 'inactive' plus a
+// 'deactivate' history entry), for redeploys onto the same pool. The old engine stays readable on chain.
 //
 // Env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and for the chain:
 //   MARKET_ENGINE_CODEHASHES_<chainId>, MARKET_ENGINE_OWNER_<chainId>, MARKET_ENGINE_QUOTE_ASSET_<chainId>
@@ -25,6 +28,7 @@ const engine = (arg('engine') ?? '').toLowerCase()
 const pool = (arg('pool') ?? '').toLowerCase()
 const label = (arg('label') ?? '').trim()
 const APPLY = process.argv.includes('--apply')
+const REPLACE = process.argv.includes('--replace')
 if (!RPC[chainId]) die('--chain must be 84532 (Base Sepolia) or 46630 (Robinhood testnet)')
 if (!/^0x[0-9a-f]{40}$/.test(engine)) die('--engine must be a 20-byte address')
 if (!/^0x[0-9a-f]{64}$/.test(pool)) die('--pool must be a 32-byte v4 pool id')
@@ -79,11 +83,21 @@ const rest = (path, init = {}) => fetch(`${url}/rest/v1/${path}`, { ...init, hea
 
 const existing = await (await rest(`gateway_instances?select=id,status,market_engine_address&pool_address=eq.${pool}&chain_id=eq.${chainId}`)).json()
 if (!Array.isArray(existing)) die(`registry read failed: ${JSON.stringify(existing).slice(0, 200)}`)
-if (existing.some((r) => r.status === 'active' && r.market_engine_address?.toLowerCase() !== engine)) die('another active engine is registered for this pool — deactivate it first')
+const others = existing.filter((r) => r.status === 'active' && r.market_engine_address?.toLowerCase() !== engine)
+if (others.length && !REPLACE) die('another active engine is registered for this pool — pass --replace to deactivate it')
+if (others.length) console.log(`  will deactivate ${others.map((r) => `${r.id} (${r.market_engine_address})`).join(', ')}`)
 const exact = existing.find((r) => r.market_engine_address?.toLowerCase() === engine)
 console.log(`  registry: ${existing.length} row(s) for this pool; ${exact ? `updating ${exact.id}` : 'inserting a new row'}`)
 
 if (!APPLY) { console.log('\nDry run only. Re-run with --apply to register.'); process.exit(0) }
+
+for (const r of others) {
+  const d = await rest(`gateway_instances?id=eq.${r.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'inactive', updated_at: now }) })
+  if (!d.ok) die(`deactivate ${r.id} failed (${d.status}): ${(await d.text()).slice(0, 200)}`)
+  const h = await rest('gateway_instance_history', { method: 'POST', body: JSON.stringify({ pool_address: pool, chain_id: chainId, action: 'deactivate', position_manager: r.market_engine_address, staging: null, verification: 'codehash', actor: by, meta: { replacedBy: engine } }) })
+  if (!h.ok) console.warn(`! history append for ${r.id} failed (${h.status})`)
+  console.log(`✓ deactivated ${r.id} (${r.market_engine_address})`)
+}
 
 const res = exact
   ? await rest(`gateway_instances?id=eq.${exact.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) })

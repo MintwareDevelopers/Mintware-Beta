@@ -24,7 +24,7 @@ export function MineralNav() {
           {LINKS.map(([label, href]) => (
             <Link key={href} href={href} className="max-[720px]:hidden no-underline transition-colors hover:!text-[var(--mw-ink)]" style={{ color: 'var(--mw-ink-2)' }}>{label}</Link>
           ))}
-          <Link href="/v1" className="mw-btn max-[720px]:!min-h-[40px] max-[720px]:text-[14px]">
+          <Link href="/app/markets" className="mw-btn max-[720px]:!min-h-[40px] max-[720px]:text-[14px]">
             Launch app
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9" /></svg>
           </Link>

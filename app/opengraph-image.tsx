@@ -5,7 +5,7 @@ import { ImageResponse } from 'next/og'
 // 16.1.6) — the JSX below is pure CSS with no embedded assets, so the growth is in next/og's own
 // runtime, not this file. Node functions don't have that cap.
 export const runtime = 'nodejs'
-export const alt = 'Mintware — Never idle. Never locked. Always yours.'
+export const alt = 'Mintware — One engine per asset.'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -56,21 +56,21 @@ export default async function OgImage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
               <div style={{ width: 11, height: 11, borderRadius: 6, background: CORAL, display: 'flex' }} />
               <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: 3, color: INK_SOFT, textTransform: 'uppercase' }}>
-                Cash that keeps earning
+                Testnet · Robinhood Chain and Base
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', fontSize: 78, fontWeight: 800, letterSpacing: -3, lineHeight: 1.02, color: INK }}>
-              <span style={{ display: 'flex' }}>Never idle. Never locked.</span>
-              <span style={{ display: 'flex', color: PERI }}>Always yours.</span>
+              <span style={{ display: 'flex' }}>One engine</span>
+              <span style={{ display: 'flex', color: PERI }}>per asset.</span>
             </div>
             <div style={{ display: 'flex', fontSize: 24, lineHeight: 1.45, color: INK_MID, marginTop: 26, maxWidth: 820 }}>
-              USDC designed to earn three ways at once — and stay liquid and spendable. The LPs who bring real, committed liquidity earn the most.
+              Liquidity, collateral and credit for tokenized stocks, gold and property. Each asset gets its own isolated, non-custodial market.
             </div>
           </div>
 
           {/* rounded pill chips */}
           <div style={{ display: 'flex', gap: 12 }}>
-            {['Vaults', 'Liquid Sovereign Account', 'Treasury', 'Agents'].map((l) => (
+            {['Markets', 'RWAs', 'Issuers', 'Agents'].map((l) => (
               <div key={l} style={{
                 display: 'flex', padding: '11px 20px', borderRadius: 999,
                 border: `1px solid ${HAIR}`, fontSize: 16, fontWeight: 600,

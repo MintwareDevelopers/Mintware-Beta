@@ -377,7 +377,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
 
   return (
     <div>
-      <Link href="/v1" className="text-[13px] no-underline" style={{ color: '#454552' }}>← Discover</Link>
+      <Link href="/app/markets" className="text-[13px] no-underline" style={{ color: '#454552' }}>← Markets</Link>
 
       {/* header */}
       <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
@@ -413,7 +413,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       {metaState === 'not_live' && !otherChainLive && (
         <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px]" style={{ background: 'rgba(22,22,44,0.04)', border: '1px solid rgba(22,22,44,0.08)', color: '#454552' }}>
           This pool is still in curation — no market is open on it yet.{' '}
-          <Link href="/v1" className="no-underline hover:underline" style={{ color: '#4643D1', fontWeight: 600 }}>Pick a live pool from Discover →</Link>
+          <Link href="/app/markets" className="no-underline hover:underline" style={{ color: '#4643D1', fontWeight: 600 }}>Pick a live pool from Markets →</Link>
         </div>
       )}
 
@@ -500,7 +500,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                 ? 'This market is live and verified on-chain. Deposits from this app open for its network shortly.'
                 : 'Mintware screens a pool on depth, age and real trading before a market opens on it. This one is on the watchlist; deposits open once its market is live.'}
             </p>
-            <Link href="/v1" className="inline-flex mt-4 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#4643D1' }}>Browse live markets →</Link>
+            <Link href="/app/markets" className="inline-flex mt-4 text-[13px] font-semibold no-underline hover:underline" style={{ color: '#4643D1' }}>Browse live markets →</Link>
           </div>
         ) : (
         <div className="flex flex-col gap-5 min-[900px]:order-2 order-1">
@@ -549,7 +549,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
               {(['deposit', 'withdraw'] as const).map((t) => (
                 <button key={t} onClick={() => { if (busy) return; setTab(t); setErr(''); setReview(null); if (status !== 'record_failed') setStatus('idle') }} className="flex-1 min-h-[40px] rounded-[10px] text-[14px] cursor-pointer capitalize" style={tab === t ? { background: '#FFFFFF', color: '#15151D', fontWeight: 600, boxShadow: 'var(--mw-raise-sm)' } : { color: '#454552', fontWeight: 500 }}>{t}</button>
               ))}
-              <Link href="/v1/swap" className="flex-1 min-h-[40px] grid place-items-center rounded-[10px] text-[14px] font-medium no-underline" style={{ color: '#454552' }}>Swap ↗</Link>
             </div>
 
             {/* O-1: a failed record is surfaced with a retry — never hidden behind a ✓ */}
@@ -604,7 +603,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                     {isConnected && !canDeposit && status !== 'record_failed' ? (metaState === 'loading' ? 'Loading…' : 'Not live for deposits') : depBtn}
                   </button>
                 </div>
-                <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#454552' }}><span>Locks anything?</span><span style={{ color: '#0F7A43', fontWeight: 600 }}>No — withdraw anytime</span></div>
+                <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#454552' }}><span>Lockup?</span><span style={{ color: '#0F7A43', fontWeight: 600 }}>None — withdraw your share in both tokens</span></div>
               </>
             ) : (
               <>

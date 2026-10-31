@@ -3,8 +3,8 @@
 // TeamTerminalShell — the Team workspace of the shared AppShell. Both the illustrative `/app/team/*`
 // terminal AND the real `/app/org/[slug]/*` treasury render here, so crossing between "preview" and
 // "real" sections never changes the chrome. NAV hrefs resolve to the real org page once a wallet has an
-// active org (Overview/Cards/Policy/Team & Roles); Vaults/Swap/Developers have no real per-org page yet
-// and stay on the illustrative /app/team/* routes.
+// active org (Overview/Cards/Policy/Team & Roles). Allocation, Team Swap and Developers were illustrative-only
+// with no real page behind them and were removed (2026-10-31); swapping lives in Personal → Swap.
 
 import { AppShell, type ShellNavGroup, type ShellNavItem } from '@/components/web2/AppShell'
 import { TeamGuard } from '@/components/web2/TeamGuard'
@@ -17,8 +17,6 @@ type NavItem = ShellNavItem & { perm?: Permission }
 
 function buildNav(activeOrgSlug: string | null): { groups: { title?: string; items: NavItem[] }[] } {
   const org = (path: string) => (activeOrgSlug ? `/app/org/${activeOrgSlug}${path ? `/${path}` : ''}` : null)
-  // Items that stay illustrative even with a real org carry a "Preview" hint so mock and real never look alike.
-  const preview = activeOrgSlug ? 'Preview' : undefined
   return {
     groups: [
       { items: [{ href: org('') ?? '/app/team', label: 'Overview', exact: true }] },
@@ -26,8 +24,6 @@ function buildNav(activeOrgSlug: string | null): { groups: { title?: string; ite
         title: 'Treasury',
         items: [
           ...(activeOrgSlug ? [{ href: org('fund')!, label: 'Treasury yield' }] : []),
-          { href: '/app/team/vaults', label: 'Allocation', hint: preview },
-          { href: '/app/team/swap', label: 'Swap' },
         ],
       },
       {
@@ -45,7 +41,6 @@ function buildNav(activeOrgSlug: string | null): { groups: { title?: string; ite
           // The real page is "Treasury control" (multisig + role caps) — there is no approvals queue yet.
           { href: org('control') ?? '/app/team/policy', label: 'Treasury controls', perm: 'spend:approve' },
           { href: org('roles') ?? '/app/team/team', label: 'Team & Roles', perm: 'roles:manage' },
-          { href: '/app/team/developers', label: 'Developers', hint: preview, perm: 'developers:manage' },
         ],
       },
     ],

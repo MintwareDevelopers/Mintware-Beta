@@ -45,15 +45,16 @@ const nextConfig = {
 
   async redirects() {
     return [
-      { source: '/dashboard', destination: '/app/rewards', permanent: true },
+      // Retired campaign/leaderboard addresses. Their old /app targets no longer exist, so send them somewhere real.
+      { source: '/dashboard', destination: '/app/portfolio', permanent: false },
       // Functional app pages moved into the /app tier (IA Phase 1). Query params
       // (e.g. /swap?cid=, ?ref=) are preserved through Next redirects.
       { source: '/swap', destination: '/app/swap', permanent: true },
-      { source: '/leaderboard', destination: '/app/leaderboard', permanent: true },
-      { source: '/profile', destination: '/app/profile', permanent: true },
-      { source: '/create-campaign', destination: '/app/create-campaign', permanent: true },
-      { source: '/manage/:campaign_id', destination: '/app/manage/:campaign_id', permanent: true },
-      { source: '/rewards', destination: '/app/rewards', permanent: true },
+      { source: '/leaderboard', destination: '/app/markets', permanent: false },
+      { source: '/profile', destination: '/app/portfolio', permanent: true },
+      { source: '/create-campaign', destination: '/issuers', permanent: false },
+      { source: '/manage/:campaign_id', destination: '/issuers', permanent: false },
+      { source: '/rewards', destination: '/app/portfolio', permanent: false },
       { source: '/v2', destination: '/', permanent: true },
       { source: '/vaults', destination: '/markets', permanent: true },
       { source: '/defi', destination: '/markets', permanent: true },
@@ -61,11 +62,33 @@ const nextConfig = {
       { source: '/solutions/:path*', destination: '/issuers', permanent: true },
       { source: '/yield-payment-network', destination: '/cards', permanent: true },
       { source: '/earn', destination: '/cards', permanent: true },
-      { source: '/app/rwa', destination: '/v1/rwas', permanent: false },
-      { source: '/app/rwa/:path*', destination: '/v1/rwas/:path*', permanent: false },
+      { source: '/app/rwa', destination: '/app/rwas', permanent: false },
+      { source: '/app/rwa/:path*', destination: '/app/rwas/:path*', permanent: false },
+      // One app (2026-10-31): the old /v1 platform and the pool pages moved under /app. Kept temporary until the
+      // new addresses settle.
+      { source: '/v1', destination: '/app/markets', permanent: false },
+      { source: '/v1/rwas', destination: '/app/rwas', permanent: false },
+      { source: '/v1/rwas/:path*', destination: '/app/rwas/:path*', permanent: false },
+      { source: '/v1/portfolio', destination: '/app/portfolio', permanent: false },
+      { source: '/v1/referrals', destination: '/app/portfolio?tab=invite', permanent: false },
+      // Team placeholders with no real page behind them were removed (2026-10-31).
+      { source: '/app/team/vaults', destination: '/app/team', permanent: false },
+      { source: '/app/team/developers', destination: '/app/team', permanent: false },
+      { source: '/app/team/swap', destination: '/app/swap', permanent: false },
+      // The agent-account lookup was retired (its API always answered 410); agents live under Previews.
+      { source: '/app/agents', destination: '/app/previews/agents', permanent: false },
+      // Account, Profile and Referrals folded into Portfolio (2026-10-31).
+      { source: '/app/account', destination: '/app/portfolio', permanent: false },
+      { source: '/app/profile', destination: '/app/portfolio', permanent: false },
+      { source: '/app/referrals', destination: '/app/portfolio?tab=invite', permanent: false },
+      { source: '/v1/swap', destination: '/app/swap', permanent: false },
+      { source: '/v1/card', destination: '/app/previews/card', permanent: false },
+      { source: '/v1/agents', destination: '/app/previews/agents', permanent: false },
+      { source: '/v1/issuers', destination: '/app/previews/issuers', permanent: false },
+      { source: '/markets/:pool', destination: '/app/markets/:pool', permanent: false },
       { source: '/about', destination: '/', permanent: true },
       { source: '/explorer', destination: '/', permanent: true },
-      { source: '/earn/:pool', destination: '/markets/:pool', permanent: true },
+      { source: '/earn/:pool', destination: '/app/markets/:pool', permanent: true },
     ]
   },
 
@@ -76,7 +99,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // Everything EXCEPT the read-only public solvency badge stays frame-blocked.
+        // Everything EXCEPT the read-only public treasury badge stays frame-blocked.
         source: '/((?!org/[^/]+/badge).*)',
         headers: [
           // Prevent clickjacking

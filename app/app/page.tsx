@@ -1,9 +1,8 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 
-// App door routes to the last-picked context. The marketing site's Open app CTA points to /v1.
+// App door: the last-picked workspace. Every "Launch app" on the public site points to /app/markets.
 export default async function AppHome() {
   const store = await cookies()
-  const mode = store.get('mw_app_mode')?.value
-  redirect(mode === 'team' ? '/app/team' : mode === 'rwa' && process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true' ? '/v1/rwas' : '/app/account')
+  redirect(store.get('mw_app_mode')?.value === 'team' ? '/app/team' : '/app/markets')
 }

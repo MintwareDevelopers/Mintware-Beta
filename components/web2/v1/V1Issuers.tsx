@@ -33,10 +33,7 @@ export function V1Issuers() {
       />
 
       <div className="mt-9 flex items-center gap-3">
-        <Label>Your listed assets</Label>
-        <span className="flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: '#0F7A43' }}>
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#0F7A43' }} />Live on testnet
-        </span>
+        <Label>Property engine</Label>
       </div>
       <div className="mt-3">
         <RwaIssuerConsole />

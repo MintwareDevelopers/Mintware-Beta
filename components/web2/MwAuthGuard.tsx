@@ -8,7 +8,7 @@ export function MwAuthGuard({
   children,
   // When true, a disconnected visitor is NOT bounced to '/' — the page renders in a
   // preview state and prompts connect on its own actions. Used by surfaces that show
-  // illustrative content pre-connect (e.g. /app/account) so picking "I'm a person"
+  // illustrative content pre-connect (e.g. a connect prompt) so picking "I'm a person"
   // never dead-ends on a blank/redirect. Default false keeps the hard gate elsewhere.
   allowDisconnected = false,
 }: {

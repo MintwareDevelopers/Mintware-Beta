@@ -1,7 +1,7 @@
 'use client'
 
 // WorkspaceSwitcher (exported as ScopeSwitcher for existing callers) — the top-of-sidebar switcher, the
-// Linear / Vercel / Safe convention. Personal ⟷ Team ⟷ RWA all live in the SAME AppShell; picking one
+// Linear / Vercel / Safe convention. Personal ⟷ Team both live in the SAME AppShell; picking one
 // swaps the sidebar menu and routes to that workspace's home, never to a different-looking app.
 
 import Link from 'next/link'
@@ -9,17 +9,14 @@ import { useState, useRef, useEffect } from 'react'
 import { useAppMode, type AppMode } from './AppMode'
 import { useActiveOrg } from './useActiveOrg'
 
-const RWA_ON = process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'
-
 type Ws = { mode: AppMode; label: string; sub: string; glyph: string; tile: string; ink: string }
 
 function useWorkspaces(): Ws[] {
   const { active } = useActiveOrg()
   const list: Ws[] = [
-    { mode: 'user', label: 'Personal', sub: 'Your account', glyph: 'P', tile: 'linear-gradient(160deg,#E4E4FE,#A9A7FA)', ink: '#2E2BA8' },
+    { mode: 'user', label: 'Personal', sub: 'Markets and portfolio', glyph: 'P', tile: 'linear-gradient(160deg,#E4E4FE,#A9A7FA)', ink: '#2E2BA8' },
     { mode: 'team', label: active?.name ?? 'Team', sub: active ? 'Treasury' : 'Treasury · preview', glyph: (active?.name ?? 'T').slice(0, 1).toUpperCase(), tile: 'linear-gradient(160deg,#FDE3D7,#F2B79C)', ink: '#8A3A17' },
   ]
-  if (RWA_ON) list.push({ mode: 'rwa', label: 'RWA', sub: 'Real-world assets', glyph: 'R', tile: 'linear-gradient(160deg,#EAF4E4,#B9D9A6)', ink: '#2F5A1E' })
   return list
 }
 

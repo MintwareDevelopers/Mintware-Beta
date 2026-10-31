@@ -1,7 +1,7 @@
 'use client'
 
 // V2 access screen — what every /app workspace layout (V2AppGate) renders until the visitor enters the V2 password
-// (POST /api/v2/unlock → the same http-only cookie the Launch modal sets; lib/v2/gate.ts#hasV2Unlock). Two variants:
+// (POST /api/v2/unlock sets an http-only cookie; lib/v2/gate.ts#hasV2Unlock). Two variants:
 // the general V2 preview, and the RWA partner framing. Light-only. Nothing behind the gate is rendered before unlock.
 
 import { useState } from 'react'
@@ -10,12 +10,12 @@ import { MintwareMark } from '@/components/ui2/MintwareMark'
 
 const COPY = {
   app: {
-    chip: 'Mintware V2', tag: 'Investor preview',
-    h1: 'The full vision, one password away.',
-    lede: 'Treasury OS, yield that stays spendable, liquidity for your token, and RWA markets — the V2 preview of everything Mintware is building. V1, the live LP Gateway, stays open to everyone.',
-    bullets: ['Personal, Team and RWA workspaces in one app', 'Every live figure read from testnet contracts', 'Illustrative screens are labelled as such'],
-    sub: 'Use your Mintware V2 preview code.',
-    cta: 'Open the preview',
+    chip: 'Mintware Team', tag: 'Private preview',
+    h1: 'Your team’s treasury, one code away.',
+    lede: 'Run an organisation’s money in one place: roles, vendor payments, payroll records, card funding and treasury controls. Team is in private preview while it runs on testnet. Markets and your portfolio stay open to everyone.',
+    bullets: ['Create an organisation and invite your team', 'Live figures read from testnet contracts', 'Illustrative screens are labelled as such'],
+    sub: 'Use your Mintware preview code.',
+    cta: 'Open Team',
   },
   rwa: {
     chip: 'Mintware RWA', tag: 'Partner preview',
@@ -51,7 +51,7 @@ export function V2Access({ variant = 'app' }: { variant?: keyof typeof COPY }) {
     <main className="min-h-screen bg-[linear-gradient(180deg,#F3F2FE_0%,#FFFFFF_70%)] text-ink">
       <header className="mx-auto flex max-w-[1120px] items-center justify-between px-6 pt-6 max-sm:px-4">
         <a href="/" className="flex items-center gap-2 text-ink no-underline"><MintwareMark size={22} /><span className="font-atx-display text-[16px] font-bold tracking-[-0.02em]">Mintware</span></a>
-        <a href="/v1" className="text-[13px] font-medium text-ink-mid no-underline hover:text-ink">V1 is live — open the LP Gateway →</a>
+        <a href="/app/markets" className="text-[13px] font-medium text-ink-mid no-underline hover:text-ink">Open the markets →</a>
       </header>
       <div className="mx-auto grid max-w-[1120px] grid-cols-[1.1fr_1fr] items-center gap-12 px-6 py-20 max-[860px]:grid-cols-1 max-sm:px-4 max-sm:py-12">
         <div>

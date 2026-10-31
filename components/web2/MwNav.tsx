@@ -4,7 +4,6 @@ import Link                   from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useSyncExternalStore } from 'react'
 import { useMintwarePrivy }   from '@/components/web2/providers'
-import { useLaunch }          from '@/components/web2/LaunchModal'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { MintwareMark }        from '@/components/ui2/MintwareMark'
 import { ScopeSwitcher }        from '@/components/web2/ScopeSwitcher'
@@ -24,7 +23,6 @@ export function MwNav() {
 
   const { address, isConnected, disconnect } = useMintwareIdentity()
   const privy = useMintwarePrivy()
-  const { launch } = useLaunch()
 
   function handleDisconnect() {
     disconnect()          // evm disconnect + privy logout (see useMintwareIdentity)
@@ -34,9 +32,9 @@ export function MwNav() {
   const isActive = (path: string) => pathname === path
 
   const NAV_LINKS = [
-    { href: '/app/account', label: 'Account' },
+    { href: '/app/portfolio', label: 'Portfolio' },
     { href: '/app/swap', label: 'Swap' },
-    { href: '/v1', label: 'LP Gateway' },
+    { href: '/app/markets', label: 'Markets' },
     { href: '/agents/leaderboard', label: 'Agents' },
   ]
 
@@ -145,9 +143,9 @@ export function MwNav() {
           >
             Markets
           </Link>
-          <button onClick={() => launch()} className="mw-btn !min-h-[40px] text-[14px]">
+          <Link href="/app/markets" className="mw-btn !min-h-[40px] text-[14px]">
             Launch app
-          </button>
+          </Link>
         </div>
       )}
     </nav>

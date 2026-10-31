@@ -13,6 +13,7 @@ import { ScopeSwitcher } from '@/components/web2/ScopeSwitcher'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { shortAddr } from '@/lib/web2/api'
+import { V1DisclaimerGate } from '@/components/web2/v1/V1DisclaimerGate'
 
 export type ShellNavItem = { href: string; label: string; hint?: string; exact?: boolean }
 export type ShellNavGroup = { title?: string; items: ShellNavItem[] }
@@ -162,22 +163,30 @@ export function AppShell({
   )
 }
 
-/** Personal workspace — retail only (IA audit 2026-10-02): token-issuer flows live in Team, the agent
- *  leaderboard is a public page, and the live LP product (V1 LP Gateway) is linked rather than duplicated. */
+/** Standard content container for app pages that don't bring their own layout. */
+export function AppContainer({ children }: { children: ReactNode }) {
+  return <div className="max-w-[1240px] mx-auto px-6 max-[640px]:px-4 py-10 max-[640px]:py-6">{children}</div>
+}
+
+/** Personal workspace — one app (2026-10-31): what works sits first, the RWA demo next, and the simulated lanes
+ *  under Previews so nothing simulated reads like a live feature. Open to everyone; Team stays V2-gated. */
 export function PersonalShell({ children }: { children: ReactNode }) {
   return (
     <AppShell
       groups={[
-        { items: [{ href: '/app/account', label: 'Account' }, { href: '/app/swap', label: 'Swap' }] },
+        { items: [{ href: '/app/markets', label: 'Markets' }, { href: '/app/portfolio', label: 'Portfolio' }, { href: '/app/swap', label: 'Swap' }] },
+        { title: 'Real-world assets', items: [{ href: '/app/rwas', label: 'Property market', hint: 'Demo' }] },
         {
-          title: 'Earn',
+          title: 'Previews',
           items: [
-            { href: '/v1', label: 'LP Gateway', hint: 'Live ↗' },
+            { href: '/app/previews/card', label: 'Card', hint: 'Simulated' },
+            { href: '/app/previews/agents', label: 'Agents', hint: 'Simulated' },
+            { href: '/app/previews/issuers', label: 'Issuers', hint: 'Simulated' },
           ],
         },
-        { title: 'Agents', items: [{ href: '/app/agents', label: 'Agent account' }] },
       ]}
     >
+      <V1DisclaimerGate />
       {children}
     </AppShell>
   )

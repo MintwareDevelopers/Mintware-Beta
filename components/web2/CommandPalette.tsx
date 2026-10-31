@@ -9,23 +9,20 @@ import { useRouter } from 'next/navigation'
 import { useDisconnect } from 'wagmi'
 import { ExternalLink, LogOut, Search } from 'lucide-react'
 
-// Mirrors the AppShell workspace menus (Personal / Team / RWA) + the live V1 product, so ⌘K never offers a page the
-// sidebar doesn't (IA audit 2026-10-02 — it used to list only Vaults, Swap, the leaderboard and a Profile redirect).
-const RWA_ON = process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'
+// Mirrors the AppShell workspace menus (Personal / Team), so ⌘K never offers a page the sidebar doesn't.
 const GROUPS: { heading: string; items: { href: string; label: string; external?: boolean }[] }[] = [
   { heading: 'Personal', items: [
-    { href: '/app/account', label: 'Account' }, { href: '/app/swap', label: 'Swap' },
-    { href: '/app/agents', label: 'Agent account' },
+    { href: '/app/markets', label: 'Markets' }, { href: '/app/portfolio', label: 'Portfolio' }, { href: '/app/swap', label: 'Swap' },
+    { href: '/app/rwas', label: 'Property market (demo)' }, { href: '/app/rwas/proof', label: 'Property market proof' },
+  ] },
+  { heading: 'Previews', items: [
+    { href: '/app/previews/card', label: 'Card' }, { href: '/app/previews/agents', label: 'Agents' }, { href: '/app/previews/issuers', label: 'Issuers' },
   ] },
   { heading: 'Team', items: [
     { href: '/app/team', label: 'Treasury overview' },
     { href: '/app/team/cards', label: 'Cards & Spend' }, { href: '/app/org/new', label: 'Create organization' },
   ] },
-  ...(RWA_ON ? [{ heading: 'RWA', items: [
-    { href: '/v1/rwas', label: 'RWA overview' }, { href: '/v1/rwas/wcp7', label: 'Willow Creek market' },
-    { href: '/v1/rwas/proof', label: 'On-chain proof' },
-  ] }] : []),
-  { heading: 'Live', items: [{ href: '/v1', label: 'LP Gateway (V1)', external: true }, { href: '/agents/leaderboard', label: 'Agent leaderboard', external: true }] },
+  { heading: 'Public', items: [{ href: '/agents/leaderboard', label: 'Agent leaderboard', external: true }] },
 ]
 
 export function CommandPalette() {

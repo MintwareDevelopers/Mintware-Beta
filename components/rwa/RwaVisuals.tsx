@@ -1,12 +1,11 @@
 'use client'
 
-// V2-RWAs visual building blocks — light-only. Every number comes from the live chain read (useRwaUnit) or
-// the recorded proof run (lib/rwa/demo.ts); nothing here is decorative data.
+// Mineral building blocks for the owned-engine screens and archived proof. Light-only.
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { formatUnits } from 'viem'
-import type { RwaUnit } from '@/config/rwa-archive/proof'
+import { RWA_QUOTE_ASSET } from '@/lib/rwa/units'
 import { type RwaUnitLive } from './useRwaUnit'
 
 // Mineral type for the RWA screens: a periwinkle eyebrow over a semibold Geist headline.
@@ -48,7 +47,7 @@ export function IconTile({ children, tone = 'peri' }: { children: ReactNode; ton
 }
 
 /** Segmented chain switch: an inset well with a raised pill on the active chain. */
-export function ChainTabs({ units, active, href }: { units: RwaUnit[]; active: string; href: (slug: string) => string }) {
+export function ChainTabs({ units, active, href }: { units: { slug: string; chain: { name: string } }[]; active: string; href: (slug: string) => string }) {
   if (units.length < 2) return null
   return (
     <div className="inline-flex rounded-[14px] p-1" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }} role="tablist" aria-label="Chain">
@@ -66,7 +65,7 @@ export function ChainTabs({ units, active, href }: { units: RwaUnit[]; active: s
   )
 }
 
-export function LiveDot({ block, failed, label = 'Live' }: { block?: number; failed?: boolean; label?: string }) {
+export function LiveDot({ block, failed, label = 'Live' }: { block?: number | null; failed?: boolean; label?: string }) {
   if (failed) return <span className="text-[12px] text-ink-soft">Live read unavailable — {block ? `cached block ${block.toLocaleString()}` : 'no current snapshot'}</span>
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-mid">
@@ -76,17 +75,59 @@ export function LiveDot({ block, failed, label = 'Live' }: { block?: number; fai
   )
 }
 
-export function LiquidityMap({ unit }: { unit: RwaUnitLive }) {
-  if (!unit.engine) return null
-  return <div className="mw-raise rounded-[22px] p-6">
-    <h2 className={H2}>Engine holdings {unit.source === 'cached' ? 'at snapshot' : ''}</h2>
-    <dl className="mt-4 grid gap-3">
-      <div><dt>NAV (USDC)</dt><dd>{unit.engine.nav === null ? 'Unavailable — appraisal may be stale' : formatUnits(BigInt(unit.engine.nav), 6)}</dd></div>
-      <div><dt>Share supply</dt><dd>{formatUnits(BigInt(unit.engine.supply), 18)}</dd></div>
-      {unit.engine.balances.map((b, i) => <div key={b.token}><dt>Asset {i + 1} · {b.token}</dt><dd>{formatUnits(BigInt(b.engine), b.decimals)} in engine · {formatUnits(BigInt(b.idle), b.decimals)} idle</dd></div>)}
-      <div><dt>Position</dt><dd>{unit.engine.position.liquidity} liquidity · ticks {unit.engine.position.tickLower} to {unit.engine.position.tickUpper}</dd></div>
-      {unit.engine.shares !== null && <div><dt>Your shares</dt><dd>{formatUnits(BigInt(unit.engine.shares),18)}</dd></div>}
+export const amount = (value: string | null | undefined, decimals: number) => value == null ? '—' : formatUnits(BigInt(value), decimals)
+export const observedDate = (timestamp: number) => new Date(timestamp * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
+
+export function ReadState({ unit, failed }: { unit: RwaUnitLive | null; failed: boolean }) {
+  if (unit?.source === 'undeployed') return <p className="text-[14px] text-ink-mid">The owned engine has not been deployed yet. Holdings, appraisals and permissions will appear after installation.</p>
+  if (!unit) return <p className="text-[14px] text-ink-soft">{failed ? 'Current engine data is unavailable. Retrying the chain read…' : 'Reading the owned engine…'}</p>
+  return null
+}
+
+/** Pool ticks avoid inferring a token ordering or price from the retired deployment. */
+export function BandGauge({ unit }: { unit: RwaUnitLive }) {
+  const h = unit.hook
+  if (!h) return <p className="text-[13px] text-ink-soft">Appraisal band unavailable.</p>
+  const extent = Math.max(1, h.specBandTicks * 1.25, Math.abs(h.spotTick - h.appraisalTick) * 1.1)
+  const x = (tick: number) => 50 + (tick - h.appraisalTick) / extent * 50
+  return <div>
+    <div role="img" aria-label={`Spot tick ${h.spotTick}; appraisal tick ${h.appraisalTick}; core band plus or minus ${h.coreBandTicks}, outer band plus or minus ${h.specBandTicks} ticks${unit.source === 'cached' ? ', cached snapshot' : ''}`}>
+      <div className="flex justify-between gap-3 text-[12px] text-ink-soft"><span>Outer band</span><span>Core band</span><span>Outer band</span></div>
+      <div className="relative mt-3 h-10 rounded-full" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+        <span className="absolute inset-y-0 rounded-full bg-[#EDE9FB]" style={{ left: `${x(h.appraisalTick - h.specBandTicks)}%`, width: `${h.specBandTicks / extent * 100}%` }} />
+        <span className="absolute inset-y-0 rounded-full bg-[#C9C0F4]" style={{ left: `${x(h.appraisalTick - h.coreBandTicks)}%`, width: `${h.coreBandTicks / extent * 100}%` }} />
+        <span className="absolute -top-2 h-14 border-l border-dashed border-peri-deep" style={{ left: '50%' }} />
+        <span className="absolute -top-1 h-12 w-1 rounded-full bg-ink" style={{ left: `${x(h.spotTick)}%` }} />
+      </div>
+    </div>
+    <dl className="mt-5 grid grid-cols-2 gap-3 text-[12.5px] text-ink-mid">
+      <div><dt>Spot tick{unit.source === 'cached' ? ' at snapshot' : ''}</dt><dd className="font-geist-mono text-ink">{h.spotTick}</dd></div>
+      <div><dt>Appraisal tick</dt><dd className="font-geist-mono text-peri-deep">{h.appraisalTick}</dd></div>
+      <div><dt>Core · ±{h.coreBandTicks} ticks</dt><dd>{h.coreFeePips / 10000}% fee</dd></div>
+      <div><dt>Outer · ±{h.specBandTicks} ticks</dt><dd>{h.specFeePips / 10000}% fee</dd></div>
     </dl>
+  </div>
+}
+
+export function LiquidityMap({ unit, symbol = 'Property' }: { unit: RwaUnitLive; symbol?: string }) {
+  const engine = unit.engine
+  if (!engine) return <p className="text-[13px] text-ink-soft">Holdings will appear after installation.</p>
+  return <div>
+    <dl className="grid grid-cols-2 gap-4 border-b border-hair-soft pb-5">
+      <div><dt className="text-[12px] text-ink-soft">NAV (USDC){unit.source === 'cached' ? ' at snapshot' : ''}</dt><dd className="mt-1 font-geist-mono text-[20px] break-words">{amount(engine.nav, 6)}</dd>{engine.nav === null && <p className="text-[12px] text-ink-soft">Unavailable — appraisal may be stale</p>}</div>
+      <div><dt className="text-[12px] text-ink-soft">Share supply</dt><dd className="mt-1 font-geist-mono text-[20px] break-words">{amount(engine.supply, 18)}</dd><p className="text-[12px] text-ink-soft">One non-transferable share class</p></div>
+    </dl>
+    <div className="mt-5 grid gap-3">
+      {engine.balances.map((b) => <div key={b.token} className="rounded-[14px] p-4" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+        <div className="text-[13px] font-semibold" title={b.token}>{b.token.toLowerCase() === RWA_QUOTE_ASSET ? 'USDC' : symbol}</div>
+        <dl className="mt-2 grid grid-cols-2 gap-3 text-[12px] text-ink-soft">
+          <div><dt>Held by engine</dt><dd className="mt-1 font-geist-mono text-ink break-words">{amount(b.engine, b.decimals)}</dd></div>
+          <div><dt>Idle adapter</dt><dd className="mt-1 font-geist-mono text-ink break-words">{amount(b.idle, b.decimals)}</dd></div>
+        </dl>
+      </div>)}
+    </div>
+    <div className="mt-4 text-[12.5px] text-ink-mid">Direct pool position · <span className="font-geist-mono break-all">{engine.position.liquidity}</span> liquidity<br />Ticks {engine.position.tickLower} to {engine.position.tickUpper}</div>
+    {engine.shares !== null && <p className="mt-3 text-[13px] text-ink-mid">Your shares · <span className="font-geist-mono">{amount(engine.shares, 18)}</span></p>}
   </div>
 }
 export function Disclosure({ chainName, symbol }: { chainName: string; symbol: string }) {

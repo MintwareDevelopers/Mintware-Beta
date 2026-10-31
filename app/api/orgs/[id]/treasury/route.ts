@@ -1,10 +1,9 @@
-// Org treasury — the read snapshot that powers the public treasury page (#6), the member card (#2),
-// and the fund screen's status (#1). Plus PATCH to record the vault address after an operator's Foundry
-// deploy (the converged vault links a delegatecall library, so it is NOT app-deployable — see the
-// 20260818000001_org_tenancy migration header + the deprecated deploy-ypn-v2-testnet route).
+// Org treasury — the read snapshot that powers the org home, the public treasury page and the fund screen's
+// status. The org's treasury is its Treasury yield vault (MintwareYieldVault, ERC-4626 Earn); positions sit in
+// members' own wallets. PATCH records the vault address after an operator deploys it.
 //
 // GET  /api/orgs/:id/treasury[?address=0x..]  — public. Org + on-chain snapshot + member count
-//                                               (+ the caller's par-while-covered realizable balance if ?address).
+//                                               (+ the caller's own supplied balance if ?address is a member).
 // PATCH /api/orgs/:id/treasury                — owner-only (signed-message). Records vault + chain.
 
 import type { NextRequest } from 'next/server'
@@ -76,10 +75,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       // The caller's own realizable balance — only for an ACTUAL member of this org (never an arbitrary address).
       let member = null
       if (addrLc && memberRow) {
-        const realizable = await reader.memberRealizableUsdc(addrLc)
+        const supplied = await reader.memberSuppliedUsdc(addrLc)
         member = {
           address: addrLc,
-          spendableUsdc: realizable.toString(),
+          suppliedUsdc: supplied.toString(),
           role: memberRow.role ?? null,
           status: memberRow.status ?? null,
           easUid: memberRow.eas_uid ?? null,
@@ -90,13 +89,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       let snapshot = null
       let control = null
       if (privileged) {
-        snapshot = {
-          navUsdc: snap.navUsdc.toString(),
-          coverageBps: snap.coverageBps > 1_000_000n ? null : Number(snap.coverageBps), // null = fully covered (MAX)
-          deployedUsdc: snap.deployedUsdc.toString(),
-          juniorBufferUsdc: snap.juniorBufferUsdc.toString(),
-          fullyCovered: snap.fullyCovered,
-        }
+        snapshot = { navUsdc: snap.navUsdc.toString() }
         const onchainOwner = await reader.owner().catch(() => null)
         control = {
           onchainOwner,
@@ -107,7 +100,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
       return ctx.json({ ...base, funded, snapshot, control, member })
     } catch (e) {
-      return ctx.json({ ...base, funded: true, snapshot: null, member: null, error: 'treasury_read_failed', detail: String(e) }, 502)
+      // A vault that doesn't answer as ERC-4626 (e.g. one recorded under the retired senior/junior model) still
+      // lets the org pages render; the figures just show as unavailable.
+      return ctx.json({ ...base, funded: true, snapshot: null, control: null, member: null, error: 'treasury_read_failed', detail: String(e) })
     }
   })(req)
 }
@@ -128,12 +123,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (org.owner_wallet.toLowerCase() !== ctx.user!.address.toLowerCase())
         return ctx.json({ error: 'only the org owner can set the treasury' }, 403)
 
-      // Sanity: the address must actually be a converged treasury vault on that chain (coverageBps() answers).
+      // Sanity: the address must actually answer as an ERC-4626 vault on that chain (asset() + totalAssets()).
       const reader = makeTreasuryReader({ rpcUrl: rpcForChain(chainId)!, vault })
       try {
         await reader.snapshot()
       } catch {
-        return ctx.json({ error: 'address does not read as a MintwareTreasuryVault on that chain' }, 422)
+        return ctx.json({ error: 'address does not read as a Treasury yield (ERC-4626) vault on that chain' }, 422)
       }
 
       const { error } = await ctx.supabase

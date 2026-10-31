@@ -54,7 +54,7 @@ const TRUST: [string, string, ReactNode][] = [
 const FAQ: [string, string][] = [
   ['What is Mintware?', 'Mintware is the liquidity layer for on-chain value. It turns capital into always-working liquidity for markets in tokenized stocks, real-world assets and stablecoins — and lets you earn from it.'],
   ['How does my money earn?', 'Your capital earns a share of the fees from every trade in the markets you back, plus yield on whatever the market doesn’t need at that moment. Two sources, one balance.'],
-  ['Can I withdraw at any time?', 'Yes. There are no lockups — you’re paid out instantly in your share of the market’s assets.'],
+  ['Can I withdraw at any time?', 'There are no lockups. You can withdraw whenever you choose and you’re paid in your share of the market’s assets. An exit can be delayed if a token’s issuer pauses it or the market is short of liquidity.'],
   ['Who holds my funds?', 'You do. Mintware is non-custodial — your shares sit in your own wallet, and every contract and transaction is on-chain.'],
   ['Where does Mintware run?', 'Markets run on Robinhood Chain and Base testnets today, ahead of an external audit.'],
   ['Are there risks?', 'Yes, as with any market. Providing liquidity carries price risk and impermanent loss, tokenized assets carry issuer risk, and smart contracts carry technical risk. Read the full risk disclosures before you use Mintware.'],
@@ -86,7 +86,7 @@ export default function HomePage() {
 
     {/* Hero */}
     <section className="relative">
-      <svg aria-hidden="true" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" className="absolute inset-x-0 -top-10 w-full h-[900px] pointer-events-none">
+      <svg aria-hidden="true" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice" className="absolute inset-x-0 -top-10 w-full h-[calc(100%+40px)] pointer-events-none" style={{ maskImage: 'linear-gradient(to bottom, #000 72%, transparent)', WebkitMaskImage: 'linear-gradient(to bottom, #000 72%, transparent)' }}>
         <defs><radialGradient id="halo" cx="70%" cy="62%" r="40%"><stop offset="0" stopColor="#C9C0F4" stopOpacity=".55" /><stop offset=".55" stopColor="#F2CBC2" stopOpacity=".18" /><stop offset="1" stopColor="#F6F6FA" stopOpacity="0" /></radialGradient></defs>
         <rect width="1400" height="900" fill="url(#halo)" />
         <g fill="none" stroke="#5B5BE6" strokeOpacity="0.07">
@@ -297,7 +297,7 @@ export default function HomePage() {
           <h2 className="m-0 font-semibold text-[clamp(30px,3.6vw,44px)] tracking-[-0.035em] leading-[1.08]">See a market up close.</h2>
           <p className="mt-3 mb-0 text-[17px] leading-[1.55]" style={{ color: 'var(--mw-ink-2)' }}>Browse the live markets on testnet, with mock tokens and no real funds.</p>
         </div>
-        <Link href="/v1" className="mw-btn relative !min-h-[54px] !px-[26px] !rounded-[14px]">Launch app <Arrow /></Link>
+        <Link href="/app/markets" className="mw-btn relative !min-h-[54px] !px-[26px] !rounded-[14px]">Launch app <Arrow /></Link>
       </div>
       <p className="mx-auto max-w-[1200px] mt-8 text-[13px] leading-[1.55]" style={{ color: 'var(--mw-ink-3)' }}>Testnet software, not an offer. Tokenized assets carry issuer, market, liquidity and smart‑contract risk, and you bear impermanent loss on liquidity you provide. Figures in the market illustration are examples. <Link href="/risk-disclosures" style={{ color: 'var(--mw-peri-deep)' }}>Risk disclosures</Link></p>
     </section>
