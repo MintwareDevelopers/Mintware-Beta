@@ -1,12 +1,12 @@
-import { Fragment } from 'react'
+import { Fragment, type ReactNode } from 'react'
 
 // FlowDiagram — a row of raised step cards joined by arrows (Mineral). Wraps to a single column on
 // narrow screens, where the arrows turn downward.
 
 export interface FlowStep {
   label: string
-  sub?: string
-  n?: string
+  sub?: ReactNode
+  n?: ReactNode
 }
 
 function Arrow({ down }: { down?: boolean }) {

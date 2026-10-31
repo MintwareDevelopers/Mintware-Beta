@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { Disclosure } from '@/components/rwa/RwaVisuals'
-import { RWA_UNITS } from '@/lib/rwa/units'
+import { FlowDiagram } from '@/components/ui2/FlowDiagram'
+import { RWA_STACK, RWA_STACK_CONTRACTS, RWA_STACK_DISCLOSURE } from '@/lib/rwa/units'
 
 // /app/rwas/how — the owned engine explained. Static and light-only.
 
@@ -31,6 +31,30 @@ export default function RwaHow() {
             asset, owned by qualified holders through non-transferable engine shares, with a dated appraisal and
             permissions enforced by the hook and the issuer&apos;s own token.
           </p>
+        </div>
+      </section>
+
+      <section className="border-b border-hair-soft">
+        <div className={`${WRAP} py-12`}>
+          <h2 className={H2}>Built on the standard</h2>
+          <FlowDiagram className="mt-7" steps={RWA_STACK.map((layer) => ({
+            label: layer.label,
+            n: <span className={`inline-flex rounded-full px-2 py-1 font-geist text-[11.5px] font-semibold ${layer.status === 'Live on testnet' ? 'bg-[#E3F4EA] text-[#0F7A43]' : 'bg-white text-ink-mid'}`}>{layer.status}</span>,
+            sub: <span className="grid gap-1.5">{layer.lines.map((line) => <span key={line}>{line}</span>)}</span>,
+          }))} />
+          <p className="mt-5 max-w-[78ch] text-[13px] leading-[1.6] text-ink-mid">{RWA_STACK_DISCLOSURE}</p>
+          <p className="mt-3 text-[14px] font-medium text-ink-mid">The property engine is live on Base Sepolia: activated and seeded. Trading is not enabled yet.</p>
+          <ul aria-label="Live contracts on Base Sepolia" className="mt-6 grid gap-3 sm:grid-cols-2">
+            {RWA_STACK_CONTRACTS.map((contract) => (
+              <li key={contract.name}>
+                <a href={`${contract.explorer}/address/${contract.address}`} target="_blank" rel="noopener noreferrer" className="mw-raise-sm block rounded-2xl p-4 text-peri-deep hover:underline focus-visible:outline-2 focus-visible:outline-offset-4">
+                  <span className="text-[13px] font-semibold">{contract.name} ↗</span>
+                  <span className="mt-1 block break-all font-geist-mono text-[11px] text-ink-mid">{contract.address}</span>
+                  <span className="mt-1 block text-[11px] text-ink-soft">{contract.explorer.includes('blockscout') ? 'Blockscout' : 'BaseScan'} · Base Sepolia</span>
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -94,6 +118,7 @@ export default function RwaHow() {
       <section className="border-b border-hair-soft bg-[#F6F6FA]">
         <div className={`${WRAP} py-10`}>
           <div className={EY}>Before real value</div>
+          <span className="mt-3 inline-flex rounded-full bg-white px-2 py-1 text-[11.5px] font-semibold text-ink-mid">Roadmap</span>
           <p className="mt-3 max-w-[78ch] text-[14px] leading-[1.6] text-ink-mid">
             Before any real asset: an external audit of the engine and hook, review of venue and holder eligibility,
             integration with the issuer&apos;s production token, and a production deployment.
@@ -102,7 +127,6 @@ export default function RwaHow() {
         </div>
       </section>
 
-      <section><div className={`${WRAP} py-8`}><Disclosure chainName={RWA_UNITS[0].chainName} symbol={RWA_UNITS[0].symbol} /></div></section>
     </div>
   )
 }
