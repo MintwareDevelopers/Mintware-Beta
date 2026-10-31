@@ -4,8 +4,10 @@
 // on-chain refusals, and the source-verified contract set. Per chain (?unit=).
 
 import Link from 'next/link'
-import { getUnit, explorer, contractRows, revertReasonText, shortHash, RWA_UNITS } from '@/lib/rwa/demo'
-import { RefusalCards, Disclosure, ChainTabs, IconTile, IconChainLink, IconRefused, IconVerified, EY, H2 } from './RwaVisuals'
+import { getUnit, explorer, contractRows, revertReasonText, shortHash, RWA_UNITS } from '@/config/rwa-archive/proof'
+import { Disclosure, ChainTabs, IconTile, IconChainLink, IconRefused, IconVerified, EY, H2 } from './RwaVisuals'
+
+import { RefusalCards } from './RwaProofVisuals'
 
 const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
 const displayLabel = (l: string) => l.replace(' deposits ', ' supplies ')
@@ -27,7 +29,7 @@ export function RwaProof({ slug }: { slug: string }) {
             <Link href={`/v1/rwas/${u.slug}`} className="text-[13.5px] font-semibold text-ink-mid no-underline hover:text-ink">← Back to the market</Link>
             <ChainTabs units={RWA_UNITS} active={u.slug} href={(s) => `/v1/rwas/proof?unit=${s}`} />
           </div>
-          <div className={`${EY} mt-7`}>On-chain proof</div>
+          <div className={`${EY} mt-7`}>Archived proof · previous model</div>
           <h1 className="mt-2 max-w-[22ch] font-geist text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.04] tracking-[-0.04em]">Every step, a transaction you can open.</h1>
           <p className="mt-3 max-w-[66ch] text-[15.5px] leading-[1.6] text-ink-mid">
             The full lifecycle of {D.property.name.replace(' (demo)', '')}, a fictional parcel, run on {u.chain.name} on{' '}

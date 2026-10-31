@@ -1,10 +1,6 @@
-// V2-RWAs — the one home for the demo liquidity units' recorded facts (addresses + every proof hash), one
-// unit per chain. Source of truth (written by the lifecycle script after a real run; never hand-edit):
-//   Base Sepolia → config/rwaDemo.json
-// The platform shows Base + Robinhood only; the earlier XRPL EVM run (config/rwaDemo.xrpl.json) is retired.
-// Testnet + unaudited: the hashes are real, the property is fictional, every token is valueless.
+// Archived transaction proof of the retired model. Never use these addresses or snapshots for live reads.
 
-import baseDemo from '@/config/rwaDemo.json'
+import baseDemo from '@/config/rwa-archive/rwaDemo.json'
 
 export type RwaRevertReason = { error: string; target: string | null; args: string[] }
 export type RwaProofTx = { label: string; hash: string; status: 'success' | 'reverted'; from?: string; block?: number; reason?: RwaRevertReason }
@@ -48,7 +44,7 @@ export type RwaUnit = {
   network: 'base-sepolia'
   chain: RwaChain
   demo: RwaDemo
-  /** the "run a live trade" button + background activity run on this unit */
+  /** Archived metadata; trading is retired. */
   liveTrade: boolean
 }
 
@@ -58,13 +54,13 @@ export const RWA_UNITS: RwaUnit[] = [
     network: 'base-sepolia',
     chain: { id: 84532, name: 'Base Sepolia', short: 'Base', explorer: 'https://sepolia.basescan.org', blockscout: 'https://base-sepolia.blockscout.com', nativeSymbol: 'ETH' },
     demo: baseDemo as unknown as RwaDemo,
-    liveTrade: true,
+    liveTrade: false,
   },
 ]
 
 export const getUnit = (slug: string): RwaUnit | undefined => RWA_UNITS.find((u) => u.slug === slug.toLowerCase())
 
-/** Back-compat: the Base Sepolia unit (the live-trade button + activity script trade here). */
+/** Recorded Base Sepolia proof. */
 export const RWA_DEMO = RWA_UNITS[0].demo
 export const RWA_CHAIN = RWA_UNITS[0].chain
 
@@ -106,14 +102,14 @@ export function tickToUsd(tick: number, propertyIsCurrency0 = RWA_DEMO.propertyI
   return (propertyIsCurrency0 ? p : 1 / p) * 1e12
 }
 
-/** The verified demo-trader Privy wallet behind the "run a live trade" button + the activity script (Base). */
+/** Historical trader identity used only to label archived transactions. */
 export const RWA_DEMO_TRADER = '0x65398D823cB346aa4CCd4774223F96E303360bAC'
 
 /** Human label for a demo wallet on a unit, else a short address. */
 export function walletLabel(addr: string, demo: RwaDemo = RWA_DEMO): string {
   const a = addr.toLowerCase()
   if (a === demo.issuer.toLowerCase()) return 'Issuer'
-  if (a === RWA_DEMO_TRADER.toLowerCase()) return 'Demo trader (live)'
+  if (a === RWA_DEMO_TRADER.toLowerCase()) return 'Archived demo trader'
   for (const w of Object.values(demo.wallets)) if (w.address.toLowerCase() === a) return w.label.replace(/^.* · /, '')
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }

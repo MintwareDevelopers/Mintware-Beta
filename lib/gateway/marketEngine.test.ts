@@ -100,3 +100,53 @@ describe('marketEngineConfigForPool', () => {
     expect(marketEngineConfigs(RH_ENV).map((c) => c.chainId)).toEqual([46630, 84532])
   })
 })
+
+describe('owned-pool engine verification', () => {
+  const HOOK = '0x' + '44'.repeat(20) as `0x${string}`
+  const ADAPTER = '0x' + '55'.repeat(20) as `0x${string}`
+  const FACTORY = '0x' + '66'.repeat(20) as `0x${string}`
+  const MANAGER = '0x' + '77'.repeat(20) as `0x${string}`
+  const USDC = '0x036cbd53842c5426634e7929541ec2318f3dcf7e' as const
+  const ownedKey = { currency0: USDC, currency1: ADAPTER, fee: 0x800000, tickSpacing: 60, hooks: HOOK }
+  const values = () => ({
+    [ENGINE]: { owner: OWNER, quoteAsset: USDC, token0: USDC, token1: TOKEN0, activated: true, poolKey: ownedKey, appraisalHook: HOOK, permissionsAdapter: ADAPTER, nonQuoteMark: HOOK, poolManager: MANAGER },
+    [HOOK]: { permissionsFactory: FACTORY, permissionsAdapter: ADAPTER, vault: ENGINE, asset: TOKEN0, quoteAsset: USDC, poolManager: MANAGER, expectedPoolId: computePoolId(ownedKey) },
+    [ADAPTER]: { PERMISSIONED_TOKEN: TOKEN0, POOL_MANAGER: MANAGER },
+    [FACTORY]: { verifiedPermissionsAdapterOf: TOKEN0 },
+  } as Record<string, Record<string, unknown>>)
+  const check = (facts = values(), extra = {}) => {
+    process.env.MARKET_ENGINE_QUOTE_ASSET = USDC
+    return verifyMarketEngine({ client: { getCode: async () => CODE, readContract: async ({ address, functionName }: { address: string; functionName: string }) => facts[address]?.[functionName] },
+      address: ENGINE, expectedOwner: OWNER, allowedCodeHashes: [], allowedOwnedCodeHashes: [keccak256(CODE)], chainId: 84532, ...extra })
+  }
+  it('maps the verified adapter to underlying in pool order', async () => {
+    expect(await check()).toMatchObject({ ok: true, token0: USDC, token1: TOKEN0 })
+    const facts = values()
+    const key = { ...ownedKey, currency0: ADAPTER, currency1: USDC }
+    facts[ENGINE].poolKey = key; facts[ENGINE].token0 = TOKEN0; facts[ENGINE].token1 = USDC
+    facts[HOOK].expectedPoolId = computePoolId(key)
+    expect(await check(facts)).toMatchObject({ ok: true, token0: TOKEN0, token1: USDC })
+  })
+  it('does not admit hooked engines through the ordinary codehash list', async () => {
+    expect(await check(values(), { allowedOwnedCodeHashes: [], allowedCodeHashes: [keccak256(CODE)] })).toMatchObject({ ok: false, error: 'engine_token_mismatch' })
+  })
+  it.each([
+    [FACTORY, 'verifiedPermissionsAdapterOf', TOKEN1],
+    [HOOK, 'asset', TOKEN1], [HOOK, 'vault', OWNER], [HOOK, 'permissionsAdapter', TOKEN1],
+    [HOOK, 'poolManager', OWNER], [ADAPTER, 'POOL_MANAGER', OWNER], [ADAPTER, 'PERMISSIONED_TOKEN', USDC],
+    [ENGINE, 'token1', ADAPTER], [HOOK, 'expectedPoolId', '0x' + '00'.repeat(32)],
+  ])('refuses a broken binding at %s.%s', async (address, field, value) => {
+    const facts = values(); facts[address][field] = value
+    expect(await check(facts)).toMatchObject({ ok: false, error: 'owned_engine_mapping_mismatch' })
+  })
+  it('keeps the quote anchored to chain USDC and testnet', async () => {
+    expect(await check(values(), { chainId: 1 })).toMatchObject({ ok: false, error: 'owned_engine_quote_mismatch' })
+    const facts = values(); facts[ENGINE].quoteAsset = TOKEN1
+    expect(await check(facts)).toMatchObject({ ok: false, error: 'owned_engine_quote_mismatch' })
+  })
+  it('only permits inactive engines for explicit read-only inspection', async () => {
+    const facts = values(); facts[ENGINE].activated = false
+    expect(await check(facts)).toMatchObject({ ok: false, error: 'engine_inactive' })
+    expect(await check(facts, { allowInactive: true })).toMatchObject({ ok: true })
+  })
+})
