@@ -122,7 +122,7 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
             {sortedRecords.map(r => (
               <div key={r.id} className="flex items-center justify-between px-4 py-2.5 rounded-[12px]" style={WELL}>
                 <span className="text-[13px] font-geist-mono text-ink-mid">{truncateAddress(r.referred)}</span>
-                <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-full ${r.status === 'active' ? 'bg-[#E3F4EA] text-[#0F7A43]' : 'bg-white text-ink-mid mw-tex-dots'}`}>
+                <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-full ${r.status === 'active' ? 'bg-[#E3F4EA] text-[#0F7A43]' : 'bg-white text-ink-mid'}`}>
                   {r.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-[#22A45D]" />}{r.status === 'active' ? 'Active' : 'Pending'}
                 </span>
               </div>

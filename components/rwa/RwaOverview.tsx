@@ -7,7 +7,7 @@ import { RWA_UNITS } from '@/lib/rwa/units'
 import { useRwaUnit, ago, rwaStatus, STATUS_CLS } from './useRwaUnit'
 import { BandGauge, LiquidityMap, LiveDot, ReadState, amount, observedDate, IconTile, IconRefused, Disclosure, EY, H2 } from './RwaVisuals'
 
-const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
+const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5 max-[640px]:px-3'
 
 export function RwaOverview() {
   const base = RWA_UNITS[0]

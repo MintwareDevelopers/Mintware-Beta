@@ -449,13 +449,13 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             <PriceChart series={spark} />
             <div className="grid grid-cols-3 gap-2 mt-3 text-[12.5px]">
               <div><div style={{ color: 'var(--mw-ink-3)' }}>Fee tier</div><div className="font-geist-mono mt-0.5">{feeTierLabel}</div></div>
-              <div><div style={{ color: 'var(--mw-ink-3)' }}>{m ? 'TVL' : 'Network'}</div><div className="font-geist-mono mt-0.5 truncate">{m ? usd(m.tvlUsd) : chainId != null ? chainLabel(chainId) : '—'}</div></div>
+              <div><div style={{ color: 'var(--mw-ink-3)' }}>{m ? 'TVL' : 'Network'}</div><div className="font-geist-mono mt-0.5 leading-snug break-words">{m ? usd(m.tvlUsd) : chainId != null ? chainLabel(chainId) : '—'}</div></div>
               <div><div style={{ color: 'var(--mw-ink-3)' }}>Est. fee APR</div><div className="font-geist-mono mt-0.5">{aprLabel ?? '—'}</div></div>
             </div>
           </div>
 
           {/* the action */}
-          <div className="flex-[1_1_300px] min-w-0 rounded-[20px] p-4" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+          <div className="flex-[1_1_300px] min-w-0 rounded-[20px] p-4 max-[520px]:!p-0 max-[520px]:!bg-transparent max-[520px]:!shadow-none" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
             {metaState === 'not_live' && !hasPos ? (
               <>
                 <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#62626F' }}>Status</div>

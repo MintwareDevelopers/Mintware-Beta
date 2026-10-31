@@ -6,7 +6,7 @@
 // config/deployments.json; keep them in step when those change. Retired designs (LP Gateway, ULV/JIT, am-AMM,
 // matched launch, Liquid Sovereign Account, senior/junior) are not described here.
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 
@@ -49,7 +49,7 @@ function Status({ s }: { s: 'live' | 'testnet' | 'demo' | 'preview' | 'retired' 
   const [label, cls] = map[s]
   return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap ${cls}`}>{label}</span>
 }
-const TABLE = 'w-full border-collapse text-[13.5px] my-4 [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-top [&_th]:text-[11px] [&_th]:uppercase [&_th]:tracking-[0.06em] [&_th]:text-ink-soft [&_th]:font-semibold [&_th]:border-b [&_th]:border-[var(--mw-line)] [&_td]:px-3 [&_td]:py-3 [&_td]:text-left [&_td]:align-top [&_td]:leading-[1.45] [&_td]:border-b [&_td]:border-[var(--mw-line)]'
+const TABLE = 'w-full border-collapse text-[13.5px] my-4 [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-top [&_th]:text-[11px] [&_th]:uppercase [&_th]:tracking-[0.06em] [&_th]:text-ink-soft [&_th]:font-semibold [&_th]:border-b [&_th]:border-[var(--mw-line)] [&_td]:px-3 [&_td]:py-3 [&_td]:text-left [&_td]:align-top [&_td]:leading-[1.45] [&_td]:border-b [&_td]:border-[var(--mw-line)] max-[560px]:[&_thead]:hidden max-[560px]:[&_tr]:block max-[560px]:[&_tr]:py-2.5 max-[560px]:[&_tr]:border-b max-[560px]:[&_tr]:border-[var(--mw-line)] max-[560px]:[&_td]:block max-[560px]:[&_td]:border-0 max-[560px]:[&_td]:px-0 max-[560px]:[&_td]:py-0.5 max-[560px]:[&_td]:break-words'
 function Addr({ a }: { a: string }) {
   return <code className="break-all">{a}</code>
 }
@@ -315,13 +315,19 @@ export default function DocsPage() {
   const [active, setActive] = useState('overview')
   const nav: Nav = (id) => { if (CONTENT[id]) { setActive(id); window.scrollTo(0, 0) } }
   const Section = CONTENT[active] ?? Overview
+  // On narrow screens the section list is a horizontal strip; keep the current section in view.
+  const strip = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const el = strip.current?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (strip.current && el && strip.current.scrollWidth > strip.current.clientWidth) strip.current.scrollLeft = el.offsetLeft - (strip.current.clientWidth - el.offsetWidth) / 2
+  }, [active])
 
   return (
     <div className="font-geist min-h-screen overflow-x-clip antialiased" style={{ background: 'var(--mw-ground)', color: 'var(--mw-ink)' }}>
       <V2Nav />
       <div className="grid grid-cols-[248px_minmax(0,1fr)] max-w-[1200px] mx-auto max-[880px]:grid-cols-1">
         <aside className="px-4 pt-8 pb-10 sticky top-[64px] self-start max-[880px]:static max-[880px]:pt-4 max-[880px]:pb-0">
-          <nav className="flex flex-col gap-4 max-[880px]:flex-row max-[880px]:gap-1 max-[880px]:overflow-x-auto max-[880px]:p-1 max-[880px]:rounded-[12px] max-[880px]:[background:var(--mw-well)] max-[880px]:[box-shadow:var(--mw-inset)] [scrollbar-width:none]">
+          <nav ref={strip} className="relative flex flex-col gap-4 max-[880px]:flex-row max-[880px]:gap-1 max-[880px]:overflow-x-auto max-[880px]:p-1 max-[880px]:rounded-[12px] max-[880px]:[background:var(--mw-well)] max-[880px]:[box-shadow:var(--mw-inset)] [scrollbar-width:none]">
             {GROUPS.map((g) => (
               <div key={g.group} className="max-[880px]:contents">
                 <div className="mb-1.5 px-2 text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft max-[880px]:hidden">{g.group}</div>

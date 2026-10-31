@@ -7,7 +7,7 @@ import { getUnit } from '@/lib/rwa/units'
 import { useRwaUnit, rwaStatus, STATUS_CLS, ago } from './useRwaUnit'
 import { BandGauge, LiquidityMap, LiveDot, ReadState, Disclosure, IconParcel, IconBand, IconTile, IconTrades, IconChainLink, amount, observedDate, EY, H2 } from './RwaVisuals'
 
-const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
+const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5 max-[640px]:px-3'
 
 export function RwaMarket({ slug }: { slug: string }) {
   const definition = getUnit(slug)!
