@@ -43,7 +43,7 @@ function Status({ s }: { s: 'live' | 'testnet' | 'demo' | 'preview' | 'retired' 
     live: ['Live', 'bg-[#E3F4EA] text-[#0F7A43]'],
     testnet: ['Testnet', 'bg-[#EDE9FB] text-[#4B2FA0]'],
     demo: ['Testnet demo', 'bg-[#EDE9FB] text-[#4B2FA0]'],
-    preview: ['Simulated preview', 'bg-white text-ink-mid mw-tex-dots'],
+    preview: ['Simulated preview', 'bg-[#EDE9FB] text-[#4B2FA0]'],
     retired: ['Retired', 'bg-white text-ink-mid'],
   } as const
   const [label, cls] = map[s]

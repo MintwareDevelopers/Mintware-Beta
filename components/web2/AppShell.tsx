@@ -111,7 +111,7 @@ export function AppShell({
         style={on ? { background: '#fff', boxShadow: 'var(--mw-raise-sm)' } : undefined}
       >
         <span className="truncate">{n.label}{mobile && n.hint ? ` · ${n.hint}` : ''}</span>
-        {!mobile && n.hint && <span className="mw-tex-dots text-[10.5px] font-semibold text-ink-mid shrink-0 rounded-full px-1.5 py-0.5" style={{ backgroundColor: '#EDE9FB' }}>{n.hint}</span>}
+        {!mobile && n.hint && <span className="text-[10.5px] font-semibold shrink-0 rounded-full px-2 py-0.5" style={{ background: '#EDE9FB', color: '#4B2FA0' }}>{n.hint}</span>}
       </Link>
     )
   }
