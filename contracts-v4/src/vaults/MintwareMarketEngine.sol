@@ -11,7 +11,7 @@ contract MintwareMarketEngine is MintwareMarketEngineCore {
     uint16 public constant ENGINE_VERSION = 2;
 
     bytes32 private constant EXPECTED_LIFECYCLE_MODULE_CODEHASH =
-        0x166985aa111748ed70d00e8956c48fe285b5ba59f50555ca71ec8487139871f9;
+        0x92dbd5dfe5c435cc7b4ae0c5c63e43f58356678b04986ef7747ba6396f387e56;
 
     constructor(MarketConfig memory config)
         MintwareMarketEngineCore(config, false, EXPECTED_LIFECYCLE_MODULE_CODEHASH)

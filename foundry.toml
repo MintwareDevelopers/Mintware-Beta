@@ -12,6 +12,9 @@ fs_permissions = [{ access = "read", path = "./contracts-v4/script/data" }]
 
 # Foundry remappings — V4 core + periphery + OZ
 remappings = [
+  "@uniswap/v4-periphery-permissioned/=contracts-v4/lib/v4-periphery-permissioned/",
+  "@uniswap/v4-hooks-public/=contracts-v4/lib/v4-hooks-public/",
+  "contracts-v4/lib/v4-hooks-public/:@uniswap/v4-periphery/=contracts-v4/lib/v4-periphery-permissioned/",
   "@uniswap/v4-core/=contracts-v4/lib/v4-core/",
   "@uniswap/v4-periphery/=contracts-v4/lib/v4-periphery/",
   "@openzeppelin/contracts/=contracts-v4/lib/openzeppelin-contracts/contracts/",

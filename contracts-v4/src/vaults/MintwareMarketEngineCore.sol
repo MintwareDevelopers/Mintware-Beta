@@ -140,7 +140,9 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
                 || currency0.code.length == 0 || currency1.code.length == 0
                 || (!allowHookedPool && address(config.poolKey.hooks) != address(0))
                 || config.poolKey.tickSpacing <= 0
-                || config.poolKey.fee > 1_000_000
+                || (config.poolKey.fee > 1_000_000
+                    && !(allowHookedPool && address(config.poolKey.hooks) != address(0)
+                        && config.poolKey.fee == 0x800000))
         ) revert InvalidPool();
         if (config.quoteAsset != currency0 && config.quoteAsset != currency1) revert InvalidQuoteAsset();
         if (
@@ -152,6 +154,12 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
             revert InvalidConfiguration();
         }
         IMarketAssetMark markSource = IMarketAssetMark(config.nonQuoteMark);
+        // Hooked wrappers validate the mark's underlying against their pinned adapter factory.
+        // Preserve PoolKey ordering: settlement assets must never be re-sorted.
+        if (allowHookedPool) {
+            if (config.quoteAsset == currency0) currency1 = markSource.asset();
+            else currency0 = markSource.asset();
+        }
         address expectedAsset = config.quoteAsset == currency0 ? currency1 : currency0;
         if (markSource.asset() != expectedAsset || markSource.quoteAsset() != config.quoteAsset) {
             revert InvalidConfiguration();
@@ -666,7 +674,7 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
     }
 
     /// @dev Self-call boundary so withdraw can proceed with complete pro-rata delivery if the mark is unavailable.
-    function readPricesForExit() external view returns (uint256 price0, uint256 price1) {
+    function readPricesForExit() external view virtual returns (uint256 price0, uint256 price1) {
         if (msg.sender != address(this)) revert NotSelf();
         return _readPrices();
     }
@@ -780,7 +788,7 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
         delete _activeUnlockHash;
     }
 
-    function _readPrices() internal view returns (uint256 price0, uint256 price1) {
+    function _readPrices() internal view virtual returns (uint256 price0, uint256 price1) {
         (uint256 marketPrice,) = MWMarketValuation.freshPriceWad(nonQuoteMark, maxMarkAge);
         if (quoteIsToken0) return (1e18, marketPrice);
         return (marketPrice, 1e18);
