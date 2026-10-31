@@ -36,9 +36,9 @@ export type GateReason = 'unauthenticated' | 'no-team-access'
 
 const DEFAULTS = {
   teamPrefixes: ['/app/team'] as const,
-  authPrefixes: ['/app/account'] as const,
+  authPrefixes: ['/app/portfolio'] as const,
   signInPath: '/?signin=1',
-  userHome: '/app/account',
+  userHome: '/app/portfolio',
 }
 
 function matches(pathname: string, prefixes: readonly string[]): boolean {

@@ -13,7 +13,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-const USER_HOME = '/app/account'
+const USER_HOME = '/app/portfolio'
 
 export function TeamGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()

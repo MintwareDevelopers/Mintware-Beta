@@ -13,7 +13,8 @@ The public marketing site uses one light design system and the owner-approved vi
 links to the app. **One app (2026-10-31):** every "Launch app" goes to `/app/markets`; the old `/v1` platform
 and `/markets/[pool]` redirect into `/app`. The app has two workspaces in one sidebar shell (`components/web2/AppShell.tsx`):
 **Personal** (open to everyone) — Markets (`/app/markets`, pool detail `/app/markets/[pool]`), Portfolio
-(`/app/portfolio`), Swap (`/app/swap`, LI.FI), the RWA property demo (`/app/rwas`), and Previews: Card, Agents and
+(`/app/portfolio`: positions, organizations, wallet holdings and the invite link; `/app/account`, `/app/profile` and
+`/app/referrals` redirect here), Swap (`/app/swap`, LI.FI), the RWA property demo (`/app/rwas`), and Previews: Card, Agents and
 Issuers (`/app/previews/*`, Simulated, tagged on screen). **Team** (`/app/team`, `/app/org/*`) stays behind the V2
 access code. Earn (the stablecoin vault) is presented as the card's
 earning balance, not a standalone page. Legacy `/about`, `/earn`, `/earn/[pool]`, `/vaults`, `/defi`, `/teams`,
@@ -170,7 +171,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/agents/leaderboard` | `app/(web3)/agents/leaderboard/page.tsx` |
 | `/angels` | `app/angels/page.tsx` |
 | `/app` | `app/app/page.tsx` |
-| `/app/account` | `app/app/(personal)/account/page.tsx` |
 | `/app/agents` | `app/app/(personal)/agents/page.tsx` |
 | `/app/markets` | `app/app/(personal)/markets/page.tsx` |
 | `/app/markets/[pool]` | `app/app/(personal)/markets/[pool]/page.tsx` |
@@ -190,8 +190,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/previews/agents` | `app/app/(personal)/previews/agents/page.tsx` |
 | `/app/previews/card` | `app/app/(personal)/previews/card/page.tsx` |
 | `/app/previews/issuers` | `app/app/(personal)/previews/issuers/page.tsx` |
-| `/app/profile` | `app/app/(personal)/profile/page.tsx` |
-| `/app/referrals` | `app/app/(personal)/referrals/page.tsx` |
 | `/app/rwas` | `app/app/(personal)/rwas/page.tsx` |
 | `/app/rwas/[unit]` | `app/app/(personal)/rwas/[unit]/page.tsx` |
 | `/app/rwas/how` | `app/app/(personal)/rwas/how/page.tsx` |

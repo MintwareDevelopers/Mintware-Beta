@@ -32,7 +32,7 @@ export function MwNav() {
   const isActive = (path: string) => pathname === path
 
   const NAV_LINKS = [
-    { href: '/app/account', label: 'Account' },
+    { href: '/app/portfolio', label: 'Portfolio' },
     { href: '/app/swap', label: 'Swap' },
     { href: '/app/markets', label: 'Markets' },
     { href: '/agents/leaderboard', label: 'Agents' },
