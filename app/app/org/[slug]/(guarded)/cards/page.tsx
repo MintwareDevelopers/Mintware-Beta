@@ -7,6 +7,7 @@
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useReadContracts, useSignMessage, useWriteContract } from 'wagmi'
+import { PageHead, SLabel, StatusChip, Note, IconCard } from '@/components/web2/TeamKit'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
@@ -109,21 +110,30 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
   return (
     <MwAuthGuard>
       <div className="max-w-[900px] mx-auto">
-        <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {orgName || 'Org'}</Link>
-        <div className="flex items-center gap-3 mt-3 flex-wrap">
-          <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em]">Cards &amp; spend</h1>
-          <span className="live-chip"><span className="dot" aria-hidden />Bridge + Stripe · pre-enable</span>
-        </div>
-        <p className="text-[13px] text-ink-mid mt-1.5 max-w-[64ch]">
-          Card issuance is not enabled. The refill path redeems Earn shares to each member&apos;s registered buffer wallet; it does not authorize purchases or settle merchants.
-        </p>
-        {msg && <div className="text-[12.5px] text-[#D14343] mt-3">{msg}</div>}
+        <PageHead
+          back={{ href: `/app/org/${slug}`, label: orgName || 'Org' }}
+          icon={<IconCard size={24} />}
+          title="Cards & spend"
+          status={{ tone: 'building', label: 'Bridge + Stripe · pre-enable' }}
+          lede="Card issuance is not enabled yet. Each card holder registers a funding wallet that card refills go to; refills redeem Earn shares to that wallet. Nothing here authorizes purchases or settles merchants."
+        />
+        {msg && <div role="status" className="mt-4 rounded-[14px] bg-[#FBE9E7] px-4 py-3 text-[13.5px] text-[#B42318] break-words">{msg}</div>}
+
+        {/* How a funding wallet goes live — the one flow a holder can actually complete today. */}
+        <ol className="mt-7 p-0 list-none grid grid-cols-3 max-[640px]:grid-cols-1 gap-3" aria-label="Registering a funding wallet">
+          {[['Propose', 'The card holder proposes their own wallet as the funding destination.'], ['Wait 48 hours', 'A delay before it can be accepted, so a surprise change can be caught.'], ['Accept', 'Once the delay passes, the holder accepts and refills can go there.']].map(([t, d], i) => (
+            <li key={t} className="mw-raise-sm rounded-[18px] p-4">
+              <div className="flex items-center gap-2.5"><span className="w-7 h-7 rounded-full grid place-items-center text-[12.5px] font-semibold text-white" style={{ background: 'var(--mw-btn)' }}>{i + 1}</span><span className="font-semibold text-[15px]">{t}</span></div>
+              <div className="text-[13px] text-ink-mid leading-[1.5] mt-2">{d}</div>
+            </li>
+          ))}
+        </ol>
 
 
         {/* card directory */}
-        <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-8 mb-3">Cards · {cards.length}</div>
-        <div className="soft-card overflow-hidden">
-          {cards.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-ink-soft">No cards yet.</div>}
+        <SLabel>Cards · {cards.length}</SLabel>
+        <div className="mw-raise rounded-[22px] overflow-hidden">
+          {cards.length === 0 && <div className="px-5 py-10 text-center text-[14px] text-ink-soft">No cards yet.</div>}
           {cards.map((c) => {
             const mine = address && c.member_wallet.toLowerCase() === address.toLowerCase()
             const readOffset = cards.indexOf(c) * 3
@@ -134,20 +144,21 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
             const matchesProposal = proposedDestination?.toLowerCase() === c.member_wallet.toLowerCase()
             const canAccept = matchesProposal && eta > 0 && nowSecs >= eta
             return (
-              <div key={c.id} className="flex items-center gap-4 px-5 py-3.5 border-b border-hair-soft last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-2">
+              <div key={c.id} className="flex items-center gap-4 px-5 py-4 border-b border-[rgba(21,21,29,.06)] last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-2.5">
+                <span className="w-11 h-11 rounded-[12px] grid place-items-center shrink-0 max-[560px]:hidden" style={{ color: 'var(--mw-peri-deep)', background: 'var(--mw-band)', boxShadow: 'var(--mw-inset)' }}><IconCard /></span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13.5px] font-medium text-ink font-mono truncate">•••• {c.last_four} <span className="text-ink-soft font-sans">· {short(c.member_wallet)}</span></div>
-                  <div className="text-[11.5px] text-ink-soft">{c.state}{c.activated_at ? ' · activated ✓' : ' · not activated'}</div>
+                  <div className="text-[15px] font-semibold text-ink truncate"><span className="font-geist-mono">•••• {c.last_four}</span> <span className="text-ink-soft font-normal">· <span className="font-geist-mono">{short(c.member_wallet)}</span></span></div>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap"><span className="text-[12.5px] text-ink-soft capitalize">{c.state}</span>{c.activated_at ? <StatusChip tone="live">Activated</StatusChip> : <StatusChip tone="building">Not activated</StatusChip>}</div>
                 </div>
                 {mine && !matchesCurrent && !matchesProposal && (
-                  <button onClick={() => updateDestination(c, 'proposeBuffer')} disabled={busy === `destination-${c.id}` || !gateway} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[12.5px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">Propose funding wallet</button>
+                  <button onClick={() => updateDestination(c, 'proposeBuffer')} disabled={busy === `destination-${c.id}` || !gateway} className="shrink-0 mw-btn !min-h-[40px] disabled:opacity-50">Propose funding wallet</button>
                 )}
-                {mine && matchesProposal && !canAccept && <span className="shrink-0 text-[11.5px] text-ink-soft">Destination pending 48-hour delay</span>}
+                {mine && matchesProposal && !canAccept && <StatusChip tone="building">Pending 48-hour delay</StatusChip>}
                 {mine && canAccept && (
-                  <button onClick={() => updateDestination(c, 'acceptBuffer')} disabled={busy === `destination-${c.id}`} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[12.5px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">Accept destination</button>
+                  <button onClick={() => updateDestination(c, 'acceptBuffer')} disabled={busy === `destination-${c.id}`} className="shrink-0 mw-btn !min-h-[40px] disabled:opacity-50">Accept destination</button>
                 )}
-                {mine && matchesCurrent && <button onClick={() => updateDestination(c, 'revokeBuffer')} disabled={busy === `destination-${c.id}`} className="shrink-0 rounded-full border border-hair px-4 py-2 text-[12.5px] font-semibold">Revoke destination</button>}
-                {!mine && !matchesCurrent && <span className="shrink-0 text-[11.5px] text-ink-soft">Awaiting holder destination registration</span>}
+                {mine && matchesCurrent && <button onClick={() => updateDestination(c, 'revokeBuffer')} disabled={busy === `destination-${c.id}`} className="shrink-0 mw-btn-quiet !min-h-[40px] text-[13px]">Revoke destination</button>}
+                {!mine && !matchesCurrent && <span className="shrink-0 text-[12.5px] text-ink-soft">Waiting for the holder to register a funding wallet</span>}
               </div>
             )
           })}
@@ -155,31 +166,31 @@ export default function CardsPage({ params }: { params: Promise<{ slug: string }
 
 
         {/* spend feed */}
-        <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-8 mb-3">Spend feed</div>
-        <div className="soft-card overflow-hidden">
-          {events.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-ink-soft">Nothing yet — swipe a card above.</div>}
+        <SLabel>Card activity</SLabel>
+        <div className="mw-raise rounded-[22px] overflow-hidden">
+          {events.length === 0 && <div className="px-5 py-10 text-center text-[14px] text-ink-soft">No card activity yet.</div>}
           {events.map((e) => (
-            <div key={e.id} className="flex items-center gap-4 px-5 py-3.5 border-b border-hair-soft last:border-b-0 max-[640px]:flex-col max-[640px]:items-start max-[640px]:gap-2">
+            <div key={e.id} className="flex items-center gap-4 px-5 py-4 border-b border-[rgba(21,21,29,.06)] last:border-b-0 max-[640px]:flex-col max-[640px]:items-start max-[640px]:gap-2">
               <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-medium text-ink truncate">{e.merchant_descriptor ?? 'Unknown merchant'} <span className="text-ink-soft font-sans font-normal">· {short(e.member_wallet)}</span></div>
-                <div className="text-[11.5px] text-ink-soft">
+                <div className="text-[14.5px] font-semibold text-ink truncate">{e.merchant_descriptor ?? 'Unknown merchant'} <span className="text-ink-soft font-normal">· <span className="font-geist-mono">{short(e.member_wallet)}</span></span></div>
+                <div className="text-[12.5px] text-ink-soft mt-0.5">
                   {e.decision === 'approved'
                     ? <span className="text-mw-green">Approved</span>
-                    : <span className="text-[#D14343]">Declined · {e.decline_reason}</span>}
+                    : <span className="text-[#B42318]">Declined · {e.decline_reason}</span>}
                   {e.latency_ms != null && ` · ${e.latency_ms}ms`}
                   {e.settled && e.settle_tx && gateway && (
                     <> · <a href={explorerTx(gateway.chainId, e.settle_tx)} target="_blank" rel="noreferrer" className="text-peri-deep hover:underline">settled ✓</a></>
                   )}
                 </div>
               </div>
-              <div className="tabular-nums text-[13.5px] text-ink shrink-0">{fmtUsd(e.amount_atomic_usdc)}</div>
+              <div className="font-geist-mono text-[15px] text-ink shrink-0">{fmtUsd(e.amount_atomic_usdc)}</div>
               {isOwner && e.decision === 'approved' && !e.settled && (
-                <button onClick={() => settle(e)} disabled={busy === `settle-${e.id}`} className="shrink-0 rounded-full border border-peri text-peri-deep px-3.5 py-1.5 text-[12px] font-semibold hover:bg-peri hover:text-white transition-colors disabled:opacity-50">{busy === `settle-${e.id}` ? 'Settling…' : 'Settle'}</button>
+                <button onClick={() => settle(e)} disabled={busy === `settle-${e.id}`} className="shrink-0 mw-btn-quiet !min-h-[36px] text-[13px] disabled:opacity-50">{busy === `settle-${e.id}` ? 'Settling…' : 'Settle'}</button>
               )}
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-ink-soft mt-5">Bridge + Stripe card rails are pre-enable. Testnet only · unaudited · external audit gates real value.</p>
+        <Note>Bridge + Stripe card rails are pre-enable. Testnet only, unaudited; an external audit gates real value.</Note>
       </div>
     </MwAuthGuard>
   )

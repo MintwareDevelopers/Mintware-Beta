@@ -10,6 +10,7 @@ import { use, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useAccount, usePublicClient, useSignMessage, useSwitchChain, useWriteContract } from 'wagmi'
 import { type Address } from 'viem'
+import { PageHead, StatusChip, IconShield } from '@/components/web2/TeamKit'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
@@ -112,56 +113,65 @@ export default function MultisigSetup({ params }: { params: Promise<{ slug: stri
   return (
     <MwAuthGuard>
       <div className="max-w-[720px] mx-auto">
-        <Link href={`/app/org/${slug}/control`} className="text-[13px] text-ink-soft hover:text-ink no-underline">← Treasury control</Link>
-        <h1 className="font-atx-display font-semibold text-[clamp(1.6rem,3.4vw,2rem)] tracking-[-0.03em] mt-2">Set up your <span className="text-gradient-accent">multisig</span></h1>
-        <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[62ch] mt-2.5">
-          Put your treasury behind an M-of-N Gnosis Safe. Signers are your team&apos;s Privy wallets —
-          each approves with a passkey. No MetaMask, no Safe app, no script.
-        </p>
+        <PageHead
+          back={{ href: `/app/org/${slug}/control`, label: 'Treasury control' }}
+          icon={<IconShield size={24} />}
+          title="Set up your multisig"
+          lede="Put your treasury behind an M-of-N Gnosis Safe in two steps: deploy it, then hand the treasury to it. Signers are your team's Privy wallets, each approving with a passkey."
+        />
 
         {!isOwner ? (
-          <div className="soft-card p-6 mt-6 text-[14px] text-ink-mid">Only the org owner can set up the treasury multisig.</div>
+          <div className="mw-inset rounded-[20px] p-6 mt-7 text-[14px] text-ink-mid">Only the org owner can set up the treasury multisig.</div>
         ) : org?.alreadyMultisig ? (
-          <div className="soft-card p-6 mt-6"><div className="live-chip"><span className="dot" aria-hidden />Already a multisig</div><p className="text-[13.5px] text-ink-mid mt-2">Your treasury is already owned by a multisig. <Link href={`/app/org/${slug}/control`} className="text-peri-deep no-underline hover:underline">View control →</Link></p></div>
+          <div className="mw-raise rounded-[24px] p-6 mt-7"><StatusChip tone="live">Already a multisig</StatusChip><p className="text-[14px] text-ink-mid mt-3">Your treasury is already owned by a multisig. <Link href={`/app/org/${slug}/control`} className="text-peri-deep no-underline hover:underline">View control →</Link></p></div>
         ) : !org?.vault ? (
-          <div className="soft-card p-6 mt-6 text-[14px] text-ink-mid">Set up your treasury first — start with Savings — then secure it with a multisig. <Link href={`/app/org/${slug}`} className="text-peri-deep no-underline hover:underline">Open treasury →</Link></div>
+          <div className="mw-inset rounded-[20px] p-6 mt-7 text-[14px] text-ink-mid">Set up your treasury first (start with Treasury yield), then secure it with a multisig. <Link href={`/app/org/${slug}`} className="text-peri-deep no-underline hover:underline">Open treasury →</Link></div>
         ) : (
           <>
             {/* Signers */}
-            <section className="soft-card p-6 mt-6">
-              <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Signers</div>
-              <p className="text-[12.5px] text-ink-soft mt-1.5">Your active team wallets. Toggle who can approve; the owner is always a signer.</p>
+            <section className="mw-raise rounded-[24px] p-6 mt-7">
+              <div className="text-[16px] font-semibold text-ink">Signers</div>
+              <p className="text-[13.5px] text-ink-mid mt-1">Your active team wallets. Untick anyone who shouldn&apos;t approve; the owner is always a signer.</p>
               <div className="mt-3 flex flex-col gap-2">
                 {signers.map((s) => {
                   const locked = s === org.ownerWallet?.toLowerCase()
                   return (
-                    <label key={s} className={`flex items-center gap-3 rounded-[10px] border border-hair px-3 py-2.5 text-[13px] ${locked ? 'bg-ground-cool' : 'cursor-pointer hover:bg-ground-cool'}`}>
-                      <input type="checkbox" checked disabled={locked} onChange={() => { if (!locked) setSigners((p) => p.filter((x) => x !== s)) }} />
-                      <span className="font-mono text-[12.5px]">{short(s)}</span>
-                      {locked && <span className="text-[10px] uppercase tracking-[0.06em] font-semibold text-peri-deep">Owner</span>}
+                    <label key={s} className={`flex items-center gap-3 rounded-[12px] px-3.5 min-h-[46px] text-[14px] ${locked ? '' : 'cursor-pointer'}`} style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+                      <input type="checkbox" className="accent-[#5B5BE6] w-4 h-4" checked disabled={locked} onChange={() => { if (!locked) setSigners((p) => p.filter((x) => x !== s)) }} />
+                      <span className="font-geist-mono text-[13.5px]">{short(s)}</span>
+                      {locked && <StatusChip tone="muted" className="ml-auto">Owner</StatusChip>}
                     </label>
                   )
                 })}
               </div>
               <div className="mt-4 flex items-center gap-3 flex-wrap">
-                <span className="text-[13px] text-ink-mid">Approvals required</span>
-                <select value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="rounded-lg border border-hair bg-white px-3 py-1.5 text-[13px]">
+                <span className="text-[14px] font-semibold text-ink-mid">Approvals required</span>
+                <select value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[44px] px-3.5 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[14px] !w-auto">
                   {Array.from({ length: signers.length }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n} of {signers.length}</option>)}
                 </select>
               </div>
             </section>
 
             {/* Actions */}
+            {/* Two steps, shown as a pair so the owner knows the deploy isn't the end. */}
+            <ol className="mt-4 p-0 list-none grid grid-cols-2 max-[520px]:grid-cols-1 gap-3" aria-label="Setup steps">
+              {([['Deploy the Safe', !!safeAddr], ['Transfer the treasury to it', done]] as [string, boolean][]).map(([t, ok], i) => (
+                <li key={t} className={`rounded-[16px] px-4 py-3 flex items-center gap-3 text-[14px] ${ok ? 'mw-raise-sm' : 'mw-inset'}`}>
+                  <span className={`w-7 h-7 rounded-full grid place-items-center text-[12.5px] font-semibold shrink-0 ${ok ? 'text-white' : 'text-ink-mid'}`} style={{ background: ok ? '#0F7A43' : '#fff' }}>{ok ? '✓' : i + 1}</span>
+                  <span className={ok ? 'font-semibold' : 'text-ink-mid'}>{t}</span>
+                </li>
+              ))}
+            </ol>
             <section className="mt-4 flex flex-col gap-3">
               {!safeAddr ? (
-                <button onClick={deploy} disabled={!canDeploy} className="rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50 self-start">Deploy {threshold}-of-{signers.length} multisig</button>
+                <button onClick={deploy} disabled={!canDeploy} className="mw-btn !min-h-[48px] disabled:opacity-50 self-start">Deploy {threshold}-of-{signers.length} multisig</button>
               ) : !done ? (
-                <button onClick={transfer} className="rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors self-start">Transfer treasury to the multisig →</button>
+                <button onClick={transfer} className="mw-btn !min-h-[48px] self-start">Transfer treasury to the multisig →</button>
               ) : (
-                <Link href={`/app/org/${slug}/control`} className="rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold no-underline hover:bg-peri-deep transition-colors self-start">View control →</Link>
+                <Link href={`/app/org/${slug}/control`} className="mw-btn !min-h-[48px] no-underline  self-start">View control →</Link>
               )}
-              {status && <div className="text-[13px] text-ink-mid font-mono">{status}</div>}
-              {safeAddr && <div className="text-[12px] text-ink-soft font-mono">Safe: {safeAddr}</div>}
+              {status && <div role="status" className="rounded-[14px] px-4 py-3 text-[13.5px] text-ink" style={{ background: 'var(--mw-band)' }}>{status}</div>}
+              {safeAddr && <div className="text-[13px] text-ink-soft font-geist-mono break-all">Safe: {safeAddr}</div>}
             </section>
           </>
         )}

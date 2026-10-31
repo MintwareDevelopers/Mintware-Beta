@@ -22,19 +22,16 @@ export function RefCodeInput({ value, buttonLabel = 'Copy', ghost = false }: Ref
   return (
     <div className="flex items-center gap-2">
       <input
-        className="flex-1 rounded-full bg-ground-cool border border-hair py-[9px] px-[14px] font-mono text-[12px] text-ink-mid outline-none whitespace-nowrap overflow-hidden text-ellipsis cursor-default select-all"
+        className="flex-1 min-w-0 rounded-[12px] border-0 min-h-[44px] px-[14px] font-geist-mono text-[13px] text-ink-mid outline-none whitespace-nowrap overflow-hidden text-ellipsis cursor-default select-all"
+        style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}
         readOnly
+        aria-label={buttonLabel === 'Copy Link' ? 'Referral link' : 'Referral code'}
         value={value}
         onClick={copy}
       />
       <button
-        className={`py-[9px] px-[16px] rounded-full text-[12px] font-semibold cursor-pointer border transition-colors duration-150 whitespace-nowrap shrink-0 active:opacity-75 ${
-          copied
-            ? 'bg-coral2 border-transparent text-white'
-            : ghost
-            ? 'bg-white text-peri-deep border-[rgba(108,108,240,0.4)]'
-            : 'bg-peri text-white border-transparent hover:bg-peri-deep'
-        }`}
+        className={`${ghost && !copied ? 'mw-btn-quiet' : 'mw-btn'} !min-h-[44px] !px-4 text-[13.5px] whitespace-nowrap shrink-0`}
+        style={copied ? { background: '#0F7A43', boxShadow: 'none' } : undefined}
         onClick={copy}
       >
         {copied ? 'Copied' : buttonLabel}

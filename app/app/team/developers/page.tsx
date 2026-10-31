@@ -1,115 +1,106 @@
-// Team · Developers — design-forward preview. Wire the treasury into your own
-// systems: scoped API keys, webhooks for authorization/settlement/policy events,
-// an events reference, and a sandbox against Base Sepolia. ALL illustrative — the
-// developer surface is in development, no keys here are real and nothing is live.
+// Team · Developers — ILLUSTRATIVE preview. Wire the treasury into your own systems: scoped API keys,
+// webhooks for payment, card and policy events, an events reference, and a sandbox against Base Sepolia.
+// Events mirror what the real org surfaces record (payments recorded/settled in the ledger, card events
+// from the card provider). The developer platform is in development; no key here is real and nothing is live.
+
+import { PageHead, SLabel, Panel, StatusChip, IconTile, Note, IconCode, IconLedger } from '@/components/web2/TeamKit'
 
 const KEYS = [
-  { label: 'Production · read', key: 'mw_live_7f3a…9c21', scope: 'treasury:read, cards:read', created: 'Aug 2' },
-  { label: 'Automation · spend', key: 'mw_live_a18b…44df', scope: 'cards:read, webhooks', created: 'Jul 28' },
+  { label: 'Production · read', key: 'mw_live_7f3a…9c21', scope: 'treasury:read, payments:read', created: 'Aug 2' },
+  { label: 'Automation · payments', key: 'mw_live_a18b…44df', scope: 'payments:write, webhooks', created: 'Jul 28' },
   { label: 'Sandbox', key: 'mw_test_02c9…7be0', scope: 'all · Base Sepolia', created: 'Jul 14' },
 ]
 
 const HOOKS = [
-  { url: 'https://acme.xyz/hooks/mintware', events: 'authorization.*, settlement.*', status: 'Active' },
-  { url: 'https://acme.xyz/hooks/policy', events: 'policy.updated, signer.added', status: 'Active' },
+  { url: 'https://acme.xyz/hooks/mintware', events: 'payment.*, card.*' },
+  { url: 'https://acme.xyz/hooks/policy', events: 'policy.updated, member.*' },
 ]
 
 const EVENTS = [
-  { name: 'authorization.approved', desc: 'A card authorization cleared edge-auth within policy.' },
-  { name: 'authorization.declined', desc: 'An authorization was refused — over limit, blocked merchant, or frozen card.' },
-  { name: 'settlement.completed', desc: 'An approved authorization settled on-chain against treasury liquidity.' },
-  { name: 'vault.rebalanced', desc: 'Treasury capital moved between a ULV pool and the idle buffer.' },
-  { name: 'policy.updated', desc: 'The quorum threshold, a spending limit, or a signer set changed.' },
+  { name: 'payment.recorded', desc: 'A vendor payment or payroll batch was recorded in the treasury ledger.' },
+  { name: 'payment.settled', desc: 'A recorded payment’s on-chain transaction confirmed.' },
+  { name: 'card.transaction', desc: 'A card purchase was reported by the card provider.' },
+  { name: 'card.refilled', desc: 'A card balance was topped up from the treasury, within its limit.' },
+  { name: 'policy.updated', desc: 'A role cap, signer or approval threshold changed.' },
 ]
 
 const SNIPPET = `// POST from Mintware → your endpoint
 {
-  "type": "authorization.approved",
+  "type": "payment.recorded",
   "id": "evt_2s9f…",
   "data": {
-    "card": "•••• 4821",
-    "merchant": "Amazon Web Services",
-    "amount_usd": 4182.00,
-    "decided_in_ms": 118,
-    "settles_against": "USDC · Growth ULV"
+    "kind": "vendor_pay",
+    "recipient": "0xA1c4…9F3b",
+    "amount_usdc": "4182.00",
+    "category": "Infrastructure",
+    "status": "recorded"
   }
 }`
 
 export default function TeamDevelopers() {
   return (
     <>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Developers</h1>
-          <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
-        </div>
-        <button disabled title="Coming soon" className="glass-pill glass-pill-sm shrink-0">+ Create key</button>
-      </div>
-      <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Wire the treasury into your own systems. Scoped API keys, webhooks for authorization and settlement events, and role-based access so automation runs under the same policy as people.</p>
+      <PageHead
+        icon={<IconCode size={24} />}
+        title="Developers"
+        status={{ tone: 'preview', label: 'Preview · illustrative' }}
+        lede="Wire the treasury into your own systems: scoped API keys, webhooks for payment and card events, and the same role caps for automation as for people."
+        actions={<button disabled title="API keys aren't available yet" className="mw-btn-quiet !min-h-[40px] opacity-60 cursor-not-allowed">+ Create key</button>}
+      />
 
       {/* API keys */}
-      <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-7 mb-3">API keys</div>
-      <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card overflow-x-auto">
-        <table className="w-full min-w-[600px] max-[640px]:min-w-0 border-collapse text-[13px]">
-          <thead>
-            <tr className="bg-ground-cool border-b border-hair-soft">
-              {['Label', 'Key', 'Scope', 'Created'].map((h, i) => (
-                <th key={h} className={`text-[9.5px] uppercase tracking-[0.09em] font-semibold text-ink-soft px-4 py-2.5 text-left ${i === 2 ? 'max-[560px]:hidden' : ''} ${i === 3 ? 'max-[640px]:hidden' : ''}`}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {KEYS.map((k) => (
-              <tr key={k.key} className="border-b border-hair-soft last:border-0">
-                <td className="px-4 py-3 font-medium text-ink">{k.label}</td>
-                <td className="px-4 py-3 font-mono text-[12px] text-ink-mid">{k.key}</td>
-                <td className="px-4 py-3 text-ink-soft text-[12px] max-[560px]:hidden">{k.scope}</td>
-                <td className="px-4 py-3 text-ink-soft max-[640px]:hidden">{k.created}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <SLabel>API keys</SLabel>
+      <div className="mw-raise rounded-[22px] overflow-hidden">
+        {KEYS.map((k) => (
+          <div key={k.key} className="flex items-center gap-4 px-5 py-4 border-b border-[rgba(21,21,29,.06)] last:border-0 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-[15px]">{k.label}</div>
+              <div className="text-[12.5px] text-ink-soft mt-0.5">{k.scope} · created {k.created}</div>
+            </div>
+            <code className="font-geist-mono text-[13px] text-ink-mid rounded-[10px] px-3 py-1.5" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>{k.key}</code>
+          </div>
+        ))}
       </div>
 
-      {/* Webhooks + snippet */}
-      <div className="grid grid-cols-[1fr_1fr] max-[880px]:grid-cols-1 gap-4 mt-8">
+      {/* Webhooks + example */}
+      <div className="grid grid-cols-[1fr_1fr] max-[880px]:grid-cols-1 gap-4">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mb-3">Webhook endpoints</div>
-          <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card">
+          <SLabel>Webhook endpoints</SLabel>
+          <div className="mw-raise rounded-[22px] overflow-hidden">
             {HOOKS.map((h) => (
-              <div key={h.url} className="px-5 py-3.5 border-b border-hair-soft last:border-0">
+              <div key={h.url} className="px-5 py-4 border-b border-[rgba(21,21,29,.06)] last:border-0">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-mono text-[12px] text-ink truncate">{h.url}</span>
-                  <span className="text-[9px] uppercase tracking-[0.08em] font-semibold text-mw-green bg-mw-green-muted rounded-full px-2 py-1 shrink-0">{h.status}</span>
+                  <span className="font-geist-mono text-[13px] text-ink truncate">{h.url}</span>
+                  <StatusChip tone="preview">Example</StatusChip>
                 </div>
-                <div className="text-[11px] text-ink-soft mt-1 font-mono">{h.events}</div>
+                <div className="text-[12.5px] text-ink-soft mt-1 font-geist-mono">{h.events}</div>
               </div>
             ))}
           </div>
         </div>
         <div>
-          <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mb-3">Example event</div>
-          <pre className="rounded-[var(--radius-card)] border border-hair bg-[#17171F] text-[#C7CCF2] p-4 text-[11.5px] leading-[1.55] overflow-x-auto font-mono shadow-card"><code>{SNIPPET}</code></pre>
+          <SLabel>Example event</SLabel>
+          <pre className="m-0 rounded-[22px] p-5 text-[12.5px] leading-[1.6] overflow-x-auto font-geist-mono text-ink" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}><code>{SNIPPET}</code></pre>
         </div>
       </div>
 
       {/* Events reference */}
-      <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-8 mb-3">Events</div>
-      <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card divide-y divide-hair-soft max-w-[820px]">
+      <SLabel>Events</SLabel>
+      <Panel pad={false} className="max-w-[860px]">
         {EVENTS.map((e) => (
-          <div key={e.name} className="flex items-start gap-4 px-5 py-3.5 flex-wrap">
-            <code className="font-mono text-[12px] text-peri-deep bg-[rgba(108,108,240,0.07)] rounded-md px-2 py-1 shrink-0">{e.name}</code>
-            <span className="text-[13px] text-ink-mid leading-[1.5] flex-1 min-w-[200px]">{e.desc}</span>
+          <div key={e.name} className="flex items-start gap-4 px-5 py-3.5 border-b border-[rgba(21,21,29,.06)] last:border-0 flex-wrap">
+            <code className="font-geist-mono text-[13px] rounded-[8px] px-2 py-1 shrink-0" style={{ background: 'var(--mw-band)', color: 'var(--mw-peri-deep)' }}>{e.name}</code>
+            <span className="text-[14px] text-ink-mid leading-[1.5] flex-1 min-w-[200px]">{e.desc}</span>
           </div>
         ))}
+      </Panel>
+
+      <div className="mw-raise rounded-[22px] p-5 mt-4 max-w-[860px] flex items-start gap-4">
+        <IconTile><IconLedger /></IconTile>
+        <p className="m-0 text-[14px] text-ink-mid leading-[1.55]">Every key and webhook runs against the <span className="font-semibold text-ink">Base Sepolia sandbox</span> first, so you can replay payment and card flows end to end without moving real value.</p>
       </div>
 
-      <div className="rounded-[var(--radius-card)] border border-hair bg-ground-cool p-5 mt-6 max-w-[820px] flex items-start gap-3">
-        <span className="w-[7px] h-[7px] rounded-full bg-peri mt-1.5 shrink-0" />
-        <p className="text-[13px] text-ink-mid leading-[1.5]">Every key and webhook runs against the <span className="font-semibold text-ink">Base Sepolia sandbox</span> before it touches mainnet — replay authorization and settlement flows end-to-end without moving real value.</p>
-      </div>
-
-      <p className="text-[11px] text-ink-soft mt-6">Illustrative. The developer platform is in development — the keys, endpoints, and events shown here are a mockup, not real credentials or a live API.</p>
+      <Note>Illustrative. The developer platform is in development; the keys, endpoints and events shown here are a mockup, not real credentials or a live API.</Note>
     </>
   )
 }

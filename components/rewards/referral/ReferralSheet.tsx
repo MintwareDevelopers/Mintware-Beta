@@ -35,97 +35,47 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
   return (
     <Drawer.Root open={open} onOpenChange={(v) => { if (!v) dismiss() }} shouldScaleBackground>
       <Drawer.Portal>
-        <Drawer.Overlay
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.32)',
-            zIndex: 999,
-          }}
-        />
+        <Drawer.Overlay className="fixed inset-0 z-[999]" style={{ background: 'rgba(21,21,29,.32)' }} />
         <Drawer.Content
-          style={{
-            position: 'fixed',
-            bottom: 0, left: 0, right: 0,
-            background: '#fff',
-            borderRadius: 'var(--radius-panel) var(--radius-panel) 0 0',
-            border: '1px solid var(--color-hair)',
-            borderBottom: 'none',
-            boxShadow: 'var(--shadow-lift)',
-            zIndex: 1000,
-            padding: '28px 24px 40px',
-            maxWidth: 520,
-            margin: '0 auto',
-            fontFamily: 'var(--font-space-grotesk), sans-serif',
-            outline: 'none',
-          }}
+          className="mw-raise-lg font-geist fixed bottom-0 left-0 right-0 z-[1000] mx-auto max-w-[520px] rounded-t-[26px] px-6 pt-5 pb-10 outline-none overflow-hidden"
         >
+          <div aria-hidden="true" className="absolute -right-24 -top-28 w-72 h-72 rounded-full opacity-25 blur-[56px]" style={{ background: 'var(--mw-sheen)' }} />
           {/* Drag handle */}
-          <div style={{
-            width: 40, height: 4,
-            background: 'var(--color-hair)',
-            borderRadius: 999,
-            margin: '0 auto 22px',
-          }} />
+          <div className="relative w-10 h-1 rounded-full mx-auto mb-5" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }} />
 
-          <Drawer.Title style={{
-            fontSize: 18, fontWeight: 500,
-            color: 'var(--color-ink)',
-            letterSpacing: '-0.02em',
-            marginBottom: 6,
-            textAlign: 'center',
-            fontFamily: 'var(--font-space-grotesk), sans-serif',
-          }}>
+          <Drawer.Title className="relative text-[20px] font-semibold tracking-[-0.03em] text-center mb-1.5">
             Your Mintware profile is live.
           </Drawer.Title>
 
-          <Drawer.Description style={{
-            fontSize: 13,
-            color: 'var(--color-ink-mid)',
-            textAlign: 'center',
-            marginBottom: 20,
-            fontFamily: 'var(--font-space-grotesk), sans-serif',
-          }}>
+          <Drawer.Description className="relative text-[14px] text-ink-mid text-center mb-5">
             Share your link to grow your Sharing score.
           </Drawer.Description>
 
-          {/* Score badge */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            background: 'var(--color-ground-cool)',
-            border: '1px solid var(--color-hair)',
-            borderRadius: 16, padding: '14px 20px', marginBottom: 20,
-          }}>
+          {/* Score gauge */}
+          <div className="relative flex items-center gap-4 rounded-[16px] px-5 py-4 mb-5" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
             <div>
-              <div style={{ fontSize: 10, color: 'var(--color-ink-soft)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Sharing score</div>
-              <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--color-coral2-deep)', fontFamily: 'var(--font-space-grotesk), sans-serif', lineHeight: 1 }}>
-                {stats.sharing_score}<span style={{ fontSize: 14, opacity: 0.5 }}>/125</span>
+              <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-soft">Sharing score</div>
+              <div className="font-geist-mono text-[28px] leading-none mt-1 tracking-[-0.03em]">
+                {stats.sharing_score}<span className="text-[14px] text-ink-soft">/125</span>
               </div>
             </div>
-            <div style={{ flex: 1, height: 8, background: '#fff', border: '1px solid var(--color-hair)', borderRadius: 999, overflow: 'hidden', position: 'relative' }}>
-              <div style={{
-                height: '100%', background: 'var(--color-coral2)', borderRadius: 999,
-                width: pct + '%', transition: 'width 0.6s ease',
-              }} />
+            <div className="flex-1 h-3 rounded-full overflow-hidden bg-white" style={{ boxShadow: 'inset 0 0 0 1px rgba(21,21,29,.06)' }}>
+              <div className="h-full rounded-full transition-[width] duration-[600ms] ease-out" style={{ width: pct + '%', background: '#7C7AF0' }} />
             </div>
           </div>
 
-          <div style={{ marginBottom: 16 }}>
+          <div className="relative mb-3">
             <RefCodeInput value={stats.ref_link} buttonLabel="Copy Link" />
           </div>
-          <div style={{ marginBottom: 20 }}>
+          <div className="relative mb-4">
             <RefCodeInput value={stats.ref_code} buttonLabel="Copy Code" ghost />
           </div>
 
           <button
             onClick={dismiss}
-            style={{
-              width: '100%', padding: 10, background: 'transparent',
-              color: 'var(--color-ink-soft)', border: 'none',
-              fontSize: 12, cursor: 'pointer', fontWeight: 500,
-              fontFamily: 'var(--font-space-grotesk), sans-serif',
-            }}
+            className="relative w-full min-h-[44px] bg-transparent border-0 text-ink-mid text-[14px] font-medium cursor-pointer hover:text-ink"
           >
-            Maybe Later
+            Maybe later
           </button>
         </Drawer.Content>
       </Drawer.Portal>

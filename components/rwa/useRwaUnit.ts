@@ -71,7 +71,7 @@ export function rwaStatus(unit: RwaUnitLive | null): RwaStatus | null {
   return { t: 'Outside the band — gap-closing trades only', tone: 'warn' }
 }
 export const STATUS_CLS: Record<RwaStatus['tone'], string> = {
-  good: 'text-[#2F7D5B] bg-[rgba(47,125,91,0.10)]',
-  info: 'text-peri-deep bg-[rgba(108,108,240,0.10)]',
-  warn: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]',
+  good: 'text-[#0F7A43] bg-[#E3F4EA]',
+  info: 'text-peri-deep bg-[#EDE9FB]',
+  warn: 'text-[#9A3F1C] bg-[#FBEEE7]',
 }

@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PageHead, IconTile, IconOrg, StatusChip } from '@/components/web2/TeamKit'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
@@ -24,33 +25,34 @@ export default function OrgHub() {
   return (
     <MwAuthGuard>
       <div className="max-w-[820px] mx-auto">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Org treasuries</div>
-            <h1 className="font-atx-display font-semibold text-[28px] tracking-[-0.03em] mt-1.5">Your orgs</h1>
-          </div>
-          <Link href="/app/org/new" className="shrink-0 rounded-full bg-peri text-white px-4 py-2.5 text-[13px] font-semibold no-underline hover:bg-peri-deep transition-colors">+ Create org</Link>
-        </div>
+        <PageHead
+          icon={<IconOrg size={24} />}
+          title="Your orgs"
+          lede="The treasuries you own or belong to. Pick one to open it."
+          actions={<Link href="/app/org/new" className="mw-btn !min-h-[40px]">+ Create org</Link>}
+        />
 
         <div className="mt-7">
-          {orgs === null && <div className="soft-card p-8 text-center text-[13px] text-ink-soft">Loading…</div>}
+          {orgs === null && <div className="mw-inset rounded-[22px] p-8 text-center text-[14px] text-ink-soft">Loading…</div>}
           {orgs && orgs.length === 0 && (
-            <div className="soft-card p-8 text-center">
-              <div className="text-[15px] font-semibold text-ink">{isConnected ? 'No orgs yet' : 'Connect a wallet'}</div>
-              <p className="text-[13px] text-ink-mid mt-1.5 max-w-[46ch] mx-auto">{isConnected ? 'Create a treasury tenant — invite your team, record your vault, and start spending from an earning balance.' : 'Sign in to see the orgs you own or belong to.'}</p>
-              {isConnected && <Link href="/app/org/new" className="mt-4 inline-block rounded-full bg-peri text-white px-5 py-2.5 text-[13.5px] font-semibold no-underline hover:bg-peri-deep transition-colors">Create your first org →</Link>}
+            <div className="mw-raise rounded-[24px] p-8 text-center">
+              <div className="mx-auto w-fit"><IconTile><IconOrg /></IconTile></div>
+              <div className="text-[17px] font-semibold text-ink mt-4">{isConnected ? 'No orgs yet' : 'Connect a wallet'}</div>
+              <p className="text-[14px] text-ink-mid mt-1.5 max-w-[46ch] mx-auto">{isConnected ? 'Create a treasury for your team: invite members, set their roles, and record payments in one ledger.' : 'Sign in to see the orgs you own or belong to.'}</p>
+              {isConnected && <Link href="/app/org/new" className="mt-5 mw-btn !min-h-[44px]">Create your first org</Link>}
             </div>
           )}
           {orgs && orgs.length > 0 && (
-            <div className="soft-card overflow-hidden">
+            <div className="flex flex-col gap-3">
               {orgs.map((o) => (
-                <Link key={o.id} href={`/app/org/${o.slug}`} className="flex items-center gap-4 px-5 py-4 border-b border-hair-soft last:border-0 no-underline hover:bg-ground-cool transition-colors">
-                  <div className="w-[38px] h-[38px] rounded-[10px] bg-peri/10 grid place-items-center text-peri-deep font-semibold text-[15px] shrink-0">{o.name.slice(0, 1).toUpperCase()}</div>
+                <Link key={o.id} href={`/app/org/${o.slug}`} className="mw-raise mw-lift rounded-[20px] flex items-center gap-4 px-5 py-4 no-underline">
+                  <div className="w-11 h-11 rounded-[12px] grid place-items-center font-semibold text-[16px] shrink-0" style={{ background: 'linear-gradient(160deg,#FDE3D7,#F2B79C)', color: '#8A3A17', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.75)' }}>{o.name.slice(0, 1).toUpperCase()}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[14.5px] font-medium text-ink truncate">{o.name}</div>
-                    <div className="text-[11.5px] text-ink-soft">/org/{o.slug} · {o.isOwner ? 'Owner' : o.role}{!o.funded ? ' · treasury not set' : ''}</div>
+                    <div className="text-[16px] font-semibold text-ink truncate">{o.name}</div>
+                    <div className="text-[12.5px] text-ink-soft mt-0.5"><span className="font-geist-mono">/org/{o.slug}</span> · {o.isOwner ? 'Owner' : o.role}</div>
                   </div>
-                  <span className="text-peri-deep text-[15px]">→</span>
+                  <span className="max-[480px]:hidden">{o.funded ? <StatusChip tone="live">Treasury live</StatusChip> : <StatusChip tone="building">Setting up</StatusChip>}</span>
+                  <span className="text-[18px]" style={{ color: 'var(--mw-peri-deep)' }} aria-hidden>→</span>
                 </Link>
               ))}
             </div>

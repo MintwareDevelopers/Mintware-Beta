@@ -10,15 +10,9 @@
 
 import Link from 'next/link'
 import { useRedirectToActiveOrg } from '@/components/web2/useActiveOrg'
+import { PageHead, SLabel, StatusChip, Note, IconPeople } from '@/components/web2/TeamKit'
 
 type Role = 'Admin' | 'Signer' | 'Approver' | 'Member' | 'Viewer'
-const ROLE_CLS: Record<Role, string> = {
-  Admin:    'text-peri-deep',
-  Signer:   'text-coral2-deep',
-  Approver: 'text-ink',
-  Member:   'text-ink-mid',
-  Viewer:   'text-ink-soft',
-}
 
 const MEMBERS: { name: string; email: string; role: Role; cards: number; last: string }[] = [
   { name: 'Devon R.', email: 'devon@acme.xyz', role: 'Admin',    cards: 1, last: '2h ago' },
@@ -42,59 +36,42 @@ export default function TeamRoles() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Team & Roles</h1>
-          <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
-        </div>
-        <Link href="/app/org" className="glass-pill glass-pill-sm no-underline">+ Invite</Link>
-      </div>
-      <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Invite your team and scope what each person can do — from full admin down to read-only. Members see only their own cards and activity; admins see the whole treasury. <Link href="/app/org" className="text-peri-deep font-medium no-underline hover:underline">Manage members in your org treasury →</Link></p>
+      <PageHead
+        icon={<IconPeople size={24} />}
+        title="Team & roles"
+        status={{ tone: 'preview', label: 'Preview · illustrative' }}
+        lede="Invite your team and scope what each person can do, from full admin down to read-only. Members see only their own cards and activity; admins see the whole treasury."
+        actions={<Link href="/app/org" className="mw-btn !min-h-[40px]">+ Invite</Link>}
+      />
 
       {/* Roster */}
-      <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-6 mb-3">Members · {MEMBERS.length}</div>
-      <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card overflow-x-auto">
-        <table className="w-full min-w-[560px] max-[640px]:min-w-0 border-collapse text-[13px]">
-          <thead>
-            <tr className="bg-ground-cool border-b border-hair-soft">
-              {['Member', 'Role', 'Cards', 'Last active'].map((h, i) => (
-                <th key={h} className={`text-[9.5px] uppercase tracking-[0.09em] font-semibold text-ink-soft px-4 py-2.5 text-left ${i === 2 ? 'text-right max-[520px]:hidden' : ''} ${i === 3 ? 'max-[640px]:hidden' : ''}`}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {MEMBERS.map((m) => (
-              <tr key={m.email} className="border-b border-hair-soft last:border-0 hover:bg-ground-cool transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-[26px] h-[26px] rounded-full grid place-items-center text-[9px] font-semibold text-white shrink-0" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))' }}>{m.name.split(' ').map((x) => x[0]).join('').slice(0, 2)}</span>
-                    <div className="min-w-0">
-                      <div className="font-medium text-ink truncate">{m.name}</div>
-                      <div className="text-[11px] text-ink-soft truncate">{m.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3"><span className={`text-[10px] uppercase tracking-[0.06em] font-semibold rounded-full border border-hair bg-ground-cool px-2 py-1 ${ROLE_CLS[m.role]}`}>{m.role}</span></td>
-                <td className="px-4 py-3 text-right tabular-nums text-ink-mid max-[520px]:hidden">{m.cards}</td>
-                <td className="px-4 py-3 text-ink-soft max-[640px]:hidden">{m.last}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Role ladder */}
-      <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-8 mb-3">The role ladder</div>
-      <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card divide-y divide-hair-soft max-w-[760px]">
-        {LADDER.map((r) => (
-          <div key={r.role} className="flex items-start gap-4 px-5 py-3.5">
-            <span className={`text-[11px] uppercase tracking-[0.06em] font-semibold w-[84px] shrink-0 ${ROLE_CLS[r.role]}`}>{r.role}</span>
-            <span className="text-[13.5px] text-ink-mid leading-[1.5]">{r.can}</span>
+      <SLabel>Members · {MEMBERS.length}</SLabel>
+      <div className="mw-raise rounded-[22px] overflow-hidden">
+        {MEMBERS.map((m) => (
+          <div key={m.email} className="flex items-center gap-4 px-5 py-4 border-b border-[rgba(21,21,29,.06)] last:border-0">
+            <span className="w-10 h-10 rounded-full grid place-items-center text-[12px] font-semibold shrink-0" style={{ background: 'var(--mw-sheen)', color: '#2E2BA8', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.6)' }}>{m.name.split(' ').map((x) => x[0]).join('').slice(0, 2)}</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-[15px] text-ink truncate">{m.name}</div>
+              <div className="text-[12.5px] text-ink-soft truncate">{m.email}</div>
+            </div>
+            <StatusChip tone={m.role === 'Admin' ? 'live' : 'muted'}>{m.role}</StatusChip>
+            <span className="text-[12.5px] text-ink-soft w-[64px] text-right shrink-0 max-[560px]:hidden">{m.last}</span>
           </div>
         ))}
       </div>
 
-      <p className="text-[11px] text-ink-soft mt-5">Illustrative. Role and org membership will be carried in the Privy session — the hard gate lands in Phase 2. Nothing here is live.</p>
+      {/* Role ladder — most power at the top, drawn as a stack that narrows toward read-only */}
+      <SLabel>The role ladder</SLabel>
+      <ol className="m-0 p-0 list-none flex flex-col gap-2 max-w-[780px]">
+        {LADDER.map((r, k) => (
+          <li key={r.role} className="mw-raise-sm rounded-[18px] px-5 py-3.5 flex items-start gap-4" style={{ marginRight: `${k * 4}%` }}>
+            <span className="font-semibold text-[14.5px] w-[84px] shrink-0">{r.role}</span>
+            <span className="text-[14px] text-ink-mid leading-[1.5]">{r.can}</span>
+          </li>
+        ))}
+      </ol>
+
+      <Note>Illustrative. In a real org you pick from four fixed presets (owner, manager, contributor, vendor); manage them under <Link href="/app/org" className="font-semibold no-underline" style={{ color: 'var(--mw-peri-deep)' }}>your org</Link>. Nothing here is live.</Note>
     </>
   )
 }

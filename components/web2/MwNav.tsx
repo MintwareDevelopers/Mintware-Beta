@@ -10,8 +10,8 @@ import { MintwareMark }        from '@/components/ui2/MintwareMark'
 import { ScopeSwitcher }        from '@/components/web2/ScopeSwitcher'
 import { shortAddr }            from '@/lib/web2/api'
 
-// MwNav — the authenticated in-app nav. Design v2 (Privy-esque): translucent
-// white/blur bar, periwinkle logo mark, glass-pill actions. All wallet/Privy
+// MwNav — the authenticated in-app nav, in Mineral: frosted porcelain bar, disc mark, section links in an
+// inset well with a raised current pill, quiet raised controls and one solid primary action. All wallet/Privy
 // logic preserved.
 
 export function MwNav() {
@@ -40,26 +40,38 @@ export function MwNav() {
     { href: '/agents/leaderboard', label: 'Agents' },
   ]
 
+  const menuIcon = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      {menuOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+    </svg>
+  )
+
   return (
-    <nav className="sticky top-0 z-[200] flex items-center justify-between px-6 max-[800px]:px-4 h-[60px] bg-white/70 backdrop-blur-[16px] border-b border-hair-soft font-atx-display">
+    <nav
+      className="sticky top-0 z-[200] flex items-center justify-between gap-3 px-[clamp(16px,4vw,40px)] h-[64px] font-geist"
+      style={{ background: 'rgba(246,246,250,0.82)', backdropFilter: 'saturate(1.4) blur(14px)', WebkitBackdropFilter: 'saturate(1.4) blur(14px)', borderBottom: '1px solid var(--mw-line)' }}
+    >
       <div className="flex items-center gap-3 shrink-0 min-w-0">
         <Link href="/" className="flex items-center gap-2.5 no-underline text-ink shrink-0">
-          <MintwareMark size={24} />
-          <span className="font-atx-display text-[17px] font-bold tracking-[-0.02em] max-[640px]:hidden">Mintware</span>
+          <MintwareMark size={28} />
+          <span className="text-[18px] font-semibold tracking-[-0.02em] max-[640px]:hidden">Mintware</span>
         </Link>
-        <ScopeSwitcher />
+        <div className="min-w-0 max-w-[200px]"><ScopeSwitcher compact /></div>
       </div>
 
       {!mounted ? (
-        <div className="h-9 w-[200px]" />
+        <div className="h-10 w-[200px]" />
       ) : isConnected ? (
-        <div className="flex items-center gap-1">
-          <div className="flex items-center gap-1 max-[880px]:hidden">
+        <div className="flex items-center gap-2">
+          {/* Section links sit in an inset well; the current page is the raised pill. */}
+          <div className="flex items-center gap-1 rounded-[14px] p-1 max-[880px]:hidden" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>
             {NAV_LINKS.map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
-                className={`px-3 py-2 text-[13px] font-medium no-underline whitespace-nowrap transition-colors ${isActive(href) ? 'text-ink' : 'text-ink-mid hover:text-ink'}`}
+                aria-current={isActive(href) ? 'page' : undefined}
+                className="px-3.5 py-1.5 rounded-[10px] text-[14px] font-medium no-underline whitespace-nowrap transition-colors"
+                style={isActive(href) ? { background: '#fff', boxShadow: 'var(--mw-raise-sm)', color: 'var(--mw-ink)' } : { color: 'var(--mw-ink-2)' }}
               >
                 {label}
               </Link>
@@ -69,27 +81,27 @@ export function MwNav() {
           <button
             onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
             title="Command palette (⌘K)"
-            className="ml-1.5 glass-pill glass-pill-sm !px-3 max-[880px]:hidden"
+            className="mw-btn-quiet !min-h-[40px] !px-3 font-geist-mono text-[12.5px] max-[880px]:hidden"
           >
             ⌘K
           </button>
 
           {address && (
-            <div
-              className="ml-2 flex items-center gap-[7px] px-3 py-[7px] text-[12px] rounded-full border border-hair bg-white cursor-pointer text-ink select-none transition-colors duration-150 hover:border-[rgba(209,67,67,0.4)] hover:text-[#D14343] group"
+            <button
+              className="mw-btn-quiet !min-h-[40px] !px-2.5 !gap-2 text-[13px] !font-medium group"
               onClick={handleDisconnect}
               title="Click to disconnect"
             >
-              <span className="w-[7px] h-[7px] rounded-full bg-peri shrink-0 group-hover:bg-[#D14343]" />
-              <span className="font-mono">{shortAddr(address)}</span>
-              <span className="text-[#D14343] text-[12px]">✕</span>
-            </div>
+              <span className="w-6 h-6 rounded-full shrink-0" style={{ background: 'var(--mw-sheen)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.6)' }} aria-hidden />
+              <span className="font-geist-mono">{shortAddr(address)}</span>
+              <span className="text-ink-soft group-hover:text-[#B42318] text-[12px]" aria-hidden>✕</span>
+            </button>
           )}
 
           {privy.authenticated && privy.hasEmbeddedWallet && (
             <button
               onClick={() => privy.linkWallet({ walletChainType: 'ethereum-only' })}
-              className="ml-1 glass-pill glass-pill-sm max-[560px]:hidden"
+              className="mw-btn-quiet !min-h-[40px] !px-3 text-[13px] max-[560px]:hidden"
               title="Link an external EVM wallet to this Privy session"
             >
               + EVM
@@ -100,24 +112,28 @@ export function MwNav() {
           <button
             onClick={() => setMenuOpen(o => !o)}
             aria-label="Menu"
-            className="hidden max-[880px]:flex glass-pill glass-pill-sm w-11 h-11 ml-1 !px-0"
+            aria-expanded={menuOpen}
+            className="hidden max-[880px]:inline-flex mw-btn-quiet !w-11 !h-11 !min-h-0 !px-0"
           >
-            {menuOpen ? '✕' : '☰'}
+            {menuIcon}
           </button>
 
           {/* Mobile dropdown */}
           {menuOpen && (
-            <div className="hidden max-[880px]:flex flex-col absolute top-[60px] left-0 right-0 bg-white/95 backdrop-blur-md border-b border-hair-soft shadow-lift z-[199]">
-              {NAV_LINKS.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={() => setMenuOpen(false)}
-                  className={`px-6 py-3.5 text-[15px] font-medium no-underline border-t border-hair-soft ${isActive(href) ? 'text-ink' : 'text-ink-mid'}`}
-                >
-                  {label}
-                </Link>
-              ))}
+            <div className="hidden max-[880px]:block absolute top-[64px] left-0 right-0 px-4 pb-4 z-[199]">
+              <div className="mw-raise rounded-[18px] p-2 flex flex-col">
+                {NAV_LINKS.map(({ href, label }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-3 rounded-[12px] text-[15px] font-medium no-underline"
+                    style={isActive(href) ? { background: 'var(--mw-band)', color: 'var(--mw-ink)' } : { color: 'var(--mw-ink-2)' }}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -125,12 +141,12 @@ export function MwNav() {
         <div className="flex items-center gap-3">
           <Link
             href="/markets"
-            className="text-[13px] font-medium text-ink-mid no-underline hover:text-ink max-[560px]:hidden"
+            className="text-[14px] font-medium text-ink-mid no-underline hover:text-ink max-[560px]:hidden"
           >
             Markets
           </Link>
-          <button onClick={() => launch()} className="glass-pill glass-pill-sm">
-            Launch app →
+          <button onClick={() => launch()} className="mw-btn !min-h-[40px] text-[14px]">
+            Launch app
           </button>
         </div>
       )}

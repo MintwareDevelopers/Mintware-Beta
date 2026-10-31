@@ -3,18 +3,74 @@
 // V2-RWAs visual building blocks — light-only. Every number comes from the live chain read (useRwaUnit) or
 // the recorded proof run (lib/rwa/demo.ts); nothing here is decorative data.
 
+import type { ReactNode } from 'react'
+import Link from 'next/link'
 import { explorer, revertReasonText, shortHash, type RwaDemo, type RwaUnit } from '@/lib/rwa/demo'
 import { usd, type RwaUnitLive } from './useRwaUnit'
 
-export const EY = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
-export const H2 = 'font-atx-display font-semibold text-ink tracking-[-0.025em] text-[clamp(1.4rem,2.4vw,1.9rem)] leading-[1.15]'
+// Mineral type for the RWA screens: a periwinkle eyebrow over a semibold Geist headline.
+export const EY = 'text-[12.5px] uppercase tracking-[0.08em] font-semibold text-peri-deep'
+export const H2 = 'font-geist font-semibold text-ink tracking-[-0.035em] text-[clamp(1.6rem,2.8vw,2.3rem)] leading-[1.08]'
+
+// RWA icons, drawn in the same disc/layer language as components/ui2/MineralIcons (24 grid, 1.7 stroke).
+function Ico({ size = 20, children }: { size?: number; children: ReactNode }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+}
+/** A parcel of land: a disc with furrows. */
+export function IconParcel({ size }: { size?: number }) {
+  return <Ico size={size}><ellipse cx="12" cy="12" rx="9" ry="4.2" /><path d="M3 12v2.6c0 2.3 4 4.2 9 4.2s9-1.9 9-4.2V12" /><path d="M7 11.2c2.4-.9 5-.9 7.6 0M9 13.3c2-.6 4-.6 6 0" /></Ico>
+}
+/** A band with a needle — the appraisal band. */
+export function IconBand({ size }: { size?: number }) {
+  return <Ico size={size}><rect x="3" y="8" width="18" height="8" rx="4" /><path d="M9 8v8M15 8v8" strokeOpacity=".5" /><path d="M12.5 5.5v13" /></Ico>
+}
+/** A disc refusing — a transaction the chain reverted. */
+export function IconRefused({ size }: { size?: number }) {
+  return <Ico size={size}><ellipse cx="12" cy="9" rx="8.5" ry="3.4" /><path d="M3.5 9v5c0 1.9 3.8 3.4 8.5 3.4s8.5-1.5 8.5-3.4V9" /><path d="m10 7.6 4 2.8M14 7.6l-4 2.8" /></Ico>
+}
+/** A chain of two links — every step on-chain. */
+export function IconChainLink({ size }: { size?: number }) {
+  return <Ico size={size}><rect x="2.5" y="8.5" width="10" height="7" rx="3.5" /><rect x="11.5" y="8.5" width="10" height="7" rx="3.5" /></Ico>
+}
+/** A disc with a check — verified source. */
+export function IconVerified({ size }: { size?: number }) {
+  return <Ico size={size}><ellipse cx="12" cy="8" rx="8.5" ry="3.4" /><path d="M3.5 8v6c0 1.9 3.8 3.4 8.5 3.4s8.5-1.5 8.5-3.4V8" /><path d="m9.2 8.1 1.9 1.3 3.8-2.6" /></Ico>
+}
+/** Two crossing arrows — trades. */
+export function IconTrades({ size }: { size?: number }) {
+  return <Ico size={size}><path d="M4 8h13M14 5l3 3-3 3M20 16H7M10 13l-3 3 3 3" /></Ico>
+}
+
+/** An icon on a recessed periwinkle tile (the Mineral feature-icon treatment). */
+export function IconTile({ children, tone = 'peri' }: { children: ReactNode; tone?: 'peri' | 'coral' }) {
+  return <span className="flex-none w-10 h-10 rounded-[12px] grid place-items-center" style={tone === 'coral' ? { color: '#9A3F1C', background: '#FBEEE7', boxShadow: 'inset 0 1px 2px rgba(154,63,28,.12)' } : { color: 'var(--mw-peri-deep)', background: 'var(--mw-band)', boxShadow: 'var(--mw-inset)' }}>{children}</span>
+}
+
+/** Segmented chain switch: an inset well with a raised pill on the active chain. */
+export function ChainTabs({ units, active, href }: { units: RwaUnit[]; active: string; href: (slug: string) => string }) {
+  if (units.length < 2) return null
+  return (
+    <div className="inline-flex rounded-[14px] p-1" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }} role="tablist" aria-label="Chain">
+      {units.map((x) => {
+        const on = x.slug === active
+        return (
+          <Link key={x.slug} href={href(x.slug)} role="tab" aria-selected={on}
+            className="rounded-[10px] px-3.5 py-1.5 text-[13px] font-semibold no-underline transition-colors"
+            style={on ? { background: '#fff', boxShadow: 'var(--mw-raise-sm)', color: 'var(--mw-ink)' } : { color: 'var(--mw-ink-2)' }}>
+            {x.chain.name}
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
 
 export function LiveDot({ block, failed, label = 'Live' }: { block?: number; failed?: boolean; label?: string }) {
   if (failed && !block) return <span className="text-[12px] text-ink-soft">Live read unavailable — showing the recorded run</span>
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-mid">
       <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mw-live opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-mw-live" /></span>
-      {block ? <>{label} · block <span className="font-atx-mono">{block.toLocaleString()}</span></> : 'Connecting…'}
+      {block ? <>{label} · block <span className="font-geist-mono">{block.toLocaleString()}</span></> : 'Connecting…'}
     </span>
   )
 }
@@ -41,9 +97,9 @@ export function BandGauge({ unit, demo, size = 'lg' }: { unit: RwaUnitLive; demo
 
   return (
     <div className="select-none">
-      <div className={`relative ${tall ? 'h-[64px]' : 'h-[40px]'} rounded-[14px] overflow-hidden border border-hair bg-[repeating-linear-gradient(135deg,rgba(232,138,103,0.10)_0_6px,rgba(232,138,103,0.03)_6px_12px)]`}>
-        <div className="absolute inset-y-0 bg-[rgba(108,108,240,0.10)]" style={{ left: pct(a - spec), right: `calc(100% - ${pct(a + spec)})` }} />
-        <div className="absolute inset-y-0 bg-[rgba(108,108,240,0.22)]" style={{ left: pct(a - core), right: `calc(100% - ${pct(a + core)})` }} />
+      <div className={`relative ${tall ? 'h-[64px]' : 'h-[40px]'} rounded-[16px] overflow-hidden bg-[repeating-linear-gradient(135deg,rgba(201,87,43,0.16)_0_1px,transparent_1px_6px)]`} style={{ backgroundColor: '#FBF3EE', boxShadow: 'var(--mw-inset)' }}>
+        <div className="absolute inset-y-0 bg-[#EDEBFC]" style={{ left: pct(a - spec), right: `calc(100% - ${pct(a + spec)})` }} />
+        <div className="absolute inset-y-0 bg-[#D9D6FA]" style={{ left: pct(a - core), right: `calc(100% - ${pct(a + core)})` }} />
         <div className="absolute inset-y-0 w-[2px] -ml-px bg-peri-deep" style={{ left: pct(a) }} />
         <div
           className="absolute inset-y-0 transition-[left] duration-[1200ms] ease-out"
@@ -51,7 +107,7 @@ export function BandGauge({ unit, demo, size = 'lg' }: { unit: RwaUnitLive; demo
           aria-label={`Pool price ${usd(unit.spot.usd, 2)}`}
         >
           <div className={`absolute inset-y-[-2px] w-[3px] -ml-[1.5px] rounded-full ${outside ? 'bg-coral2-deep' : 'bg-[#0F7A43]'}`} />
-          <div className={`absolute ${tall ? 'top-1.5' : 'top-1'} -translate-x-1/2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white whitespace-nowrap shadow-sm ${outside ? 'bg-coral2-deep' : 'bg-[#0F7A43]'}`}>
+          <div className={`absolute ${tall ? 'top-1.5' : 'top-1'} -translate-x-1/2 rounded-full px-2 py-0.5 font-geist-mono text-[11px] font-medium text-white whitespace-nowrap shadow-sm ${outside ? 'bg-coral2-deep' : 'bg-[#0F7A43]'}`}>
             {usd(unit.spot.usd, 2)}
           </div>
         </div>
@@ -63,9 +119,9 @@ export function BandGauge({ unit, demo, size = 'lg' }: { unit: RwaUnitLive; demo
       </div>
       {tall && (
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5 text-[12px] text-ink-mid">
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] bg-[rgba(108,108,240,0.22)]" />Core band · {unit.band.coreFeePct}% fee</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] bg-[rgba(108,108,240,0.10)]" />Hard band · {unit.band.specFeePct}% fee</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] bg-[repeating-linear-gradient(135deg,rgba(232,138,103,0.35)_0_3px,transparent_3px_6px)]" />Refused by the hook</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] bg-[#D9D6FA]" />Core band · {unit.band.coreFeePct}% fee</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] bg-[#EDEBFC]" style={{ boxShadow: 'inset 0 0 0 1px rgba(91,91,230,.15)' }} />Hard band · {unit.band.specFeePct}% fee</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-[3px] bg-[#FBF3EE] bg-[repeating-linear-gradient(135deg,rgba(201,87,43,0.35)_0_1px,transparent_1px_4px)]" />Refused by the hook</span>
         </div>
       )}
     </div>
@@ -78,7 +134,7 @@ export function LiquidityMap({ unit, interest, symbol }: { unit: RwaUnitLive; in
   const total = Math.max(1, lend + pool + junior)
   const segs = [
     { k: 'lend', label: 'Earning in lending', v: lend, cls: 'bg-[#A9A7FA]', note: `${unit.lending.aprPct}% ${unit.lending.simulated ? 'simulated ' : ''}rate` },
-    { k: 'pool', label: 'In the pool', v: pool, cls: 'bg-peri', note: 'liquidity traders hit' },
+    { k: 'pool', label: 'In the pool', v: pool, cls: 'bg-[#5B5BE6]', note: 'liquidity traders hit' },
     { k: 'junior', label: 'Issuer first-loss buffer', v: junior, cls: 'bg-[#F4A183]', note: `USD, plus ${Math.round(unit.vault.juniorUnits).toLocaleString()} ${symbol} locked beneath` },
   ]
   return (
@@ -96,16 +152,16 @@ export function LiquidityMap({ unit, interest, symbol }: { unit: RwaUnitLive; in
               <div className="mt-0.5 pl-[18px] text-[11.5px] text-ink-soft">{s.note}</div>
             </div>
             <div className="text-right shrink-0">
-              <div className="font-atx-display text-[20px] font-semibold tracking-[-0.01em] tabular-nums">{usd(s.v)}</div>
+              <div className="font-geist-mono text-[19px] tracking-[-0.02em]">{usd(s.v)}</div>
               <div className="text-[11.5px] text-ink-soft">{Math.round((s.v / total) * 100)}%</div>
             </div>
           </div>
         ))}
       </div>
       {interest !== null && (
-        <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2 rounded-[14px] border border-[rgba(42,158,138,0.3)] bg-[rgba(42,158,138,0.06)] px-4 py-3">
-          <span className="text-[12.5px] text-ink-mid">Interest earned by idle liquidity, live</span>
-          <span className="font-atx-mono text-[20px] font-semibold text-peri-deep tabular-nums">{usd(interest, 4)}</span>
+        <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2 rounded-[14px] px-4 py-3" style={{ background: 'var(--mw-band)' }}>
+          <span className="text-[12.5px] text-ink-mid">Interest earned by idle liquidity, live{unit.lending.simulated ? ' (simulated rate)' : ''}</span>
+          <span className="font-geist-mono text-[19px] text-peri-deep">{usd(interest, 4)}</span>
         </div>
       )}
     </div>
@@ -119,14 +175,14 @@ export function RefusalCards({ unit, compact = false }: { unit: RwaUnit; compact
   return (
     <div className={`grid gap-4 ${compact ? 'grid-cols-1' : 'grid-cols-2 max-[760px]:grid-cols-1'}`}>
       {refused.map((t) => (
-        <div key={t.hash} className="rounded-[20px] border border-[rgba(232,138,103,0.45)] bg-[linear-gradient(180deg,#FFF6F1_0%,#FFFFFF_100%)] p-6">
-          <div className="flex items-center gap-2">
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-[rgba(232,138,103,0.2)] text-[14px] font-bold text-[#B4532A]">⨯</span>
-            <span className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-[#B4532A]">Refused on-chain{t.reason ? ` · ${t.reason.error}` : ''}</span>
+        <div key={t.hash} className="mw-raise rounded-[22px] p-6 flex flex-col" style={{ outline: '1.5px solid rgba(201,87,43,.28)', outlineOffset: -1.5 }}>
+          <div className="flex items-center gap-3">
+            <IconTile tone="coral"><IconRefused /></IconTile>
+            <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#9A3F1C]">Refused on-chain{t.reason ? ` · ${t.reason.error}` : ''}</span>
           </div>
-          <h3 className="mt-3 font-atx-display text-[18px] font-semibold leading-snug">{t.leg.title}</h3>
-          <p className="mt-1.5 text-[13.5px] leading-[1.55] text-ink-mid">{revertReasonText(t) ?? t.label}</p>
-          <a href={ex.tx(t.hash)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 rounded-full mw-raise-sm px-3 py-1.5 font-atx-mono text-[12px] text-peri-deep no-underline hover:border-peri">
+          <h3 className="mt-4 text-[19px] font-semibold tracking-[-0.02em] leading-snug">{t.leg.title}</h3>
+          <p className="mt-1.5 mb-0 text-[14px] leading-[1.55] text-ink-mid">{revertReasonText(t) ?? t.label}</p>
+          <a href={ex.tx(t.hash)} target="_blank" rel="noreferrer" className="mt-5 self-start inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 font-geist-mono text-[12px] text-peri-deep no-underline hover:underline" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
             {shortHash(t.hash)} · mined, reverted ↗
           </a>
         </div>
@@ -175,38 +231,38 @@ export function PriceBandChart({ unit, demo }: { unit: RwaUnitLive; demo: RwaDem
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`${demo.property.symbol} spot price against its appraisal band`}>
         <defs>
-          <linearGradient id="rwaSpotFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#6C6CF0" stopOpacity="0.16" /><stop offset="100%" stopColor="#6C6CF0" stopOpacity="0" /></linearGradient>
+          <linearGradient id="rwaSpotFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#5B5BE6" stopOpacity="0.16" /><stop offset="100%" stopColor="#5B5BE6" stopOpacity="0" /></linearGradient>
         </defs>
         {ticks.map((v) => (
           <g key={v}>
             <line x1={PL} x2={W - PR} y1={Y(v)} y2={Y(v)} stroke="rgba(23,23,31,0.06)" />
-            <text x={PL - 10} y={Y(v) + 4} textAnchor="end" fontSize="11" fill="#9A9AA8">${v.toFixed(2)}</text>
+            <text x={PL - 10} y={Y(v) + 4} textAnchor="end" fontSize="11" fontFamily="var(--font-geist-mono)" fill="#62626F">${v.toFixed(2)}</text>
           </g>
         ))}
         {slots.map((s, i) => {
           const xa = Math.max(PL, X(i) - half), xb = Math.min(W - PR, X(i) + half)
           return (
             <g key={`band${i}`}>
-              <rect x={xa} width={xb - xa} y={Y(s.appraisal * specF)} height={Y(s.appraisal / specF) - Y(s.appraisal * specF)} fill="rgba(108,108,240,0.07)" />
-              <rect x={xa} width={xb - xa} y={Y(s.appraisal * coreF)} height={Y(s.appraisal / coreF) - Y(s.appraisal * coreF)} fill="rgba(108,108,240,0.13)" />
-              <line x1={xa} x2={xb} y1={Y(s.appraisal)} y2={Y(s.appraisal)} stroke="#5A57DE" strokeDasharray="5 4" strokeWidth="1.25" />
+              <rect x={xa} width={xb - xa} y={Y(s.appraisal * specF)} height={Y(s.appraisal / specF) - Y(s.appraisal * specF)} fill="#EDEBFC" />
+              <rect x={xa} width={xb - xa} y={Y(s.appraisal * coreF)} height={Y(s.appraisal / coreF) - Y(s.appraisal * coreF)} fill="#D9D6FA" />
+              <line x1={xa} x2={xb} y1={Y(s.appraisal)} y2={Y(s.appraisal)} stroke="#4643D1" strokeDasharray="5 4" strokeWidth="1.25" />
             </g>
           )
         })}
         <path d={area} fill="url(#rwaSpotFill)" />
-        <path d={line} fill="none" stroke="#3B3A8F" strokeWidth="2" strokeLinejoin="round" />
+        <path d={line} fill="none" stroke="#2E2BA8" strokeWidth="2" strokeLinejoin="round" />
         {slots.map((s, i) => {
-          if (!s.ev) return <circle key={`p${i}`} cx={X(i)} cy={Y(s.spot)} r={i === n - 1 ? 5 : 3} fill={i === n - 1 ? '#3B3A8F' : '#fff'} stroke="#3B3A8F" strokeWidth="1.5" />
-          if (s.ev.kind === 'appraisal') return <rect key={`p${i}`} x={X(i) - 4} y={Y(s.appraisal) - 4} width="8" height="8" transform={`rotate(45 ${X(i)} ${Y(s.appraisal)})`} fill="#5A57DE" />
-          return <circle key={`p${i}`} cx={X(i)} cy={Y(s.spot)} r="3.4" fill={s.ev.byVault ? '#F4A183' : '#fff'} stroke={s.ev.byVault ? '#E88A67' : '#3B3A8F'} strokeWidth="1.5" />
+          if (!s.ev) return <circle key={`p${i}`} cx={X(i)} cy={Y(s.spot)} r={i === n - 1 ? 5 : 3} fill={i === n - 1 ? '#2E2BA8' : '#fff'} stroke="#2E2BA8" strokeWidth="1.5" />
+          if (s.ev.kind === 'appraisal') return <rect key={`p${i}`} x={X(i) - 4} y={Y(s.appraisal) - 4} width="8" height="8" transform={`rotate(45 ${X(i)} ${Y(s.appraisal)})`} fill="#4643D1" />
+          return <circle key={`p${i}`} cx={X(i)} cy={Y(s.spot)} r="3.4" fill={s.ev.byVault ? '#F4A183' : '#fff'} stroke={s.ev.byVault ? '#E88A67' : '#2E2BA8'} strokeWidth="1.5" />
         })}
-        <text x={X(n - 1) - 8} y={Y(unit.spot.usd) + (unit.spot.usd < unit.appraisal.usd ? 18 : -10)} textAnchor="end" fontSize="12" fontWeight="600" fill="#3B3A8F">now ${unit.spot.usd.toFixed(2)}</text>
-        <text x={X(n - 1) - 8} y={Y(unit.appraisal.usd) - 8} textAnchor="end" fontSize="11.5" fontWeight="600" fill="#5A57DE">appraisal ${unit.appraisal.usd.toFixed(2)}</text>
-        <text x={PL} y={H - 10} fontSize="11" fill="#9A9AA8">pool opened at the appraisal</text>
-        <text x={W - PR} y={H - 10} textAnchor="end" fontSize="11" fill="#9A9AA8">now · block {unit.block.toLocaleString()}</text>
+        <text x={X(n - 1) - 8} y={Y(unit.spot.usd) + (unit.spot.usd < unit.appraisal.usd ? 18 : -10)} textAnchor="end" fontSize="12" fontWeight="600" fill="#2E2BA8">now ${unit.spot.usd.toFixed(2)}</text>
+        <text x={X(n - 1) - 8} y={Y(unit.appraisal.usd) - 8} textAnchor="end" fontSize="11.5" fontWeight="600" fill="#4643D1">appraisal ${unit.appraisal.usd.toFixed(2)}</text>
+        <text x={PL} y={H - 10} fontSize="11" fill="#62626F">pool opened at the appraisal</text>
+        <text x={W - PR} y={H - 10} textAnchor="end" fontSize="11" fill="#62626F">now · block {unit.block.toLocaleString()}</text>
       </svg>
       <div className="mt-2 flex flex-wrap gap-4 px-1 text-[12px] text-ink-mid">
-        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-[#3B3A8F] bg-white" />trade</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-[#2E2BA8] bg-white" />trade</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-[#E88A67] bg-[#F4A183]" />vault unwind (an LP exit)</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rotate-45 bg-peri-deep" />new appraisal</span>
       </div>
@@ -216,7 +272,7 @@ export function PriceBandChart({ unit, demo }: { unit: RwaUnitLive; demo: RwaDem
 
 export function Disclosure({ chainName, symbol }: { chainName: string; symbol: string }) {
   return (
-    <p className="max-w-[86ch] text-[12px] leading-[1.6] text-ink-soft">
+    <p className="m-0 max-w-[90ch] rounded-[16px] px-5 py-4 text-[12.5px] leading-[1.6] text-ink-soft" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>
       Testnet demonstration on {chainName}. The property is fictional; dUSD and {symbol} are valueless test tokens; the lending
       yield is simulated. The contracts are unaudited. A liquidity position is not a deposit, a savings product, or a guaranteed
       or fixed return. Nothing here is an offer of securities or of any investment.{' '}

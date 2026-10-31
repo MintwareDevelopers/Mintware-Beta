@@ -61,7 +61,7 @@ export function RwaOverview() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className={EY}>Pool price</div>
-                  <div className="mt-2 font-atx-display text-[52px] font-semibold leading-none tracking-[-0.03em] tabular-nums">{unit ? usd(unit.spot.usd, 2) : '—'}</div>
+                  <div className="mt-2 font-geist-mono text-[clamp(40px,6vw,52px)] leading-none tracking-[-0.04em]">{unit ? usd(unit.spot.usd, 2) : '—'}</div>
                   <div className="mt-2 text-[13px] text-ink-mid">
                     vs appraisal <span className="font-semibold text-peri-deep">{unit ? usd(unit.appraisal.usd, 2) : '—'}</span>
                     {unit && <> · appraised {ago(now - unit.appraisal.at)}</>}
@@ -120,30 +120,30 @@ export function RwaOverview() {
 
 function Stat({ k, v, tone }: { k: string; v: string; tone?: 'warn' }) {
   return (
-    <div className="bg-white/90 px-5 py-4">
-      <div className="text-[11.5px] text-ink-soft">{k}</div>
-      <div className={`mt-1 font-atx-display text-[26px] font-semibold tracking-[-0.02em] tabular-nums ${tone === 'warn' ? 'text-[#B4532A]' : 'text-ink'}`}>{v}</div>
+    <div className="bg-white px-5 py-4">
+      <div className="text-[12px] text-ink-soft">{k}</div>
+      <div className={`mt-1 font-geist-mono text-[26px] tracking-[-0.03em] ${tone === 'warn' ? 'text-[#9A3F1C]' : 'text-ink'}`}>{v}</div>
     </div>
   )
 }
 
 const TONES = {
-  teal: 'text-peri-deep bg-[rgba(42,158,138,0.10)]',
-  peri: 'text-peri-deep bg-[rgba(108,108,240,0.10)]',
-  coral: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]',
+  teal: 'text-[#0F7A43] bg-[#E3F4EA]',
+  peri: 'text-peri-deep bg-[#EDE9FB]',
+  coral: 'text-[#9A3F1C] bg-[#FBEEE7]',
 }
 function RoleCard({ n, tag, title, body, tone }: { n: string; tag: string; title: string; body: string; tone: keyof typeof TONES }) {
   return (
     <div className="rounded-[20px] mw-raise p-6">
       <div className="flex items-center justify-between">
-        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.1em] ${TONES[tone]}`}>{tag}</span>
-        <span className="font-atx-mono text-[12px] text-ink-soft">{n}</span>
+        <span className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${TONES[tone]}`}>{tag}</span>
+        <span className="font-geist-mono text-[12px] text-ink-soft">{n}</span>
       </div>
-      <h3 className="mt-4 font-atx-display text-[18px] font-semibold">{title}</h3>
+      <h3 className="mt-4 text-[19px] font-semibold tracking-[-0.02em]">{title}</h3>
       <p className="mt-2 text-[13.5px] leading-[1.55] text-ink-mid">{body}</p>
     </div>
   )
 }
 function Arrow() {
-  return <div className="grid place-items-center text-[20px] text-ink-soft max-[900px]:rotate-90 max-[900px]:py-1" aria-hidden>→</div>
+  return <div className="grid place-items-center text-ink-soft max-[900px]:rotate-90 max-[900px]:py-1" aria-hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg></div>
 }

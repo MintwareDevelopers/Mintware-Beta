@@ -1,124 +1,77 @@
-// Team · Vaults — design-forward allocation view. Two halves: where the treasury's
-// capital is DEPLOYED (Growth ULV pools + the Aave idle buffer, rebalance in one
-// place) and the vaults this org CURATES (retail LPs deposit into what you build —
-// Curator is the create role, pulled from the User surface). ALL illustrative — the
-// ULV engine is in testing on Base Sepolia, nothing here is live or an offer.
+// Team · Allocation — ILLUSTRATIVE preview of where a treasury's capital sits and what each slice earns
+// from: Treasury yield (single-asset USDC lending, no pairing), a curated market's pool (trading fees,
+// impermanent loss), prefunded card balances, and an unallocated reserve. No rates are shown: lending rates
+// are variable and pool fees depend on trading, so a projected yield would be a promise we can't make.
+// Status in the material: solid = deployed, dotted = card balances, hatched = reserve.
+
+import Link from 'next/link'
+import type { ReactNode } from 'react'
+import { PageHead, KpiRow, SLabel, Panel, StatusChip, IconTile, Note, IconPie, IconGrow, IconSwap, IconCard } from '@/components/web2/TeamKit'
 
 const SUMMARY = [
-  { k: 'Allocated to vaults', v: '$5.80M', s: '73% of treasury' },
-  { k: 'Idle buffer', v: '$1.14M', s: 'Aave v3 · instant' },
-  { k: 'Blended APY', v: '6.2%', s: '30-day net' },
-  { k: '30-day yield', v: '$29,940', s: 'across positions' },
+  { k: 'Total allocated', v: '$7.31M', s: '92% of treasury' },
+  { k: 'In Treasury yield', v: '$5.40M', s: 'USDC lending, variable' },
+  { k: 'In markets', v: '$1.43M', s: 'one curated pool' },
+  { k: 'Reserve', v: '$0.63M', s: 'unallocated' },
 ]
 
-type Alloc = { name: string; pair: string; allocated: string; pct: number; apy: string; earned: string; tint: string }
-const HELD: Alloc[] = [
-  { name: 'Growth ULV', pair: 'USDC single-sided', allocated: '$3.02M', pct: 52, apy: '6.8%', earned: '+$17,120', tint: 'var(--color-peri)' },
-  { name: 'Pair Vault',  pair: 'ETH / USDC',         allocated: '$1.22M', pct: 21, apy: '7.4%', earned: '+$7,530',  tint: 'var(--color-coral2)' },
-  { name: 'Aave idle buffer', pair: 'USDC · v3',     allocated: '$1.14M', pct: 20, apy: '4.1%', earned: '+$3,890',  tint: 'var(--color-peri-deep)' },
-  { name: 'Reserve',     pair: 'unallocated',        allocated: '$0.42M', pct: 7,  apy: '—',    earned: '—',        tint: 'var(--color-ink-soft)' },
+type Slice = { name: string; what: string; earns: string; risk: string; allocated: string; pct: number; bg: string; tex: string; icon: ReactNode }
+const SLICES: Slice[] = [
+  { name: 'Treasury yield', what: 'USDC, single asset', earns: 'Lending interest (variable)', risk: 'Lending-market and contract risk', allocated: '$5.40M', pct: 68, bg: '#7C7AF0', tex: '', icon: <IconGrow /> },
+  { name: 'TSLA / USDG market', what: 'Curated pool, one MarketEngine', earns: 'A share of trading fees', risk: 'Impermanent loss, issuer risk', allocated: '$1.43M', pct: 18, bg: '#A9A7FA', tex: '', icon: <IconSwap /> },
+  { name: 'Card balances', what: 'Prefunded, per card', earns: 'Nothing; ready to spend', risk: 'Card programme not live yet', allocated: '$0.48M', pct: 6, bg: '#E1DBFA', tex: 'mw-tex-dots', icon: <IconCard /> },
+  { name: 'Reserve', what: 'Unallocated USDC', earns: 'Nothing', risk: 'None beyond the asset', allocated: '$0.63M', pct: 8, bg: '#ECECF2', tex: 'mw-tex-hatch', icon: <IconPie /> },
 ]
 
-type Curated = { name: string; pair: string; tvl: string; depositors: number; fee: string; status: 'Live' | 'Seeding' }
-const CURATED: Curated[] = [
-  { name: 'Acme Growth', pair: 'USDC single-sided', tvl: '$1.90M', depositors: 214, fee: '10%', status: 'Live' },
-  { name: 'Acme LSA Pair', pair: 'ACME / ETH',       tvl: '$0.34M', depositors: 38,  fee: '15%', status: 'Seeding' },
-]
-
-export default function TeamVaults() {
+export default function TeamAllocation() {
   return (
     <>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Vaults</h1>
-          <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
-        </div>
-        <button disabled title="Team-scoped vault creation isn't wired up yet — coming soon" className="glass-pill-primary shrink-0 opacity-60 cursor-not-allowed">+ Create vault →</button>
-      </div>
-      <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Allocate treasury capital across Growth ULV pools and the Aave idle buffer, and curate your own vaults. Creating a vault is a Curator action — retail LPs deposit into what you build; the strategy, lock terms, and fee split are yours to set.</p>
+      <PageHead
+        icon={<IconPie size={24} />}
+        title="Allocation"
+        status={{ tone: 'preview', label: 'Preview · illustrative' }}
+        lede="Where the treasury's capital sits, what each part earns from, and what it's exposed to. Moving capital between them goes through Treasury controls."
+        actions={<button disabled title="Rebalancing from the terminal isn't built yet" className="mw-btn !min-h-[40px] opacity-60 cursor-not-allowed">Rebalance</button>}
+      />
 
-      {/* Summary strip */}
-      <div className="grid grid-cols-4 max-[880px]:grid-cols-2 max-[480px]:grid-cols-1 gap-3 mt-5">
-        {SUMMARY.map((k) => (
-          <div key={k.k} className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-4">
-            <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">{k.k}</div>
-            <div className="font-atx-display font-medium text-[22px] tracking-tight text-ink mt-1.5 tabular-nums">{k.v}</div>
-            <div className="text-[11px] text-ink-soft mt-0.5">{k.s}</div>
-          </div>
-        ))}
-      </div>
+      <KpiRow items={SUMMARY} />
 
-      {/* Held allocation */}
-      <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-8 mb-3">Treasury allocation</div>
-      <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-5">
-        <div className="flex h-2.5 rounded-full overflow-hidden mb-5">
-          {HELD.map((a) => <span key={a.name} style={{ width: `${a.pct}%`, background: a.tint }} />)}
+      <SLabel>Breakdown</SLabel>
+      <Panel>
+        <div className="flex h-5 rounded-full overflow-hidden gap-[3px] p-[3px]" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }} aria-hidden>
+          {SLICES.map((a) => <span key={a.name} className={`rounded-full ${a.tex}`} style={{ width: `${a.pct}%`, backgroundColor: a.bg }} />)}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] max-[640px]:min-w-0 border-collapse text-[13px]">
-            <thead>
-              <tr className="border-b border-hair-soft">
-                {['Position', 'Allocated', 'Share', 'APY', '30d earned', ''].map((h, i) => (
-                  <th key={h || i} className={`text-[9.5px] uppercase tracking-[0.09em] font-semibold text-ink-soft pb-2.5 ${i === 0 ? 'text-left' : 'text-right'} ${i === 3 ? 'max-[560px]:hidden' : ''} ${i === 4 ? 'max-[520px]:hidden' : ''}`}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {HELD.map((a) => (
-                <tr key={a.name} className="border-b border-hair-soft last:border-0">
-                  <td className="py-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-[9px] h-[9px] rounded-full shrink-0" style={{ background: a.tint }} />
-                      <div className="min-w-0">
-                        <div className="font-medium text-ink truncate">{a.name}</div>
-                        <div className="text-[11px] text-ink-soft truncate font-mono">{a.pair}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 text-right tabular-nums text-ink">{a.allocated}</td>
-                  <td className="py-3 text-right tabular-nums text-ink-mid">{a.pct}%</td>
-                  <td className="py-3 text-right tabular-nums text-peri-deep font-semibold max-[560px]:hidden">{a.apy}</td>
-                  <td className="py-3 text-right tabular-nums text-mw-green font-medium max-[520px]:hidden">{a.earned}</td>
-                  <td className="py-3 text-right"><button disabled title="Coming soon" className="text-[11px] font-semibold text-ink-soft uppercase tracking-[0.05em]">Rebalance</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Curated vaults */}
-      <div className="flex items-center justify-between gap-3 mt-8 mb-3 flex-wrap">
-        <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft">Vaults you curate · {CURATED.length}</div>
-      </div>
-      <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3">
-        {CURATED.map((c) => (
-          <div key={c.name} className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-5">
-            <div className="flex items-start justify-between gap-3">
+        <div className="mt-5 flex flex-col">
+          {SLICES.map((a) => (
+            <div key={a.name} className="grid grid-cols-[auto_1fr_auto] max-[640px]:grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1 py-4 border-t border-[rgba(21,21,29,.06)] first:border-0 first:pt-0">
+              <IconTile>{a.icon}</IconTile>
               <div className="min-w-0">
-                <div className="font-atx-display font-semibold text-[15px] text-ink truncate">{c.name}</div>
-                <div className="text-[11px] text-ink-soft mt-0.5 font-mono">{c.pair}</div>
+                <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-[15.5px]">{a.name}</span><span className="text-[13px] text-ink-soft">{a.what}</span></div>
+                <div className="text-[13.5px] text-ink-mid mt-1">Earns from: <span className="text-ink">{a.earns}</span> · Exposed to: {a.risk}</div>
               </div>
-              <span className={`text-[9px] uppercase tracking-[0.08em] font-semibold rounded-full px-2 py-1 shrink-0 ${c.status === 'Live' ? 'text-mw-green bg-mw-green-muted' : 'text-mw-amber bg-[rgba(194,122,0,0.08)]'}`}>{c.status}</span>
+              <div className="text-right max-[640px]:col-start-2 max-[640px]:text-left">
+                <div className="font-geist-mono text-[16px]">{a.allocated}</div>
+                <div className="font-geist-mono text-[12.5px] text-ink-soft">{a.pct}%</div>
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 mt-4">
-              {[{ l: 'TVL', v: c.tvl }, { l: 'Depositors', v: String(c.depositors) }, { l: 'Your fee', v: c.fee }].map((s) => (
-                <div key={s.l}>
-                  <div className="text-[10px] uppercase tracking-[0.08em] text-ink-soft">{s.l}</div>
-                  <div className="font-atx-display font-medium text-[16px] text-ink tabular-nums mt-0.5">{s.v}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        {/* create tile — no team-scoped create flow yet; disabled rather than dropping you into the personal vault-create onboarding */}
-        <div title="Team-scoped vault creation isn't wired up yet — coming soon" className="rounded-[var(--radius-card)] border border-dashed border-hair bg-ground-cool/40 p-5 flex flex-col items-start justify-center gap-1.5 min-h-[132px] opacity-70 cursor-not-allowed">
-          <span className="font-atx-display font-semibold text-[15px] text-ink-soft">+ Create a vault</span>
-          <span className="text-[12.5px] text-ink-mid max-w-[40ch] leading-[1.45]">Seed a new ULV pool as a Curator — set the pair, chain, and lock terms. Coming soon for org treasuries.</span>
+          ))}
         </div>
+      </Panel>
+
+      {/* Markets for your own token — the issuer path, not a vault the treasury builds itself. */}
+      <SLabel>Liquidity for your own token</SLabel>
+      <div className="mw-inset mw-tex-hatch rounded-[22px] p-5 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <IconTile><IconSwap /></IconTile>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-[15.5px]">A market for your token</span><StatusChip tone="planned">Not available yet</StatusChip></div>
+            <div className="text-[13.5px] text-ink-mid mt-1">Issuers bring a tokenized asset to market with one engine per pool, after curation.</div>
+          </div>
+        </div>
+        <Link href="/issuers" className="mw-btn-quiet !min-h-[40px] shrink-0">How it works for issuers</Link>
       </div>
 
-      <p className="text-[11px] text-ink-soft mt-6">Illustrative. The ULV vault engine is in testing on Base Sepolia — allocations, curated vaults, and yields shown here are a mockup, not live positions or an offer.</p>
+      <Note>Illustrative. Allocations shown are examples, not live positions or an offer. Lending rates are variable and pool fees depend on trading; neither is guaranteed. Testnet only, unaudited.</Note>
     </>
   )
 }

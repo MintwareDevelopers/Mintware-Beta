@@ -28,101 +28,76 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
   function shareOnTwitter() {
     if (!refLink) return
     const text = encodeURIComponent(
-      `I just got my on-chain reputation score on @MintwareDev — it's live now.\n\nCheck yours and join my network: ${refLink}`
+      `I'm on @Mintware_Fi — markets for tokenized stocks and real-world assets.\n\nJoin with my link: ${refLink}`
     )
     window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'noopener')
   }
 
+  const WELL = { background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }
+  const LABEL = 'text-[12px] uppercase tracking-[0.08em] font-semibold text-ink-soft'
+
   return (
-    <>
-      {/* Hero — value prop · dark pop */}
-      <div className="relative overflow-hidden rounded-[var(--radius-panel)] p-[28px_28px_24px] mb-3 bg-ink">
-        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(60% 130% at 12% 0%, rgba(244,161,131,0.24), transparent 60%), radial-gradient(50% 120% at 100% 100%, rgba(108,108,240,0.28), transparent 62%)' }} />
-        <div className="grain absolute inset-0 opacity-40" aria-hidden />
-        <div className="relative">
-          <div className="uppercase tracking-[0.1em] text-[10px] font-semibold text-coral2 mb-[10px]">
-            Sharing score
+    <div className="font-geist flex flex-col gap-4">
+      {/* 1 — what inviting does, with the score it moves */}
+      <div className="mw-raise-lg relative overflow-hidden rounded-[24px] p-[clamp(20px,3vw,28px)]">
+        <div aria-hidden="true" className="absolute -right-24 -top-28 w-80 h-80 rounded-full opacity-30 blur-[56px]" style={{ background: 'var(--mw-sheen)' }} />
+        <div className="relative grid gap-6 items-center grid-cols-1 min-[720px]:grid-cols-[1.1fr_1fr]">
+          <div>
+            <div className="text-[13px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--mw-peri-deep)' }}>Invite</div>
+            <div className="text-[24px] font-semibold tracking-[-0.03em] leading-[1.15] mt-2">Bring people you know.</div>
+            <div className="text-[14.5px] text-ink-mid leading-[1.55] mt-2 max-w-[40ch]">Share your link. Each person who joins with it and becomes active raises your Sharing score.</div>
           </div>
-          <div className="font-atx-display text-[22px] font-semibold text-white leading-[1.25] mb-[6px] tracking-[-0.4px]">
-            Grow your network,<br /><span className="text-gradient-accent">earn more rewards.</span>
-          </div>
-          <div className="text-[13px] text-white/60 leading-[1.55] mb-[22px] max-w-[320px]">
-            Every active referral raises your Sharing score — and multiplies your reward allocation.
-          </div>
-          <div className="flex items-center gap-[14px] rounded-2xl bg-white/[0.06] border border-white/15 p-[14px_18px]">
-            <div className="text-[36px] font-atx-display font-medium text-coral2 leading-[1] tracking-[-1px] shrink-0 tabular-nums">
-              {isLoading ? '—' : sharingScore}<span className="text-[14px] text-white/45"> / 125</span>
+          <div className="rounded-[18px] p-4" style={WELL}>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[13px] text-ink-mid font-medium">Sharing score</span>
+              <span className="font-geist-mono text-[28px] tracking-[-0.03em]">{isLoading ? '—' : sharingScore}<span className="text-[14px] text-ink-soft"> / 125</span></span>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="uppercase tracking-[0.1em] text-[10px] font-semibold text-white/50 mb-[6px]">
-                Sharing score
-              </div>
-              <div className="h-[8px] rounded-full bg-white/15 overflow-hidden relative">
-                <div
-                  className="h-full bg-coral2 absolute inset-y-0 left-0 rounded-full transition-[width] duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
-                  style={{ width: pct + '%' }}
-                />
-              </div>
+            <div className="mt-3 h-3 rounded-full overflow-hidden bg-white" style={{ boxShadow: 'inset 0 0 0 1px rgba(21,21,29,.06)' }}>
+              <div className="h-full rounded-full transition-[width] duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ width: pct + '%', background: '#7C7AF0' }} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Why refer */}
-      <div className="flex gap-2 mb-3 max-sm:flex-col">
-        <div className="soft-card flex-1 p-[12px_14px]">
-          <div className="text-[12px] font-semibold text-ink mb-[2px]">Boost your score</div>
-          <div className="text-[11px] text-ink-mid leading-[1.4]">Active referrals raise your Sharing score up to 125 pts</div>
+      {/* 2 — where it stands */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="mw-raise rounded-[20px] p-4">
+          <div className={LABEL}>Referred</div>
+          {isLoading
+            ? <div className="h-[30px] w-[48px] rounded-md mt-2 mw-shimmer" style={{ background: 'var(--mw-well)' }} />
+            : <div className="font-geist-mono text-[28px] tracking-[-0.03em] mt-1">{treeSize}</div>}
         </div>
-        <div className="soft-card flex-1 p-[12px_14px]">
-          <div className="text-[12px] font-semibold text-ink mb-[2px]">Earn rewards</div>
-          <div className="text-[11px] text-ink-mid leading-[1.4]">A stronger Attribution score grows your reward share</div>
+        <div className="mw-raise rounded-[20px] p-4">
+          <div className={LABEL}>Active</div>
+          {isLoading
+            ? <div className="h-[30px] w-[48px] rounded-md mt-2 mw-shimmer" style={{ background: 'var(--mw-well)' }} />
+            : <div className="font-geist-mono text-[28px] tracking-[-0.03em] mt-1">{qualityPct}%</div>}
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="flex gap-3 mb-3">
-        <div className="soft-card flex-1 p-[14px_16px] text-center">
-          {isLoading
-            ? <div className="h-[24px] w-[36px] rounded bg-ground-cool mx-auto mb-[4px] mw-shimmer" />
-            : <div className="text-[24px] font-atx-display font-medium tracking-[-0.5px] leading-[1] mb-[4px] text-peri-deep tabular-nums">{treeSize}</div>
-          }
-          <div className="uppercase tracking-[0.08em] text-[10px] font-semibold text-ink-soft">Referred</div>
-        </div>
-        <div className="soft-card flex-1 p-[14px_16px] text-center">
-          {isLoading
-            ? <div className="h-[24px] w-[36px] rounded bg-ground-cool mx-auto mb-[4px] mw-shimmer" />
-            : <div className="text-[24px] font-atx-display font-medium tracking-[-0.5px] leading-[1] mb-[4px] text-coral2-deep tabular-nums">{qualityPct}%</div>
-          }
-          <div className="uppercase tracking-[0.08em] text-[10px] font-semibold text-ink-soft">Active</div>
-        </div>
-      </div>
-
-      {/* Share Your Link */}
-      <div className="soft-card p-[20px_22px] mb-3">
-        <div className="uppercase tracking-[0.1em] text-[10px] font-semibold text-peri-deep mb-[14px]">
-          Share Your Link
-        </div>
-        <div className="flex flex-col gap-[10px]">
+      {/* 3 — share */}
+      <div className="mw-raise rounded-[22px] p-5">
+        <div className={LABEL}>Your link</div>
+        <div className="flex flex-col gap-3 mt-3">
           {refCode === null ? (
             <div className="flex flex-col gap-2">
-              <div className="h-[40px] w-full rounded-xl bg-ground-cool mw-shimmer" />
-              <div className="h-[40px] w-[60%] rounded-xl bg-ground-cool mw-shimmer" />
+              <div className="h-[44px] w-full rounded-[12px] mw-shimmer" style={{ background: 'var(--mw-well)' }} />
+              <div className="h-[44px] w-[60%] rounded-[12px] mw-shimmer" style={{ background: 'var(--mw-well)' }} />
             </div>
           ) : (
             <>
               <div>
-                <div className="text-[11px] text-ink-soft mb-[4px]">Referral link</div>
+                <div className="text-[13px] text-ink-mid mb-1.5">Referral link</div>
                 <RefCodeInput value={refLink!} buttonLabel="Copy Link" />
               </div>
               <div>
-                <div className="text-[11px] text-ink-soft mb-[4px]">Referral code</div>
+                <div className="text-[13px] text-ink-mid mb-1.5">Referral code</div>
                 <RefCodeInput value={refCode} buttonLabel="Copy Code" ghost />
               </div>
             </>
           )}
           <button
-            className="glass-pill w-full justify-center mt-[4px] disabled:opacity-40"
+            className="mw-btn-quiet w-full mt-1 disabled:opacity-40"
             onClick={shareOnTwitter}
             disabled={!refCode}
           >
@@ -131,34 +106,30 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
         </div>
       </div>
 
-      {/* Referred Wallets */}
-      <div className="soft-card p-[20px_22px] mb-3">
-        <div className="uppercase tracking-[0.1em] text-[10px] font-semibold text-peri-deep mb-[14px]">
-          Referred Wallets
-        </div>
+      {/* 4 — who joined */}
+      <div className="mw-raise rounded-[22px] p-5">
+        <div className={LABEL}>People you referred</div>
         {isLoading ? (
           <div className="flex flex-col items-center gap-2 py-6">
-            <div className="h-[12px] w-[80px] rounded bg-ground-cool mw-shimmer" />
+            <div className="h-[12px] w-[80px] rounded mw-shimmer" style={{ background: 'var(--mw-well)' }} />
           </div>
         ) : sortedRecords.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 pt-6 pb-3 text-ink-soft">
-            <div className="text-[13px] text-center max-w-[220px] leading-[1.55]">
-              No referrals yet. Share your link to get started.
-            </div>
+          <div className="mt-3 rounded-[14px] px-4 py-6 text-center text-[14px] text-ink-mid" style={WELL}>
+            No referrals yet. Share your link to get started.
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 mt-3">
             {sortedRecords.map(r => (
-              <div key={r.id} className="flex items-center justify-between p-[10px_14px] rounded-xl bg-ground-cool border border-hair">
-                <span className="text-[12px] font-mono text-ink-mid">{truncateAddress(r.referred)}</span>
-                <span className={`text-[10px] font-semibold tracking-[0.08em] px-2.5 py-[3px] uppercase rounded-full border ${r.status === 'active' ? 'border-[rgba(108,108,240,0.3)] text-peri-deep' : 'border-[rgba(209,67,67,0.3)] text-[#D14343]'}`}>
-                  {r.status}
+              <div key={r.id} className="flex items-center justify-between px-4 py-2.5 rounded-[12px]" style={WELL}>
+                <span className="text-[13px] font-geist-mono text-ink-mid">{truncateAddress(r.referred)}</span>
+                <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-full ${r.status === 'active' ? 'bg-[#E3F4EA] text-[#0F7A43]' : 'bg-white text-ink-mid mw-tex-dots'}`}>
+                  {r.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-[#22A45D]" />}{r.status === 'active' ? 'Active' : 'Pending'}
                 </span>
               </div>
             ))}
           </div>
         )}
       </div>
-    </>
+    </div>
   )
 }
