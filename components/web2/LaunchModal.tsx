@@ -64,7 +64,7 @@ export function LaunchModalProvider({ children }: { children: ReactNode }) {
   // V1 track — straight to the live V1 platform. No gate; it's the live product.
   function goV1() {
     setOpen(false)
-    router.push('/v1')
+    router.push('/app/markets')
   }
 
   // V2 track — always the password gate. V2 is a "coming soon" investor preview, so the password is

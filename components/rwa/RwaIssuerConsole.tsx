@@ -40,7 +40,7 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {status && <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${STATUS_CLS[status.tone]}`}>{status.t}</span>}
-          <Link href={`/v1/rwas/${unit.slug}`} className="mw-btn-quiet !min-h-[40px] no-underline">Open market</Link>
+          <Link href={`/app/rwas/${unit.slug}`} className="mw-btn-quiet !min-h-[40px] no-underline">Open market</Link>
         </div>
       </div>
 

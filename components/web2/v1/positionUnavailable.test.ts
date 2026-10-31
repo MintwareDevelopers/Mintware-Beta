@@ -73,6 +73,6 @@ it('MW-05: portfolio retains a manageable position with unavailable value and hu
   expect(html).toContain('Value unavailable')
   expect(html).toContain('2 shares')
   expect(html).not.toContain('2000000000000000000 shares')
-  expect(html).toContain(`/markets/${pool}`)
+  expect(html).toContain(`/app/markets/${pool}`)
   expect(html).toContain('Manage')
 })

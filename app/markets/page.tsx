@@ -128,7 +128,7 @@ export default function MarketsPage() {
     </Section>
 
     <CTA title="See a market" soft="up close.">
-      <Link href="/v1" className="mw-btn mw-btn-lg">Open the app <Arrow /></Link>
+      <Link href="/app/markets" className="mw-btn mw-btn-lg">Open the app <Arrow /></Link>
       <Link href="/cards" className="mw-btn-quiet mw-btn-lg">Spend with the card</Link>
     </CTA>
   </Page>

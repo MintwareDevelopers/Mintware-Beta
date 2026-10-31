@@ -58,7 +58,7 @@ function SwapContent() {
               </ol>
             </div>
 
-            <Link href="/v1" className="mw-raise mw-lift relative overflow-hidden rounded-[22px] p-5 no-underline text-ink block">
+            <Link href="/app/markets" className="mw-raise mw-lift relative overflow-hidden rounded-[22px] p-5 no-underline text-ink block">
               <div aria-hidden="true" className="absolute -right-16 -bottom-20 w-52 h-52 rounded-full opacity-30 blur-[40px]" style={{ background: 'var(--mw-sheen)' }} />
               <div className="relative flex items-center gap-3"><IconTile><IconDepth size={20} /></IconTile><span className="font-semibold text-[16px]">Or provide liquidity</span></div>
               <p className="relative text-[13.5px] text-ink-mid leading-[1.5] mt-3 mb-0">Put a token into a market instead and earn a share of the fee on every trade. Testnet, with mock tokens.</p>

@@ -60,7 +60,7 @@ export function V1Portfolio() {
         <div className="mt-6 rounded-[16px] p-7" style={PLAIN}>
           <div className="font-semibold text-[16px]">{partial ? 'Some markets could not be read right now' : 'No positions yet'}</div>
           <p className="text-[13.5px] mt-1.5" style={{ color: '#454552' }}>{partial ? 'Try again in a moment; your funds are unaffected.' : 'Open a live market and deposit one or both tokens to start earning its fees.'}</p>
-          <Link href="/v1" className="inline-flex mt-4 text-[13.5px] font-semibold no-underline hover:underline" style={{ color: '#4643D1' }}>Browse live markets →</Link>
+          <Link href="/app/markets" className="inline-flex mt-4 text-[13.5px] font-semibold no-underline hover:underline" style={{ color: '#4643D1' }}>Browse live markets →</Link>
         </div>
       ) : (
         <GlassFrame className="mt-6">
@@ -68,7 +68,7 @@ export function V1Portfolio() {
             <span>Market</span><span>Network</span><span className="text-right">Value</span><span className="text-right" />
           </div>
           {rows.map((p) => (
-            <Link key={`${p.chainId}:${p.marketEngine}`} href={`/markets/${encodeURIComponent(p.poolAddress)}?pair=${encodeURIComponent(p.pairLabel)}&pm=${p.marketEngine}`} className="grid items-center px-5 py-4 no-underline hover:bg-white/60" style={{ gridTemplateColumns: '2fr 1fr 1fr 0.8fr', color: '#15151D', borderBottom: '1px solid rgba(22,22,44,0.05)' }}>
+            <Link key={`${p.chainId}:${p.marketEngine}`} href={`/app/markets/${encodeURIComponent(p.poolAddress)}?pair=${encodeURIComponent(p.pairLabel)}&pm=${p.marketEngine}`} className="grid items-center px-5 py-4 no-underline hover:bg-white/60" style={{ gridTemplateColumns: '2fr 1fr 1fr 0.8fr', color: '#15151D', borderBottom: '1px solid rgba(22,22,44,0.05)' }}>
               <span className="font-semibold text-[14.5px]">{p.pairLabel}{!p.live && <span className="ml-2 text-[11px] font-semibold" style={{ color: '#8A5300' }}>closed · exit available</span>}</span>
               <span className="text-[13px]" style={{ color: '#454552' }}>{marketChain(p.chainId)?.short ?? `Chain ${p.chainId}`} · testnet</span>
               <span className="text-right font-mono font-semibold text-[14px]">{p.value == null ? `Value unavailable · ${formatUnits(BigInt(p.shares), 18)} shares` : `${p.value.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${p.symbol ?? ''}`}</span>

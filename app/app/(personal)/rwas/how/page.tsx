@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Disclosure } from '@/components/rwa/RwaVisuals'
 import { RWA_UNITS } from '@/lib/rwa/demo'
 
-// /v1/rwas/how — the RWA liquidity unit explained. Static. Light-only; copy rules:
+// /app/rwas/how — the RWA liquidity unit explained. Static. Light-only; copy rules:
 // "supply", never deposit / savings / guaranteed / fixed APY.
 
 const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
@@ -99,7 +99,7 @@ export default function RwaHow() {
             This is a testnet demonstration. Before any real asset: an external audit of the hook and vault, counsel on venue
             and LP eligibility, integration with the issuer&apos;s production token standard, and a mainnet deployment on Base.
           </p>
-          <Link href="/v1/rwas/proof" className="mt-4 inline-flex text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">See what is already proven on-chain →</Link>
+          <Link href="/app/rwas/proof" className="mt-4 inline-flex text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">See what is already proven on-chain →</Link>
         </div>
       </section>
 

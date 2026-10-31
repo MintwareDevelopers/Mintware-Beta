@@ -145,7 +145,7 @@ export const DECK_HTML = `<!doctype html>
     <span class="pill"><span class="dot"></span>Live on testnet</span>
     <span style="font-size:14px; color:var(--ink-mid); flex:1 1 300px">The MarketEngine is live on Robinhood Chain testnet, with deposit and withdraw running end-to-end through the production app.</span>
     <div class="vrow" style="flex-basis:100%; margin-top:2px">
-      <a class="vlink" href="https://mintware.finance/v1" target="_blank" rel="noopener">Open the live markets →</a>
+      <a class="vlink" href="https://mintware.finance/app/markets" target="_blank" rel="noopener">Open the live markets →</a>
       <a class="vlink" href="https://mintware.finance/the-math" target="_blank" rel="noopener">See the return model →</a>
     </div>
   </div>
@@ -201,7 +201,7 @@ export const DECK_HTML = `<!doctype html>
     <div class="card"><h3>Agent payments in production</h3><p>An x402 pay-per-call surface is live at mintware.finance today.</p></div>
     <div class="card"><h3>Security-first</h3><p>Multiple rounds of internal audits, exploit replays and fuzzing before any real value moves.</p></div>
   </div>
-  <div class="vrow"><a class="vlink" href="https://mintware.finance/v1" target="_blank" rel="noopener">See the live markets →</a></div>
+  <div class="vrow"><a class="vlink" href="https://mintware.finance/app/markets" target="_blank" rel="noopener">See the live markets →</a></div>
 </section>
 
 <!-- 9 · BUSINESS MODEL -->

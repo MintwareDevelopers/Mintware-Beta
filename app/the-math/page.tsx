@@ -50,7 +50,7 @@ export default function TheMath() {
     </Section>
 
     <CTA title="Put your balance" soft="to work.">
-      <Link href="/v1" className="mw-btn mw-btn-lg">Explore live markets <Arrow /></Link>
+      <Link href="/app/markets" className="mw-btn mw-btn-lg">Explore live markets <Arrow /></Link>
       <Link href="/markets" className="mw-btn-quiet mw-btn-lg">How markets work</Link>
     </CTA>
   </Page>

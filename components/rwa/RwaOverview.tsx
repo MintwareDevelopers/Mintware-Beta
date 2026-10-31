@@ -1,6 +1,6 @@
 'use client'
 
-// /v1/rwas — the RWA workspace front door. Leads with the live Base market as ONE instrument (price inside the
+// /app/rwas — the RWA workspace front door. Leads with the live Base market as ONE instrument (price inside the
 // appraisal band + where the liquidity sits), then the chain's own refusals as the headline proof. Light-only.
 
 import Link from 'next/link'
@@ -53,7 +53,7 @@ export function RwaOverview() {
               <h2 className={`${H2} mt-1.5`}>{D.property.name.replace(' (demo)', '')}</h2>
               <p className="mt-1.5 text-[13.5px] text-ink-mid">{D.property.symbol} / dUSD · Uniswap v4 · {base.chain.name} · fictional land parcel</p>
             </div>
-            <Link href={`/v1/rwas/${base.slug}`} className="mw-btn">Open the market →</Link>
+            <Link href={`/app/rwas/${base.slug}`} className="mw-btn">Open the market →</Link>
           </div>
 
           <div className="mt-7 grid grid-cols-[1.25fr_1fr] gap-5 max-[980px]:grid-cols-1">
@@ -94,7 +94,7 @@ export function RwaOverview() {
             Both of these were real transactions, mined and reverted on {base.chain.name}, with the exact rule decoded from the chain.
           </p>
           <div className="mt-7"><RefusalCards unit={base} /></div>
-          <Link href="/v1/rwas/proof" className="mt-6 inline-flex text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">See the full lifecycle, every transaction →</Link>
+          <Link href="/app/rwas/proof" className="mt-6 inline-flex text-[13.5px] font-semibold text-peri-deep no-underline hover:underline">See the full lifecycle, every transaction →</Link>
         </div>
       </section>
 
