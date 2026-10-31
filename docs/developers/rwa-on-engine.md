@@ -1,324 +1,377 @@
-# RWA liquidity through the shared MarketEngine
+# RWA unit: our hooked v4 pool + the shared MarketEngine
 
-Design decision · 2026-10-31 · Base Sepolia only · fictional property and valueless tokens.
-This document proposes implementation; it does not change or deploy any contract.
-Current-code citations refer to baseline `577e95468b1f1bb92d779732af06cfa4e9ebd5de`.
+Design revision · 2026-10-31 · Base Sepolia only · fictional assets and valueless testnet capital.
+This is an implementation recommendation; this ticket changes only this document.
+Current-code citations use checkout `a7db72b458d3fe04313593abe6c1a6d794f16b2d`; historical citations name their commit.
+Live deployments, deployed MW-03 status, runtime sizes and integration outcomes are **unverified** here.
 
-## Recommendation and inherited decisions
+## Product premise and recommendation
 
-Use one ordinary `MintwareMarketEngine` instance per property asset/quote pair, running the same
-`MintwareMarketEngineCore`, lifecycle module, adapters and registry as other markets. Add only an
-issuer appraisal implementation of `IMarketAssetMark`. Choose a hookless pool, one transferable
-portfolio share and in-kind exits. Issuer inventory receives the same shares as anyone else's capital;
-there is no senior claim, junior cover, RWA vault, collateral position or credit product here.
-“One engine per asset” means one curated active engine for its selected quote/pool, not an on-chain
-ban on other pools; retired generations remain addressable for exits.
+One MarketEngine instance per RWA asset supplies capital to **our own hooked v4 pool**. The engine owns
+capital, adapters, LP positions, portfolio shares and in-kind exits; the appraisal hook owns this pool's
+appraisal, trading band, band fee, staleness and exit window. Third-party pools retain the hookless
+LP Gateway route. Every pool Mintware creates carries our hook. These are owner decisions.
 
-This follows the current one-share engine direction (`.claude/STATE.md:22-34,38-47`;
-`.claude/rules/lp-gateway.md:9-18,27-34`). The concrete wrapper passes `allowHookedPool=false`
-and pins the lifecycle codehash (`contracts-v4/src/vaults/MintwareMarketEngine.sol:10-18`).
-Registry resolution already distinguishes active/inactive generations
-(`lib/gateway/marketEngine.ts:62-94`). No RWA-specific engine subclass is proposed.
+Recommend a second thin engine wrapper, the existing appraisal hook extended to implement
+`IMarketAssetMark`, and Base Sepolia USDC as quote. Reuse the shared core, lifecycle and adapters,
+with only two narrow core edits described below. There is one portfolio share class: issuer inventory
+receives the same shares as other contributions. No separate RWA vault, tranche, collateral or credit
+product. One curated active generation per asset is a discovery policy; retired generations stay
+addressable for exits, as resolution already supports (`lib/gateway/marketEngine.ts:62-94`).
 
-Prior work harvested, without treating branch proposals as implemented behavior:
+Prior-work harvest, with proposals distinguished from implemented behavior:
 
-| Source examined | Decision carried forward |
+| Source | Keep / reconcile |
 |---|---|
-| `docs/target-architecture` at `bbdd22033`: `docs/developers/target-architecture.md:13-23` | Shared engine, lending seam, no tranche stack. This file is absent on the working branch. Its proposed permissioned-hook route is superseded for this pilot by token-level enforcement. |
-| `wip/codex-snapshot-2026-10-28` at `1a4e18956`: `docs/product/platform-architecture-adjudication-2026-10-28.md:220-254` | Script deployment, independent mark, explicit activation, transfer/exit qualification; an RWA label creates no new vault type. |
-| `feat/contracts-v2` at `3c977d0d5`: `docs/developers/v2/DECISIONS.md:10-13,37` | Direct PoolManager custody, bound adapters and removing redundant registry fields; do not import that branch's broader contract stack. |
-| `.claude/rules/rwa-liquidity.md:15-25` | Preserve appraisal controls and the token gate, retire its Treasury/tranche assumptions. The current deploy script now uses a test liquidity actor, not Treasury (`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:18-26,97-116`). |
+| `bbdd22033:docs/developers/target-architecture.md:13-23` | Shared capital engine, lending seam, no tranche stack. The owner clarification supplies the own-pool hook boundary; an appraisal hook does not duplicate the capital engine. |
+| `1a4e18956:docs/product/platform-architecture-adjudication-2026-10-28.md:220-254` | Script installation, explicit activation, independent valuation, transferable-share and in-kind-exit qualification. Independent means independent of pool spot; the hook can publish that mark. |
+| `3c977d0d5:docs/developers/v2/DECISIONS.md:10-13,37` | Direct PoolManager positions, bound adapters and lean registry metadata. Do not import that branch's wider stack. |
+| `.claude/rules/rwa-liquidity.md:15-25` | Retain hook, appraisal controls, grace window and token gate; replace the Treasury/tranche assumptions and the claim that LPs never receive property. The current installer already uses a test actor (`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:18-26,97-116`). |
 
-## 1. Appraisal becomes the non-quote mark
+## 1. Engine variant, fee validation and curation
 
-**Decision:** introduce `IssuerAppraisalMark` under the existing mark implementation directory,
-implementing the unchanged `asset()`, `quoteAsset()`, `latestMark()` interface. The interface returns
-whole quote tokens per whole asset token, scaled by `1e18`, and the source observation timestamp
-(`contracts-v4/src/vaults/IMarketAssetMark.sol:4-19`). Use dUSD as quote for this pilot; a USD
-appraisal is not automatically a quote-token appraisal if a different quote loses its USD relationship.
-No pool spot is used as the appraisal source.
+**Recommend `MintwareOwnedPoolMarketEngine`, a second thin wrapper.** It passes `allowHookedPool=true`
+and pins the same verified lifecycle implementation. Keep `MintwareMarketEngine` as the third-party
+wrapper: it currently passes `false` and pins the module codehash
+(`contracts-v4/src/vaults/MintwareMarketEngine.sol:10-18`). A public constructor toggle on that wrapper
+would blur its eligibility contract. Both wrappers must inherit the same accounting implementation.
+For this first owned-pool variant, require a nonzero appraisal hook, `nonQuoteMark == poolKey.hooks`,
+matching PoolManager/assets, and the exact dynamic-fee PoolKey. Future hook kinds need their own reviewed
+eligibility policy; `true` alone is not an allowlist.
 
-The issuer's designated appraisal signer is the mark's `keeper`; it signs the publication transaction
-directly. A separate owner controls delayed keeper rotation. No signature relay, verifier registry or
-second oracle network is needed for this demo. A signed transaction proves who submitted a valuation,
-not that the property valuation is correct. Keep the report hash, observation date and transaction
-visible. Today the hook authenticates `msg.sender`, not an off-chain report signature, and stamps
-publication time (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:222-264`).
+**Core edit 1: recognize the exact dynamic-fee sentinel.** Today any `fee > 1_000_000` fails even when
+hooks are allowed (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:132-144`). Our hook requires
+`isDynamicFee`, and its installer uses `LPFeeLibrary.DYNAMIC_FEE_FLAG`
+(`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:350-359`;
+`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:87-94`; recorded fee `8388608`: `config/rwaDemo.json:24`).
+Proposed validity: `fee <= 1_000_000 || (allowHookedPool && hooks != 0 && fee == DYNAMIC_FEE_FLAG)`.
+Keep the independent hook-address check. Do not mask off arbitrary bits or admit flag-plus-fee values.
+The owned wrapper requires the sentinel; the old wrapper still rejects hooked/dynamic pools.
+A static-fee workaround loses band-fee behavior; no derived constructor can bypass the base rejection.
+The vendored v4 source directory is empty in this checkout, so its exact flag/callback implementation
+is **unverified locally**; restore the pinned dependency and test sentinel, override-bit and boundary cases.
 
-Proposed publication API: `postAppraisal(int24 tick, uint64 observedAt, bytes32 reportHash)`.
-Bind asset, quote, decimals and sorted token orientation immutably. Keep ticks solely as the
-bounded logarithmic update coordinate so the audited movement algorithm can be reused; derive
-`priceWad` deterministically with existing tick math and full-precision arithmetic, never RPC floats.
-For property as currency0, `priceWad = 1.0001^tick × 10^(propertyDecimals-quoteDecimals) × 1e18`;
-invert the raw tick ratio when property is currency1. Test both orderings and rounding boundaries.
-Reject invalid ticks, zero/overflowed prices, zero/future/non-increasing observation timestamps and
-empty report hashes. First publication is unbounded against a predecessor but must be reviewed before
-activation. Return the report's `observedAt`, not publication time. An unchanged price needs a genuinely
-new issuer assessment to refresh age; an operator heartbeat must not rejuvenate an old appraisal.
+**Core edit 2: make `readPricesForExit` virtual, preserving its default body.** Its current self-only
+implementation uses the ordinary fresh-price reader (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:668-672,783-787`).
+Override only in the owned wrapper to read the same hook mark with the hook's age-plus-grace allowance,
+using `MWMarketValuation.freshPriceWad`, retaining `msg.sender == address(this)` and token orientation.
+That helper rejects zero/future/missing/stale observations (`contracts-v4/src/lib/MWMarketValuation.sol:23-35`).
+Do not widen `maxMarkAge` globally: ordinary activation, contributions and deployment must expire at
+trading freshness, while only partial-exit valuation receives grace. No new core storage or RWA branch,
+no lifecycle edit, and no copied withdrawal function. Without this seam, full exits work stale but partial
+exits cannot use grace; that is why a second small core edit is justified.
 
-| Control | Recommended home and behavior | Current evidence |
-|---|---|---|
-| Step cap | Mark: `maxStepTicks=500` for rehearsal. Absolute move from last accepted tick. | Hook `postAppraisal`, `contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:237-243`. |
-| Minimum interval | Mark: 10 minutes between accepted publications; track publication time separately from observation time. | Same hook `:242`; current demo defaults `contracts-v4/script/DeployRwaLiquidityUnit.s.sol:48-58`. |
-| Rolling drift / MW-03 | Mark: retain `maxDriftTicksPerDay=1000`, sum absolute movements published in `(now−24h, now]`; reversals do not refund budget and each move expires separately. | Hook `:244-260`; regression `contracts-v4/test/audit-2026-10-31/RollingDrift.t.sol:23-82`. |
-| Keeper rotation | Mark: owner proposes/confirms after 48h, including before activation; rotation never resets movement history. | Existing 48h constant and rotation: hook `:61,296-309`. |
-| Mutable appraisal limits | Delete the hook's mutable config surface. Fix step, interval and drift limits at construction for the pilot. Changing policy requires a new mark/engine generation and explicit opt-in. | Hook currently permits instant pre-pool config, then 48h delay (`:314-331`); engine mark binding is immutable (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:190-203`). |
-| Maximum age | Engine `maxMarkAge=30 days` for rehearsal, measured from source observation. Mark returns historical truth even when stale; no duplicate “fresh” authority. | `contracts-v4/src/lib/MWMarketValuation.sol:23-35`; core `:783-787`. |
-| Spot disagreement | Engine `maxSpotMarkDeviationBps`; propose 300 bps for rehearsal. This compares quote prices, not raw tick distances. | Core `:848-861`. |
-| Recenter controls | Existing edge threshold, cooldown and maximum tick move; no appraisal-triggered privileged recenter. | Core `:458-515`. |
-| Exit grace | Delete `oracleGraceSecs` from the new mark. Complete in-kind delivery needs no fresh mark; incomplete delivery still requires one and spot agreement. | Core `:534-541,597-637`; old grace exists in hook `:267-281`. |
+**Curation:** retain the existing registry and verifier. Verification already accepts an explicit
+`allowedCodeHashes` list and checks owner, quote, activation, token order and pool identity, but has no
+owned-pool classification or hook/mark-binding check (`lib/gateway/marketEngine.ts:23-59`). Add curator
+metadata `third-party` / `owned` and select the corresponding approved wrapper/build hashes; verify
+`hooks == 0` for the former and the approved hook, exact PoolKey, engine binding and mark identity for the
+latter. Record actual deployed runtime hashes against reproducible builds, including immutable arguments;
+a self-reported kind/version or a nonzero hook is insufficient. Hook ownership/keeper/config and exit
+rehearsal also need curation evidence. This extends curation, not the chain quote rule or a second registry.
 
-MW-03 is already fixed in this checkout: carry the cumulative checkpoints and binary-search window
-boundary into the mark, with its regression cases. The fix tightens window semantics; it does not mean
-the demo's numeric 1000-tick limit was reduced. Source and deployed bytecode must be checked separately;
-the historic demo's deployed MW-03 status is **unverified** here.
+## 2. Binding, callbacks and exits
 
-These are rehearsal settings, not a validated property-risk model. Use a small quote-denominated
-`principalCap`, an initial 20% maximum LP allocation, and an appraisal-centered initial range about
-±1000 ticks, aligned to pool spacing; rehearsal must choose compatible edge/cooldown/move settings.
-The cap is an action-time check, not continuous portfolio insurance (core `:399-440`).
-If a genuine appraisal exceeds movement limits, pause new risk and review/reinstall explicitly;
-do not fabricate intermediate assessments or bypass the cap. Existing exits retain the limitations below.
+**Bind the hook's single actor to the engine, never to its module, owner or router.** `setVault` is
+currently one-shot and derives the expected PoolId from that actor's `poolKey()`; add/remove callbacks
+check the actor and pool (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:200-210,368-381`). Keep the
+ABI name initially if helpful; update its terminology to “engine”. The lifecycle executes by delegatecall,
+so PoolManager calls originate from the engine (`contracts-v4/src/vaults/MintwareMarketLifecycleModule.sol:18-21`;
+`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:711-725`). An already-bound historical hook cannot
+be rebound: install a new hook/pool/engine generation.
 
-Engine age and spot checks protect activation, contributions, deployment and recentering
-(core `:224-234,258-286,399-440,458-490`). They do not verify appraisal quality or constrain how far a
-compromised signer can walk over many days. `allocateIdle`, `recallIdle` and `harvest` do not require a
-fresh mark (core `:307-329,446-450`). Engine pausing and stopping publication are operational controls;
-neither stops a hookless pool's swaps.
+**Resolve the deployment cycle explicitly.** The core constructor requires an initialized pool
+(`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:177-184`), but the current hook requires `setVault`
+before initialization and reads deployed actor code (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:203-209,350-355`).
+Recommend a one-shot, owner-only `pinPoolKey` in the hook before initialization, validating sorted
+asset/quote, spacing, exact dynamic fee and this hook address. `beforeInitialize` then requires that pinned
+key and the authorized owner as initializer, plus the existing fresh/core-band checks, without requiring
+a deployed actor. After initialization, deploy the engine and let `setVault(engine)` verify the *same*
+pinned key and PoolManager/mark bindings, without changing the pin. Until binding, refuse swaps and LP
+operations; make `latestMark` unavailable so engine activation cannot precede binding. Constructor asset
+getters remain available. This preserves anti-front-run pool binding without weakening the core's
+initialized-pool invariant or adding a placeholder actor/factory. Test wrong-key, wrong-initializer,
+early-activation and second-binding refusals.
 
-## 2. Drop the swap-level appraisal band
-
-**Decision: option (a).** Keep `hooks=address(0)` and a static pool fee. Call the displayed appraisal
-zone an **engine action tolerance**, never a trading floor or ceiling. The current hook rejects
-out-of-band trades except same-side gap-closing trades and exempts its bound actor
-(`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:386-432`). That protection is intentionally removed.
-
-| Choice | Code and audit cost | Interoperability and actual protection |
-|---|---|---|
-| **(a) Shared hookless pool — chosen** | Zero engine/lifecycle changes; remove the 348-nSLOC hook and extract only its valuation controls into the mark. Audit mark conversion, governance and integration. | Standard v4 execution, subject to token permission checks. Stops engine risk additions/recentering on disagreement; cannot stop third-party swaps or protect already-resting LP inventory from adverse selection. |
-| (b) Exactly one audited hook | Retain/rewrite swap-hook behavior, change wrapper eligibility, fee validation, installer and curation; budget roughly 80–160 additional integration nSLOC before hook changes. Requires combined engine/hook audit. | Pool-specific hook behavior, router support checks and swap-path failure modes. Can stop trades beyond the band, but cannot make appraisal realizable or create buyers. The current hook's actor gate/exemption also needs reconciliation. |
-| (c) App-only band or special router | Adds another execution policy and tests without an enforceable pool-wide limit. | Bypassable by direct pool access; reject. A custom curve, wrapper or vault would add a second system and is outside this design. |
-
-Even passing `allowHookedPool=true` would not install today's dynamic-fee hook: core rejects fee
-values over 1,000,000, while the old script sets `DYNAMIC_FEE_FLAG`. Its liquidity callbacks also admit
-only one bound actor (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:132-144`;
-`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:87-94`;
-`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:368-381`). Option (b) is not a one-line exception.
-
-A property LP needs a credible dated valuation, explicit inventory exposure, bounded deployed capital,
-permitted delivery routes and honest information about exit liquidity. A stale appraisal band can prevent
-price discovery while saying nothing about realizable property proceeds. The chosen design accepts
-inventory losses and market discounts; appraisal is an accounting input, not issuer redemption backing.
-If the issuer requires every swap to obey a band, this asset is ineligible for this pilot.
-
-Use a relatively wide initial range and conservative allocation. Existing recentering is permissionless,
-same-width and centered on **spot near the mark**, only near a range edge; a new appraisal alone does
-not trigger it (core `:453-515`). A keeper may call that existing method, but gains no override.
-At stale/deviant prices, existing liquidity can still trade until exhausted/out of range. Pausing the
-engine does not remove it, and there is no owner-wide emergency LP recall in the exposed core lifecycle
-(core `:307-329,368-399,446-521,644-652`). Do not promise autonomous withdrawal on an oracle alarm.
-
-## 3. Token compliance survives; share eligibility is separate
-
-**Decision:** rely on the issuer token's transfer enforcement and admit only a token whose custody
-rules permit the complete engine path. The demo checks both nonzero transfer endpoints against
-`permittedHolder OR registry.isVerified` (`contracts-v4/src/rwa/testnet/MockPermissionedPropertyToken.sol:52-59`).
-Engine and adapter transfers do not bypass this check. “ERC-3643-shaped” is not certification:
-real issuer freeze, agent, recovery and compliance-module behavior is **unverified** until exercised
-against that issuer's exact testnet implementation.
-
-Required property-token enrollment for the proposed topology:
-
-| Address | Enrollment / verification requirement |
+| Engine operation | Pool calls and hook callbacks |
 |---|---|
-| Issuer inventory wallet and every property contributor/seller | Permitted or registry-verified; removing verification alone does not revoke a wallet still on the permitted list. |
-| Engine instance | Enroll: receives contributions, supplies/recalls the property adapter, settles with PoolManager, pays exit recipients. |
-| Property-side `MintwareIdleYieldAdapter` | Enroll: holds property; engine↔adapter transfers are checked. |
-| PoolManager | Enroll: holds pool property and pays engine/trader recipients. This is shared infrastructure, not a pool-specific identity. |
-| Every buyer and in-kind withdrawal recipient | Verify (or explicitly permit); quote-only LPs must understand they may need an eligible property recipient to exit fully. |
-| DemoSwapRouter | Enroll for the retained demo route: sells transfer property user→router→PoolManager; buys deliver PoolManager→user. |
-| Other router/intermediate custodian | Enroll only if it actually receives or sends property; verify any token-specific spender rules separately. Do not blanket-enroll arbitrary routers. |
-| Quote adapter and quote ERC-4626 source | No property enrollment: neither holds property in this design. Apply the quote token's own restrictions independently. |
-| Lifecycle module, appraisal mark, registry, owner/guardian/keeper acting only as callers | No property enrollment: they do not hold it; the module executes by delegatecall as the engine. |
+| Deploy liquidity | Collect if a position exists, then positive `modifyLiquidity` → `beforeAddLiquidity`. The overload may first swap idle assets → `beforeSwap` / `afterSwap` (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:368-440`; `contracts-v4/src/vaults/MintwareMarketLifecycleModule.sol:42-107`). |
+| Recenter | Collect, negative modification → `beforeRemoveLiquidity`, then positive modification → `beforeAddLiquidity`; no swap in this path. Failed re-add rolls everything back (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:453-490`; `contracts-v4/src/vaults/MintwareMarketLifecycleModule.sol:110-165`). |
+| Withdraw | Collect first, then negative modification for the requested LP fraction, adapter recalls and token payouts. It does not swap property into quote (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:534-619,643-650`). |
+| Harvest / fee collection | Zero-delta `modifyLiquidity` (`contracts-v4/src/lib/MWV4PositionEngine.sol:84-100`). Expected v4 dispatch is the remove callback for delta ≤ 0; **unverified in the missing local dependency**, mandatory integration assertion. |
+| Allocate / recall idle | Adapter calls only, no PoolManager liquidity action (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:307-329`). |
 
-Evidence for these edges: core `:267-283,663-665,711-735`;
+Keep LP callbacks limited to PoolManager, pinned pool and bound-engine authorization. **Never add band,
+age, trading-pause or grace checks to removal or zero-delta collection.** Current LP callbacks already
+omit those checks (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:368-381`). Keep the bound-engine swap
+exemption: it currently skips pause/freshness/band checks and uses the core fee
+(`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:386-411`). It is not an arbitrary swap gateway: the
+engine's optional deployment swap has a fresh mark, spot check, input bound, price limit and minimum
+output, followed by deployment checks (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:335-440`).
+Hook trading pause stops ordinary traders; it does not itself pause engine capital operations. Do not
+reuse old claims about Treasury unwind bounds; this engine's withdrawals do not use that swap exemption.
+
+**Can a hook revert trap exits? Yes.** Fee collection precedes the isolated LP-removal attempt, so a
+collection hook revert aborts the whole withdrawal. A later removal revert marks LP delivery incomplete;
+it does not magically deliver that LP's assets (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:541-567,597-605`).
+Our pinned, non-rebindable hook must allow the engine's removal/collection regardless of band or age.
+This removes policy-induced exit blocking, not token freezes, hook bugs or failed settlement.
+
+Proposed age policy, measured from one source observation, with age/ grace fixed for the installation:
+
+| State | Trading and new risk | In-kind withdrawal |
+|---|---|---|
+| Fresh: age ≤ max age | Normal hook band/fees and engine checks. | Complete delivery needs no valuation; incomplete delivery still needs mark/spot checks. |
+| Exit window: max age < age ≤ max age + grace | Ordinary swaps halted; engine fresh-price operations refuse. | Complete delivery remains available; wrapper permits the old appraisal for partial valuation, subject to existing spot checks and delivery/minimum constraints. |
+| Beyond grace / unavailable mark | Trading and new risk refuse. | Complete pro-rata delivery still works; incomplete delivery refuses until a valid mark and delivery path return. |
+
+Today `oracleReady` includes grace, but the engine neither reads it nor distinguishes an exit-age allowance
+(`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:267-281`;
+`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:534-540,668-672,783-787`). The table is proposed integration.
+Grace is permission to value an incomplete exit, not a promise it succeeds: spot disagreement can still
+refuse it (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:597-637`). Full exit remains available after
+grace subject to readable accounting, permissions, settlement and output minimums. Engine pause does not
+gate `withdraw` (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:521-525`).
+Do not promise automatic LP recall on an appraisal alarm: `recallIdle` retrieves adapter capital,
+while LP removal is tied to holder withdrawals; no owner-wide emergency LP recall is exposed
+(`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:307-329,368-525,643-650`).
+
+## 3. One appraisal source: the hook is the mark
+
+**Implement `IMarketAssetMark` directly on the retained hook; no `IssuerAppraisalMark` contract.** Add
+immutable asset, quote and decimal/orientation metadata, plus `asset()`, `quoteAsset()` and `latestMark()`.
+The interface specifies whole quote per whole asset scaled by `1e18`, with the source observation time
+(`contracts-v4/src/vaults/IMarketAssetMark.sol:4-19`). Derive the mark from the accepted appraisal tick,
+never pool spot. In pool order, raw currency1/currency0 ratio is `1.0001^tick`; invert when property is
+currency1, then multiply by `10^(propertyDecimals-quoteDecimals) × 1e18`. Use integer TickMath and
+full-precision arithmetic, rejecting zero/overflow; test both token orders, decimals and rounding extremes.
+A split adapter adds a contract without separating an independent authority and is unnecessary here.
+
+Keep one appraisal history and all its controls in the hook:
+
+| Control | Current evidence / recommendation |
+|---|---|
+| Step and publication interval | Retain hook enforcement, currently `maxStepTicks` and `minUpdateInterval` (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:237-243`). |
+| Rolling 24h drift, MW-03 | Retain cumulative absolute-movement checkpoints and binary-search expiry, including reversals. Already present locally (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:244-260`); preserve every regression/model case (`contracts-v4/test/audit-2026-10-31/RollingDrift.t.sol:23-82`). Deployed fix status remains unverified. |
+| Keeper rotation | Retain owner proposal/confirmation after 48h, without resetting history (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:61,296-309`). |
+| Config changes | Retain 48h governance for mutable band/fee/movement settings. Currently config is instant before pool binding, delayed afterwards (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:314-331`). Freeze max age and grace when the key is pinned; enforce this in proposal **and** confirmation. Policy-age changes require a new generation. |
+| Max age / grace | Hook owns the policy. At installation validate `engine.maxMarkAge == hook.maxAppraisalAge`; it is an immutable consumer threshold, not another appraisal store (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:190-203`). The exit override reads the hook's fixed age + grace. |
+| Trading band and fee | Preserve core/spec fees selected from the pre-swap tick, post-swap spec-band rejection and the same-side gap-closing exception (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:386-433`). This is an enforced trading rule, not a realizable-value floor. |
+
+Propose `initAppraisal/postAppraisal(tick, observedAt, reportHash)`: retain `appraisedAt` as publication
+clock for rate limits and rolling movement; add one authoritative observation timestamp/report hash.
+Currently the hook authenticates the transaction sender and stamps publication time only
+(`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:222-264`). Change `isFresh`, `oracleReady` and `latestMark`
+to use the same observation time; never return current time to conceal age. Reject zero/future or
+non-increasing observations and empty report hashes. A same-price refresh requires a genuinely new
+assessment, not a cron heartbeat. `latestMark` returns the dated value even when stale after binding;
+consumers enforce their distinct age windows. No second keeper, appraisal ledger or duplicated drift limit.
+
+The signer attests a value; a transaction signature does not establish valuation quality. First appraisal
+has no predecessor cap today (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:221-232`): review it before
+initialization. If a genuine new assessment exceeds limits, pause new risk and review a new installation;
+do not fabricate intermediate reports. Future collateral consumers must choose their own risk policy.
+
+Rehearsal recommendation: retain core/spec bands 300/1000 ticks, step 500, interval 10 minutes, drift
+1000/24h, max age 30 days, grace 7 days and fees 3000/10000 pips (current demo defaults:
+`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:48-58`). Propose a small USDC capital cap, 20% LP cap,
+and a spacing-aligned appraisal-centered initial range about ±1000 ticks. Engine action tolerance is
+separate: choose 1100 bps for rehearsal so it covers the configured spec band's approximate price width;
+a tighter 300-bps tolerance would intentionally refuse partial exits in much of that band. Exact tick/
+price boundary vectors must validate this choice; appraisal moves can still leave spot outside tolerance.
+Recenter remains bounded, same-width and spot-centered near an edge, not automatically appraisal-centered
+(`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:453-515`). Caps are action-time checks, not continuous
+loss protection (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:399-440`). These are test parameters.
+
+## 4. Quote, compliance, shares and idle assets
+
+**Use existing Base Sepolia USDC, not dUSD.** The checked-in operating instructions identify
+`MARKET_ENGINE_QUOTE_ASSET_84532` as `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+(`scripts/ops/relaunch-base-market.sh:18-23`). The verifier already checks one expected quote per chain
+(`lib/gateway/marketEngine.ts:27-29,51-55`). Keep that rule and quote setting unchanged, enabling capital
+reuse across markets. Live env/address/decimals and funding availability require deployment preflight;
+they were not queried here. Label the asset testnet USDC. Express appraisals in that quote; a USD report
+is not automatically a quote-token valuation under depegging. No fresh demo stablecoin or quote exception.
+
+Token-level compliance remains necessary alongside the hook. The mock checks both nonzero transfer
+endpoints against `permittedHolder OR registry.isVerified`
+(`contracts-v4/src/rwa/testnet/MockPermissionedPropertyToken.sol:52-59`); expiry/revocation is registry-side
+(`contracts-v4/src/rwa/testnet/MockRwaIdentityRegistry.sol:29-37`). Removing verification alone cannot
+revoke a separately permitted address. Real issuer freeze/recovery/compliance behavior is **unverified**
+until exercised against the chosen issuer testnet token; the mock is not certification.
+
+| Address | Required property-token enrollment |
+|---|---|
+| Issuer inventory wallet, contributors and sellers | Permitted or verified; demonstrate revocation without a leftover permitted-holder bypass. |
+| Engine instance | Enroll: receives contributions, moves assets through its adapter, settles with PoolManager and pays recipients. |
+| Property-side idle adapter | Enroll: receives/returns property. |
+| PoolManager | Enroll: custody and settlement. This is shared infrastructure, not a pool-specific identity. |
+| Buyer / in-kind recipient | Verify or explicitly permit; quote-only LPs need an eligible property recipient for full delivery. |
+| DemoSwapRouter | Enroll: property sells pass user → router → PoolManager; buys deliver PoolManager → buyer. |
+| Other router / custodian | Enroll only actual transfer endpoints; check token-specific spender rules separately. |
+| Quote adapter / quote ERC-4626 source | No property enrollment; apply quote-token restrictions independently. |
+| Hook, lifecycle module, registry, owner/guardian/keeper acting only as callers | No property enrollment: these roles do not take property custody; the module acts as the engine. |
+
+Transfer-edge evidence: `contracts-v4/src/vaults/MintwareMarketEngineCore.sol:267-283,663-665,711-735`;
 `contracts-v4/src/vaults/MintwareIdleYieldAdapter.sol:120-145`;
-`contracts-v4/src/vaults/MintwareMarketLifecycleModule.sol:18-21,43-87,121-165`;
-`contracts-v4/src/rwa/testnet/DemoSwapRouter.sol:40-78`.
-The old script enrolled only PoolManager, its actor and router; the property adapter is a new enrollment
-(`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:103-106`).
+`contracts-v4/src/vaults/MintwareMarketLifecycleModule.sol:18-21,43-87`;
+`contracts-v4/src/rwa/testnet/DemoSwapRouter.sol:40-78`. The old installer enrolls PoolManager, actor and
+router only (`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:103-106`); property-adapter enrollment is new.
 
-**Do not inherit “LPs never touch property.”** Withdrawals pay both assets in kind. Engine shares are
-plain ERC-20 and quote-only contributions do not check the contributor's property identity
-(core `:36,267-303,521-530`; wrapper `contracts-v4/src/vaults/MintwareMarketEngine.sol:10-18`).
-Thus underlying ownership checks do not constrain economic exposure through transferable MWMS shares.
-A revoked share owner can specify another permitted recipient; the transfer is engine→recipient,
-not share-owner→recipient (core `:528-530,663-665`). Require issuer acceptance of this pooled-share
-model before activation. If share-holder restrictions are required, do not launch this asset or add
-an RWA wrapper to conceal the mismatch. A UI allowlist cannot fix unrestricted on-chain shares.
+**Transferable shares remain an issuer decision.** Core shares are plain ERC-20; quote-only contribution
+does not establish property-holder eligibility (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:36,267-303`).
+Underlying token restrictions and the hook's LP gate do not restrict economic exposure through MWMS.
+A revoked share owner can choose an eligible recipient: delivery is engine → recipient
+(`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:528-530,663-665`). Require issuer acceptance of that
+pooled-share model before activation. If share-holder restrictions are required, defer this asset; UI
+allowlisting cannot supply on-chain share restrictions. Both issuer and LP hold the same claim.
 
-Failure and exit behavior to demonstrate, not hand-wave away:
+Withdrawals deliver both assets in kind. Adapter/LP shortfalls use the least deliverable fraction;
+recipient failures burn only marked value delivered, and retained shares remain a claim on the residual
+portfolio, not segregated frozen tokens. Output-minimum failures roll back the transaction
+(`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:573-639`). Demonstrate these failure cases:
 
-| Failure | Current behavior and recovery recommendation |
+| Failure | Current behavior and proposed recovery |
 |---|---|
-| Trader/property holder revoked | Their property transfers fail. This does not by itself block engine recentering or other holders' exits. Reverify through the issuer; do not bypass the token. |
-| Withdrawal recipient revoked | Property delivery fails. With a fresh mark, spot agreement, readable accounting and compatible output minimums, quote may be paid and shares retained for undelivered value. Otherwise the transaction reverts. Choose an issuer-approved eligible recipient or restore eligibility. |
-| Property adapter revoked/frozen | Recall can return zero; incomplete custody retrieval scales both payouts to the least deliverable fraction. If property delivery fraction is zero, quote payout can also become zero. Restore adapter eligibility and retry. |
-| Engine or PoolManager revoked/frozen | Recenter can revert atomically on token settlement. LP withdrawal can fail as a bucket; **fee collection occurs before isolation** and can revert the whole exit when property fees cannot transfer. No unconditional quote escape exists. |
-| Stale mark plus any incomplete delivery | `ExitMarkUnavailable`; no grace-based stale valuation. Restore a valid mark and transfer path. Complete delivery can still work without a mark or spot agreement. |
-| Source/accounting view unavailable | Adapter NAV reads can revert the whole exit even where recall itself is best-effort. Restore source reads; do not substitute a made-up valuation. |
+| Trader revoked | Property transfer fails; this alone does not revoke engine/other recipients. Restore issuer eligibility, never bypass the token (`contracts-v4/src/rwa/testnet/MockPermissionedPropertyToken.sol:52-59`). |
+| Recipient revoked | That property leg can fail while quote is delivered and shares retained, but only with usable exit valuation, spot agreement, readable NAV and compatible minimums. Choose an approved recipient or restore eligibility (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:607-639`). |
+| Property adapter revoked/frozen | Recall can return zero; the common fraction can reduce quote payout to zero too. Restore the adapter's transfer permission (`contracts-v4/src/vaults/MintwareIdleYieldAdapter.sol:139-145`; `contracts-v4/src/vaults/MintwareMarketEngineCore.sol:573-605`). |
+| Engine / PoolManager frozen | Settlement or fee collection may revert the whole exit; no unconditional quote escape. Restore infrastructure eligibility, then retry (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:541-567`; `contracts-v4/src/vaults/MintwareMarketLifecycleModule.sol:42-87`). |
+| Hook callback refuses | Collection can abort the entire exit; isolated removal failure becomes incomplete delivery. Binding/callback bugs must be excluded before activation; there is no bypass of a broken hook (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:541-567`). |
+| Stale mark / partial delivery | Today ordinary max age applies. Proposed wrapper permits grace-only partial valuation; after grace, `ExitMarkUnavailable`. Restore appraisal and delivery; full in-kind delivery needs no mark (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:534-540,597-637`). |
+| Spot outside action tolerance | Incomplete exit refuses even in grace; full delivery does not require spot agreement. Do not relax limits ad hoc to manufacture an exit (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:597-637,848-861`). |
+| Source accounting unavailable | Adapter NAV reads can abort exit despite best-effort recall. Restore reads; do not fabricate NAV (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:762-773`). |
 
-Evidence: core `:534-567,573-637,675-703,762-773` and lifecycle module `:110-165`.
-The recipient-failure path burns marked value delivered; adapter/LP shortfalls use a common deliverable
-fraction. Retained shares remain a portfolio claim, not a segregated claim to specific frozen tokens.
-Minimum-output failures roll back the transaction (core `:597-639`).
+Do not revoke infrastructure until balances/LP obligations reconcile. Keep blocked generations visible.
+Issuer forced-transfer recovery is unverified and must not be assumed to preserve PoolManager accounting.
 
-Engine pause does not gate `withdraw` (core `:521-525`), but token freezes can brick it.
-Exit recovery is issuer restoration of permissions, followed by normal in-kind withdrawal; any issuer
-forced-transfer/recovery facility is **unverified**, and cannot be assumed to preserve pool accounting.
-Keep the old engine discoverable and shares visible while blocked. Do not revoke infrastructure until
-all property balances and LP obligations are reconciled. A revoked ordinary user must not be enrolled
-as infrastructure as a workaround.
+**Idle/ERC-4626 slot:** property uses `MintwareIdleYieldAdapter`; quote uses the existing
+`MintwareERC4626YieldAdapter` only with a reviewed testnet USDC source, otherwise explicitly choose zero
+source and display “held ready”. The installer helper already selects these by source address and checks
+`asset()` (`contracts-v4/script/lib/MarketEngineAdapterDeployment.sol:15-29`). For deterministic rehearsal,
+reuse `MockERC4626` with faucet USDC and explicitly funded, simulated donations—no interest minting
+(`contracts-v4/test/mocks/MockERC4626.sol:12-36`). Source availability is unverified; there is no new lender.
+Adapters bind once (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:207-220`); source switching needs
+a new generation. The ERC-4626 adapter uses `previewRedeem` NAV and best-effort recall
+(`contracts-v4/src/vaults/MintwareERC4626YieldAdapter.sol:108-166`). Capacity overflow stays engine cash;
+actual supply failure reverts (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:728-745`). Source loss,
+fees and limited liquidity affect the one shared claim. Liquidity is this migration's entire scope.
 
-## 4. Idle assets use the existing source slots
+## 5. Deletions and the /v1/rwas read contract
 
-**Decision:** property uses the existing idle-custody adapter; quote uses the existing
-`MintwareERC4626YieldAdapter` over a testnet ERC-4626 source. For the first deterministic rehearsal,
-reuse `contracts-v4/test/mocks/MockERC4626.sol:12-36`, funded explicitly with valueless dUSD and labelled
-simulated. Do not port the old APR-minting adapter. If no suitable source is deployed, explicitly select
-zero source/idle custody and show “held ready”; no invented yield and no custom lending integration.
+Archive historical proofs in Git history/an archive ref; remove obsolete code from active compilation
+and imports only after reconciliation. Keeping renamed copies in compiled directories is not deletion.
 
-This is already a deployment choice: source zero selects idle custody; nonzero source must have the
-matching `asset()` (`contracts-v4/script/lib/MarketEngineAdapterDeployment.sol:15-29`). Each engine gets
-two dedicated adapters, bound once (core `:207-220`). The ERC-4626 adapter supplies to its source,
-values shares with `previewRedeem`, and recalls best-effort
-(`contracts-v4/src/vaults/MintwareERC4626YieldAdapter.sol:108-166`). Binding/source selection is not
-hot-swappable; moving from an idle-only installation to a different source needs a new generation.
-
-There is no “idle senior USD”: all balances back the same share. Amounts above `adapter.maxSuppliable()`
-stay as engine cash; an actual supply failure reverts (core `:728-745`). Source loss, fees or limited liquidity affect that claim. The quote-source
-mock can demonstrate those mechanics, not an expected return. Keep “one engine per asset:
-liquidity → collateral → credit” as sequencing: this document implements only liquidity. A future
-collateral consumer may read the mark, but must choose its own age, haircut and liquidation policy.
-
-## 5. Retire the demo stack and make the RWA page a market view
-
-**Decision:** archive historical proof data and remove obsolete executable paths after reconciliation.
-Archive means preserved in Git history/an archive ref, excluded from active imports and compilation;
-moving all old Solidity into another compiled directory would not simplify the system.
-
-| Current artifact | Fate in the implementation follow-up |
+| Artifact | Follow-up implementation disposition |
 |---|---|
-| `contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol` | Delete after extracting mark controls and porting MW-03 tests. No hook deployment, dynamic band fees or actor-only LP gate. |
-| `contracts-v4/src/rwa/testnet/DemoLendingAdapter.sol` | Delete; current simulated interest minting (`:56-85`) is replaced by a standard source fixture through the existing adapter. |
-| `MockPermissionedPropertyToken.sol`, `MockRwaIdentityRegistry.sol`, `DemoUSD.sol`, `interfaces/IRwaIdentityRegistry.sol` under `contracts-v4/src/rwa/` | Keep unchanged as testnet token/identity fixtures, not engine dependencies. Keep their explicit mock status. Token checks and registry expiry remain issuer-side (`MockPermissionedPropertyToken.sol:52-59`; `MockRwaIdentityRegistry.sol:29-37`). |
-| `contracts-v4/src/rwa/testnet/DemoSwapRouter.sol` | Keep unchanged as a test harness; it accepts a supplied PoolKey and uses ordinary v4 swaps (`:40-78`). A production router integration is not part of this ticket. |
-| `contracts-v4/test/rwa/MockRwaLiquidityVault.sol`; `contracts-v4/script/DeployRwaLiquidityUnit.s.sol` | Delete the hook actor and its installer after replacing their scenarios with engine integration tests and the canonical installer. Current relationship is explicit at script `:18-23,97-116`. |
-| `contracts-v4/test/rwa/MintwareRwaLiquidityUnit.t.sol`; `contracts-v4/test/audit-2026-10-31/RollingDrift.t.sol` | Rewrite/retarget applicable tests; preserve refusal and rolling-window coverage, retire hook-only expectations. |
-| `config/rwaDemo*.json` | Preserve old addresses, snapshots and transaction hashes as historical artifacts; remove them from active RWA discovery. No rewriting old proof transactions as engine transactions. Current import and historic XRPL status: `lib/rwa/demo.ts:1-7`. |
-| `lib/rwa/demo.ts`, `/api/rwa/unit`, RWA activity/appraisal scripts | Replace the Treasury/hook binding with registry resolution and mark publication; remove hook-only refresh and band sizing assumptions. Current reads: `app/api/rwa/unit/route.ts:27-49,132-141`; `lib/rwa/liveTrade.ts:51-58`; `scripts/rwa-refresh-appraisal.mjs:28,55-73`. |
-| `/v1/rwas`, detail/proof/how views, `components/rwa/*`, issuer console | Keep routes and useful presentation; replace data model and copy with one engine share, in-kind exits and dated mark. Remove first-loss, lock and simulated APR counters (`components/rwa/RwaMarket.tsx:71-85`; `RwaIssuerConsole.tsx:29-56`; `RwaVisuals.tsx:131-163`). |
+| `contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol` | **Retain and extend** for mark interface, source time and deployment binding. Preserve band, fees, MW-03, timelocks and exit window. |
+| `contracts-v4/src/rwa/testnet/DemoLendingAdapter.sol` | Delete simulated minting path (`contracts-v4/src/rwa/testnet/DemoLendingAdapter.sol:56-85`); use the shared ERC-4626 slot. |
+| `contracts-v4/src/rwa/testnet/DemoUSD.sol` | Delete once remaining test/script references are removed; its bespoke mint authority is unnecessary with USDC (`contracts-v4/src/rwa/testnet/DemoUSD.sol:19-32`). |
+| `MockPermissionedPropertyToken.sol`, `MockRwaIdentityRegistry.sol`, `interfaces/IRwaIdentityRegistry.sol` under `contracts-v4/src/rwa/` | Retain testnet identity/token fixtures; no engine-specific compliance ledger. |
+| `contracts-v4/src/rwa/testnet/DemoSwapRouter.sol` | Keep as test harness, accepts supplied PoolKey (`contracts-v4/src/rwa/testnet/DemoSwapRouter.sol:40-60`). Broader router support remains unverified. |
+| `contracts-v4/test/rwa/MockRwaLiquidityVault.sol` | Delete after tests use the real engine; currently just a test LP actor (`contracts-v4/test/rwa/MockRwaLiquidityVault.sol:12-40`). |
+| `contracts-v4/script/DeployRwaLiquidityUnit.s.sol` | Retire duplicate actor installer; harvest CREATE2 permission-bit mining and hook setup (`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:76-110,133-147`) into canonical installation tooling. |
+| RWA integration / RollingDrift tests | Retarget to engine composition, retain hook refusal and MW-03 coverage; do not delete valid tests to meet a size budget. |
+| `config/rwaDemo*.json`, `lib/rwa/demo.ts` | Preserve old facts/hashes as history; replace active discovery and Treasury metadata (`lib/rwa/demo.ts:1-7,121-128`). |
+| `/api/rwa/unit`, activity/appraisal scripts | Reuse shared engine reads; retain hook reads, band sizing and genuine appraisal publication. Retire Treasury/lending selectors (`app/api/rwa/unit/route.ts:27-49,132-141`), replace the same-tick freshness refresh with dated reports (`scripts/rwa-refresh-appraisal.mjs:65-75`). |
+| `/v1/rwas` and detail/proof/how/issuer views | Keep routes/presentation; replace tranche/lock/simulated-rate fields currently emitted by the API (`app/api/rwa/unit/route.ts:209-215`) with one share and actual portfolio/source state. |
 
-Do not count removal of Treasury contracts as new savings: the current installer already replaces
-Treasury with a mock actor, although UI metadata still names it (`lib/rwa/demo.ts:121-128`;
-`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:18-23`). Never resurrect it to perform the migration.
+No Treasury contract deletion is counted: current deployment already uses the mock actor
+(`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:18-23`). Historical claims must not become engine shares
+by relabeling them. No new appraisal contract, RWA capital module or separate state service.
 
-Proposed `/v1/rwas` read contract: select curated engine rows by asset metadata, resolve explicit
-`chainId + poolId + engineAddress`, and use the existing market/share readers. Extend their shared ABI
-for missing views rather than inventing a second RWA state service. Registry verification currently
-checks codehash, owner, quote, activation, tokens and pool identity; it does **not** independently certify
-the issuer or mark (`lib/gateway/marketEngine.ts:24-59`). Curators must additionally verify mark/source
-bindings, token permission topology and the exit rehearsal; record those checks as curation metadata.
-Current verification allows one expected quote per chain (`lib/gateway/marketEngine.ts:27-29,51-55`).
-To coexist with other Base Sepolia markets, extend this shared verifier to accept a curator-approved
-per-instance expected quote, retaining the chain default for existing instances. Do not derive the
-allowance solely from the candidate engine's own response. This is a small generic curation change,
-not an RWA registry or a reason to replace the chain's existing quote setting globally.
+**Read contract:** discover curated owned-pool rows by asset metadata; resolve explicit
+`chainId + poolId + engineAddress`, including retired generations. Extend shared engine/hook ABIs as
+needed; `/api/rwa/unit` may temporarily delegate to that reader. The current resolver handles inactive
+generations (`lib/gateway/marketEngine.ts:70-94`); hook/source/issuer certification is an additional
+curation obligation, absent from the current verification reads (`lib/gateway/marketEngine.ts:37-55`).
 
-| Screen value | Replacement source / meaning |
+| Screen value | Source and meaning |
 |---|---|
-| Total value and user's share | `totalNav`, `totalSupply`, `balanceOf`; quote-denominated appraisal NAV, not cash realizable on exit. Uncollected fees are excluded (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:238-243`). Existing ABI: `lib/web3/artifacts/marketEngine.ts:8-12`. If NAV fails, show unavailable and retain share balance/exit controls. |
-| Inventory location | Engine raw token balances, each adapter's `totalAssets`, `positionLiquidity`, range and pool spot; derive token amounts with shared position math. Core NAV composition: `contracts-v4/src/vaults/MintwareMarketEngineCore.sol:789-815`. |
-| Appraisal | Mark `latestMark`, signer, report hash/date and publication history. Compute freshness against verified engine installation parameters. `maxMarkAge` and deviation are internal immutables, so expose deployment metadata, not nonexistent getters (core `:79-80`). |
-| Price/range | PoolManager spot; engine `tickLower/tickUpper`; engine action tolerance as a separate overlay. No “hard floor”, band-fee or “trading halted on stale” status. |
-| Operations/proof | Engine contribution/withdrawal/recenter/fee events, mark events and standard pool Swap events. Do not filter all trading to the demo router as the old route does (`app/api/rwa/unit/route.ts:163-184`). |
-| Availability | Engine pause/activation, mark age, identity status of relevant endpoints, source liquidity and output simulation. Display failures as failures, not zero balances. |
+| NAV and user share | Engine `totalNav`, `totalSupply`, `balanceOf`: appraisal-valued portfolio, not realizable cash. Pending fees are excluded (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:238-243`). Keep share/exit controls visible if NAV fails. |
+| Inventory / liquidity | Raw engine balances, adapter assets, position liquidity/range and pool spot; reuse position math (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:789-815`). |
+| Appraisal / governance | Hook mark, observation/publication dates, report hash, keeper, pending changes; hook owns the source and limits (§3). |
+| Pool rules | Hook core/spec bands, actual pre-swap fee policy, freshness, `tradingPaused`, `oracleReady` (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:267-291,386-433`). Show the gap-closing exception and engine exemption, not an absolute price floor. |
+| Engine policy | Range, action tolerance, caps and separate fresh/grace/beyond-grace exit status. Internal age/deviation immutables need verified deployment metadata, not invented getters (`contracts-v4/src/vaults/MintwareMarketEngineCore.sol:79-83`). |
+| Activity / proofs | Shared engine events, hook appraisal events and all pool Swap events. Remove router-only trade filtering (`app/api/rwa/unit/route.ts:163-184`). Keep old proof transactions labeled historical. |
+| Availability | Engine activation/pause, hook status, relevant identity endpoints, source liquidity and transaction simulation. Failed reads are unavailable, never zero. |
 
-Keep one-block-pinned state reads and distinguish live/cached/historical data; the old API already pins
-reads and falls back independently (`app/api/rwa/unit/route.ts:127-151,224-228`). Historical snapshots must
-not appear fresh. Replace the old `vault.seniorUsd/juniorUnits/lockExpiry` response shape and status labels
-(`components/rwa/useRwaUnit.ts:14-19,70-78`). `/api/rwa/unit` may remain a thin compatibility endpoint
-temporarily, but must delegate shared engine reading and disappear if no caller needs it.
+Retain block-pinned reads and independent history fallback (`app/api/rwa/unit/route.ts:127-151,224-228`),
+but label the actual pinned state block: today's response uses head despite reading head−1 (`app/api/rwa/unit/route.ts:129,199-200`).
+Distinguish live/cached/recorded data and observation age; a historical snapshot must never look fresh.
 
-## 6. Ordered migration and testnet deployment
+## 6. Ordered testnet migration and size gate
 
-These are acceptance steps for the later implementation PR, not actions performed by this design ticket.
+These are acceptance steps for a later implementation PR; no deployment occurs in this documentation ticket.
 
-1. **Inventory and freeze new demo activity.** Snapshot the old Base Sepolia balances, claims, pool,
-   permissions and deployment hashes. Compare live bytecode with its recorded build, including MW-03.
-   Stop old automation/new issuance without disabling legitimate recovery. Pass: balance reconciliation
-   and a reproducible old-exit rehearsal; deployed state is unverified until this step runs.
-2. **Implement only the mark and integration changes.** Reuse the shared core/module/adapters unchanged.
-   Port rolling-drift tests: window boundary, each move expiry, reversal, heartbeat/outage and model fuzz.
-   Add wrong signer, early rotation, rotation without budget reset, invalid dates, stale reports,
-   token-order/decimal conversion and genuine outsize-appraisal rejection cases. Pass: exact errors,
-   conversion vectors and no new dependency on a pool hook.
-3. **Exercise engine composition locally.** Fresh contributions; stale/deviant entry and recenter refusal;
-   ordinary swaps outside action tolerance succeeding; full in-kind exit while stale; incomplete exits
-   requiring fresh mark/spot; each revoked endpoint separately; revoked share owner choosing a permitted
-   recipient; frozen engine/PoolManager with nonzero fees; source recall/view failure; output minimums and
-   retained-share value. Pass: observed outcomes match §3, with no assertion that every exit succeeds.
-4. **Initialize a new hookless Base Sepolia pool.** Reuse token/identity fixtures where safe; publish a
-   reviewed first mark; initialize the static-fee pool at its correctly oriented appraisal. Hook address
-   participates in PoolKey, so this is a new pool identity, not an in-place hook removal
-   (`contracts-v4/script/DeployMarketEngine.s.sol:113-119`; `lib/gateway/marketEngine.ts:46-55`).
-5. **Install inactive with the canonical script.** Use chain 84532 and `MARKET_TEST_ONLY=true`, verified
-   lifecycle module, new non-quote mark, dUSD quote source and zero property source. Installer supports
-   this testnet and leaves the engine inactive (`contracts-v4/script/DeployMarketEngine.s.sol:58-74,82-100,141-175`).
-   Accept ownership handoff, enroll the engine/property adapter/PoolManager/router, verify each transfer
-   edge, source asset and module codehash. Pass: exact configuration and identities verified before activation.
-6. **Activate, seed and rehearse.** Owner activates; issuer and test LPs contribute using nonzero minimum
-   shares. Seed both sides, then use existing bounded `deployLiquidity`; no automatic property acquisition
-   is assumed. Execute normal and failure cases on testnet with decoded receipts. Pass: correct NAV/share
-   accounting, measured token outputs and preserved claims on refused operations.
-7. **Curate and switch UI.** Register the new generation, explicitly configure quote/codehash expectations,
-   wire shared reads and replace band/tranche copy. Pass: live block and source labels, unavailable-NAV
-   behavior, both exit assets, permission errors and historic proof separation all verified.
-8. **Opt-in asset migration and retirement.** Old holders exit under the old contract's actual terms; only
-   received assets enter the new engine. No senior/junior-to-MWMS conversion ratio or forced migration.
-   Keep old recovery available until balances/obligations are reconciled; archive old configs and remove
-   unused source/scripts only then. Pass: new registry points to the engine, old balances remain accounted
-   for, no active Treasury/hook readers, negative code delta. No push or deployment is part of this ticket.
+1. **Inventory and freeze new old-demo activity.** Snapshot balances, claims, permissions, pool/key, bytecode
+   and proof hashes; verify deployed MW-03 separately. Rehearse old exits without disabling recovery.
+   Pass: reconciled ledger and reproducible old recovery. Live state is unverified until this runs.
+2. **Implement the bounded changes.** Second wrapper, exact dynamic-fee core check, virtual exit reader,
+   hook mark/time/pin changes and canonical installer mode. Today that installer hardcodes a zero hook,
+   rejects the sentinel and creates the old wrapper (`contracts-v4/script/DeployMarketEngine.s.sol:102-141`).
+   Keep its testnet/PoolManager gates and inactive finish (`contracts-v4/script/DeployMarketEngine.s.sol:58-74,156-175`). Restore pinned dependencies.
+3. **Prove composition locally.** Test fee sentinel/illegal bits/old-wrapper refusal; initializer and binding
+   attacks; mark conversion both orders; genuine observation timestamps; step/interval/drift, every MW-03
+   case, keeper/config timelocks and frozen-age policy. Exercise core/spec fees, gap-closing exception,
+   stale/paused swaps, optional engine swaps, deploy/recenter/zero-delta callbacks and atomic rollback.
+   Test full exits fresh, in grace and beyond grace, with out-of-band spot and both pauses; partial exits
+   at each age/spot boundary; every revoked endpoint, transferable shares/alternate recipient, source
+   recall/view failure, nonzero frozen fees and output minimums. Decode exact errors. Pass: table outcomes.
+4. **Prepare Base Sepolia hook and pool.** Verify canonical USDC, PoolManager, owner/keeper/guardian,
+   funding and chosen source. Deploy token/identity fixtures if needed; CREATE2-mine the new hook's
+   permission bits, pin the exact USDC/property key and freeze age policy, post a reviewed dated appraisal,
+   initialize as authorized owner inside the fresh core band. Pass: no actor or public trading before binding.
+5. **Install and bind the engine inactive.** Use chain 84532, `MARKET_TEST_ONLY=true`, the owned wrapper,
+   hook as mark, verified lifecycle, property idle slot and selected USDC slot. Deploy after initialization,
+   call `setVault(engine)`, configure dedicated adapters and complete ownership handoffs. Enroll engine,
+   property adapter, PoolManager, router and test recipients. Pass: exact pin, codehashes, source asset,
+   policy ages and every transfer edge verified; hook binding precedes activation.
+6. **Activate, seed and rehearse on testnet.** Activate only after issuer share/exit acceptance. Issuer and
+   test LPs contribute with nonzero minimum shares, seed both sides and deploy within caps. Record actual
+   outputs and decoded refusal receipts for the local matrix; grace tests can use a separate short-age
+   test fixture, while 48h governance stays intact. Pass: correct claims and no band/staleness LP trap.
+7. **Curate and switch readers.** Register the owned generation with wrapper/hook evidence, unchanged
+   chain quote expectation and shared reads. Pass: band/fee/exit states, unavailable NAV, permissions,
+   actual state block, in-kind assets and historical proofs display correctly.
+8. **Opt-in migration, then retirement.** Old holders recover assets under old terms; only received assets
+   enter the new engine. No tranche-to-MWMS conversion ratio and no automatic dUSD-to-USDC parity claim:
+   test users fund the new quote with testnet USDC. Preserve old claims/permissions until reconciliation,
+   then archive obsolete configs and delete the listed executable paths. Pass: old recovery remains
+   discoverable, new curation is correct, imports compile and measured net Solidity falls. Do not push.
 
-### Change size and audit boundary
+Measured baseline nSLOC removes line/block comments and blank lines, retaining imports/braces; vendor
+code is excluded. Remeasured in this checkout. Added counts below are **budgets, not implemented savings**.
 
-Measured baseline nSLOC = nonblank Solidity lines after removing line/block comments, including imports
-and braces; excludes vendor dependencies. Counts below are local source measurements, not bytecode sizes.
-Additions are estimates/budgets to verify during implementation; do not claim them as measured savings.
-
-| Scope | Added | Removed | Net |
+| Solidity scope | Added / growth budget | Measured removal | Net budget |
 |---|---:|---:|---:|
-| New `IssuerAppraisalMark` replacing hook | 180–240 | 348 (`contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol`) | −168 to −108 |
-| Delete simulated lending adapter | 0 | 68 (`contracts-v4/src/rwa/testnet/DemoLendingAdapter.sol`) | −68 |
-| Retire hook actor and installer; add small mark/fixture setup around canonical installer | 40–70 | 34 + 110 (`contracts-v4/test/rwa/MockRwaLiquidityVault.sol`; `contracts-v4/script/DeployRwaLiquidityUnit.s.sol`) | −104 to −74 |
-| **Solidity subtotal, excluding rewritten test suites** | **220–310** | **560** | **−340 to −250** |
+| Retain hook (348 nSLOC today), extend mark/time/binding | 70–100 | 0 | +70 to +100 |
+| New thin owned-pool wrapper, including exit override | 30–45 | 0 | +30 to +45 |
+| Two core edits | 3–6 | 0 | +3 to +6 |
+| Delete DemoLendingAdapter + DemoUSD | 0 | 68 + 20 | −88 |
+| Replace duplicate RWA installer with canonical setup additions | 35–50 | 110 | −75 to −60 |
+| Delete mock liquidity actor | 0 | 34 | −34 |
+| **Source + scripts + actor subtotal** | **138–201** | **232** | **−94 to −31** |
+| Rewritten integration/regression suites, including added shared-engine cases | 450–500 total | 494 existing | −44 to +6 |
+| **All affected Solidity target** | | | **−138 to −25** |
 
-Core, wrapper, lifecycle, mark interface and both existing adapter implementations: **zero changes**.
-One new runtime contract type; two obsolete runtime types removed; one test actor and one script retired.
-Existing mocks/source fixture remain; deployed instances of reused contracts do not add source code.
-Budget test-suite replacement at roughly neutral to +150 nSLOC, keeping the total Solidity change negative.
-Measure TS/TSX/scripts separately: replace duplicate readers and remove obsolete automation, target net
-nonpositive. Do not count archived history, already-deleted Treasury code or data JSON as source savings.
-If budgets fail, shrink scope before introducing another abstraction.
+Measured file extents: `contracts-v4/src/rwa/MintwareRwaAppraisalHook.sol:1-482`,
+`contracts-v4/src/rwa/testnet/DemoLendingAdapter.sol:1-95`, `contracts-v4/src/rwa/testnet/DemoUSD.sol:1-34`,
+`contracts-v4/script/DeployRwaLiquidityUnit.s.sol:1-149`, `contracts-v4/test/rwa/MockRwaLiquidityVault.sol:1-42`.
+The 494 test baseline is 418 in `contracts-v4/test/rwa/MintwareRwaLiquidityUnit.t.sol:1-527` plus 76 in
+`contracts-v4/test/audit-2026-10-31/RollingDrift.t.sol:1-84`; measure replacement and new test growth together.
+`src/**` delta, including retired demo sources, is **+15 to +63**; net reduction comes from removing
+duplicate installer/actor machinery, not deleting the hook or counting already-retired Treasury. Keep this distinction visible.
+Lifecycle, mark interface and adapter implementations stay unchanged. One new wrapper type; two demo
+runtime types removed. Runtime bytecode size is a separate build check, not inferred from source lines.
+Measure TS/TSX/script cleanup separately, target nonpositive, and count no historical JSON as Solidity savings.
+If implementation exceeds budgets, report the actual delta and simplify duplicated setup/tests without
+losing scenarios; a negative total is an acceptance target, not a reason to claim unmeasured savings.
+Run existing engine/adapter/hook/MW-03 suites, composition tests and build-size checks in that PR.
 
-Review the new mark and full composition: manipulated assessments, conversion rounding, rolling history,
-signer rotation, permissioned settlement, share eligibility and partial exits. Existing engine checks
-remain mandatory; this document does not certify the engine or token. Run the existing engine,
-adapter and MW-03 regression suites plus the new integration tests and build-size checks in that PR.
-
-## Open questions for the owner
+## Owner questions
 
 1. Does the issuer accept transferable pooled shares and eligible-recipient in-kind exits? If not, defer this asset.
-2. Is the removal of swap-level price limits acceptable, including trading against resting liquidity during stale marks?
-3. Who owns the appraisal signing/rotation roles, and what report cadence and tolerance should replace rehearsal settings?
-4. What concrete issuer procedure restores frozen infrastructure, and which testnet identity/token implementation will prove it?
+2. Who owns appraisal publication, delayed rotation and guardian roles, and what report cadence replaces rehearsal settings?
+3. Accept the proposed 30-day freshness / 7-day partial-exit grace and 1100-bps action tolerance for rehearsal, with complete exits remaining possible after grace?
+4. Which issuer testnet token and restoration procedure will prove recovery from frozen infrastructure before activation?
