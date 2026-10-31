@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { MineralNav } from '@/components/marketing/mineral/MineralNav'
+import { V2Nav } from '@/components/ui2/V2Nav'
 import { EngineHero } from '@/components/marketing/mineral/EngineHero'
 import { MarketScreen } from '@/components/marketing/mineral/MarketScreen'
 import { IconIsolated, IconOwned, IconHours, IconFailClosed, IconExit, IconAudited } from '@/components/ui2/MineralIcons'
@@ -82,7 +82,7 @@ export default function HomePage() {
     <div className="px-4 py-2.5 text-center text-[13px]" style={{ background: 'var(--mw-band)', borderBottom: '1px solid var(--mw-line)', color: 'var(--mw-ink-2)' }}>
       Testnet preview on Robinhood Chain and Base. Mock tokens only, unaudited. <Link href="/risk-disclosures" className="font-medium" style={{ color: 'var(--mw-peri-deep)' }}>What that means</Link>
     </div>
-    <MineralNav />
+    <V2Nav />
 
     {/* Hero */}
     <section className="relative">

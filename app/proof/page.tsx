@@ -5,7 +5,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { MwNav } from '@/components/web2/MwNav'
+import { V2Nav } from '@/components/ui2/V2Nav'
 import { LATEST_RUN, STAGED_LIQUIDITY_RUN, LP_GATEWAY_RUN, CARD_RAIL, FORMAL_VERIFICATION, SECURITY_AUDIT, SECURITY_AUDIT_R2, SECURITY_AUDIT_R4, SECURITY_AUDIT_R5, EXPLOIT_REDTEAM, AUDIT_MATRIX, txUrl, addrUrl, shortHash, chainLabel, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
 
 const KIND: Record<Decision['kind'], string> = {
@@ -31,7 +31,7 @@ export default function ProofPage() {
 
   return (
     <div className="min-h-screen font-geist bg-[#F6F6FA] text-ink">
-      <MwNav />
+      <V2Nav />
       <main className="mx-auto max-w-[900px] px-6 max-[700px]:px-4 py-[44px]">
         {/* hero */}
         <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display">

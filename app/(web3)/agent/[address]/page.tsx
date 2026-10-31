@@ -2,7 +2,7 @@
 
 import { useAccount }   from 'wagmi'
 import { useParams }    from 'next/navigation'
-import { MwNav }        from '@/components/web2/MwNav'
+import { V2Nav } from '@/components/ui2/V2Nav'
 import { MwAuthGuard }  from '@/components/web2/MwAuthGuard'
 import { safeUrl }      from '@/lib/web2/safeUrl'
 import { useEffect, useState } from 'react'
@@ -68,7 +68,7 @@ function AgentProfileContent() {
 
   return (
     <div className="min-h-screen bg-white font-atx-display text-ink overflow-x-clip">
-      <MwNav />
+      <V2Nav />
       <div className="max-w-[640px] mx-auto px-6 pt-10 pb-20">
         <a href="/agents/leaderboard" className="inline-flex items-center gap-1.5 text-ink-mid text-[13px] no-underline mb-7 hover:text-ink">← Back to leaderboard</a>
 
