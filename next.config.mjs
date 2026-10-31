@@ -50,7 +50,7 @@ const nextConfig = {
       // (e.g. /swap?cid=, ?ref=) are preserved through Next redirects.
       { source: '/swap', destination: '/app/swap', permanent: true },
       { source: '/leaderboard', destination: '/app/leaderboard', permanent: true },
-      { source: '/profile', destination: '/app/profile', permanent: true },
+      { source: '/profile', destination: '/app/portfolio', permanent: true },
       { source: '/create-campaign', destination: '/app/create-campaign', permanent: true },
       { source: '/manage/:campaign_id', destination: '/app/manage/:campaign_id', permanent: true },
       { source: '/rewards', destination: '/app/rewards', permanent: true },
@@ -69,7 +69,11 @@ const nextConfig = {
       { source: '/v1/rwas', destination: '/app/rwas', permanent: false },
       { source: '/v1/rwas/:path*', destination: '/app/rwas/:path*', permanent: false },
       { source: '/v1/portfolio', destination: '/app/portfolio', permanent: false },
-      { source: '/v1/referrals', destination: '/app/referrals', permanent: false },
+      { source: '/v1/referrals', destination: '/app/portfolio?tab=invite', permanent: false },
+      // Account, Profile and Referrals folded into Portfolio (2026-10-31).
+      { source: '/app/account', destination: '/app/portfolio', permanent: false },
+      { source: '/app/profile', destination: '/app/portfolio', permanent: false },
+      { source: '/app/referrals', destination: '/app/portfolio?tab=invite', permanent: false },
       { source: '/v1/swap', destination: '/app/swap', permanent: false },
       { source: '/v1/card', destination: '/app/previews/card', permanent: false },
       { source: '/v1/agents', destination: '/app/previews/agents', permanent: false },
