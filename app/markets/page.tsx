@@ -26,7 +26,7 @@ const CHECKS: [string, ReactNode][] = [
 ]
 
 const RISKS: [string, string, string, ReactNode][] = [
-  ['The price moves', 'Providing liquidity carries impermanent loss. You can end up with more of the asset that fell.', 'Yours to judge. Exit any share of your position at any time.', <IconPrice key="p" size={20} />],
+  ['The price moves', 'Providing liquidity carries impermanent loss. You can end up with more of the asset that fell.', 'Yours to judge. Exit any share of your position, with no lockup.', <IconPrice key="p" size={20} />],
   ['The issuer acts', 'Tokenized assets can be paused, frozen or changed by their issuer.', 'Contained to that one market. Every market runs its own engine.', <IconIsolated key="i" size={20} />],
   ['Something is unreadable', 'Prices go stale, a feed drops, a market closes for the weekend.', 'The engine stops rather than guesses. Withdrawals stay open.', <IconFailClosed key="f" size={20} />],
   ['The code has a bug', 'Smart contracts carry technical risk, and these are not yet audited.', 'Testnet with mock tokens only, until an external audit is done.', <IconAudited key="a" size={20} />],

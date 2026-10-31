@@ -1,7 +1,7 @@
 'use client'
 
 // Treasury yield (renamed from "Savings" — copy rule, 2026-10-02) — a single-asset (USDC) yield account backed by MintwareYieldVault: idle USDC earns in Aave
-// via the vault's adapter, a live buffer keeps deposits spendable, and redeem() is buffer-first then
+// via the vault's adapter, a live buffer covers small withdrawals, and redeem() is buffer-first then
 // pulls from Aave for the shortfall (large withdrawals stay seamless). No tranches here — that's the
 // treasury/Vaults surface. Deposit: approve → deposit(assets, to). Withdraw: redeem(sharesForAmount).
 // Chrome comes from the shared TeamTerminalShell layout.
@@ -20,7 +20,7 @@ const ERC20_ABI = [{ type: 'function', name: 'approve', stateMutability: 'nonpay
 const CHAINS = [{ id: 84532, name: 'Base Sepolia' }]
 const fmtUsd = (atomic?: bigint) => atomic === undefined ? '—' : `$${Number(formatUnits(atomic, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
-export default function SavingsPage({ params }: { params: Promise<{ slug: string }> }) {
+export default function TreasuryYieldPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
   const { address } = useMintwareIdentity()
   const { chainId: walletChain } = useAccount()
@@ -141,7 +141,7 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
                 <button onClick={() => withdraw(false)} className="flex-1 mw-btn-quiet !min-h-[48px]">Withdraw</button>
               </div>
               <button onClick={() => withdraw(true)} className="text-[13px] text-ink-mid mt-3 bg-transparent border-0 cursor-pointer hover:text-ink">Withdraw all →</button>
-              <p className="text-[12.5px] text-ink-soft mt-3 leading-[1.5]">Supplied USDC earns the lending adapter&apos;s variable rate (not fixed, not guaranteed). Withdrawals pull from the buffer first, then unwind from the adapter for anything larger — no lockup. Testnet only.</p>
+              <p className="text-[12.5px] text-ink-soft mt-3 leading-[1.5]">Supplied USDC earns whatever the vault&apos;s lending adapter pays. The rate varies, isn&apos;t guaranteed, and is zero when a vault uses a no-yield adapter, as some testnet vaults do. Withdrawals come from the buffer first, then the adapter. There&apos;s no lockup, but a large exit can wait on the adapter&apos;s liquidity. Testnet only.</p>
             </div>
           </>
         ) : null}

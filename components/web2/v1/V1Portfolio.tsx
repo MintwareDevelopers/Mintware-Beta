@@ -44,7 +44,7 @@ export function V1Portfolio() {
 
   return (
     <div>
-      <LaneHeader eyebrow="Portfolio" title="Your positions," accent="always yours." lede="Every market you hold shares in, valued from chain. Withdraw pro-rata in both tokens whenever you like." />
+      <LaneHeader eyebrow="Portfolio" title="Your positions," accent="always yours." lede="Every market you hold shares in, valued from chain. Withdraw your share in both tokens, with no lockup." />
 
       {!isConnected ? (
         <div className="mt-6 rounded-[16px] p-7" style={PLAIN}>

@@ -54,7 +54,7 @@ const TRUST: [string, string, ReactNode][] = [
 const FAQ: [string, string][] = [
   ['What is Mintware?', 'Mintware is the liquidity layer for on-chain value. It turns capital into always-working liquidity for markets in tokenized stocks, real-world assets and stablecoins — and lets you earn from it.'],
   ['How does my money earn?', 'Your capital earns a share of the fees from every trade in the markets you back, plus yield on whatever the market doesn’t need at that moment. Two sources, one balance.'],
-  ['Can I withdraw at any time?', 'Yes. There are no lockups — you’re paid out instantly in your share of the market’s assets.'],
+  ['Can I withdraw at any time?', 'There are no lockups. You can withdraw whenever you choose and you’re paid in your share of the market’s assets. An exit can be delayed if a token’s issuer pauses it or the market is short of liquidity.'],
   ['Who holds my funds?', 'You do. Mintware is non-custodial — your shares sit in your own wallet, and every contract and transaction is on-chain.'],
   ['Where does Mintware run?', 'Markets run on Robinhood Chain and Base testnets today, ahead of an external audit.'],
   ['Are there risks?', 'Yes, as with any market. Providing liquidity carries price risk and impermanent loss, tokenized assets carry issuer risk, and smart contracts carry technical risk. Read the full risk disclosures before you use Mintware.'],
