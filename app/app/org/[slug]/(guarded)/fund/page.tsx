@@ -10,6 +10,7 @@ import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatUnits, parseUnits } from 'viem'
 import { useAccount, useReadContract, useSignMessage, useSwitchChain, useWriteContract } from 'wagmi'
+import { PageHead, Kpi, IconGrow } from '@/components/web2/TeamKit'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
@@ -101,54 +102,51 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
 
   return (
     <MwAuthGuard>
-      <div className="max-w-[600px] mx-auto">
-        <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {org?.name || 'Org'}</Link>
-        <div className="mt-3 flex flex-wrap items-center gap-2"><h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em]">Treasury yield</h1><span className="rounded-full border border-hair px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-soft">Testnet · unaudited</span></div>
-        <p className="text-[13px] text-ink-mid mt-2 leading-[1.5] max-w-[54ch]">Supply <span className="font-semibold text-ink">USDC</span> to a yield vault. Idle USDC is lent through the vault&apos;s lending adapter, a live buffer covers withdrawals, and larger withdrawals unwind from the adapter on demand. The position is held by <span className="font-semibold text-ink">your connected wallet</span>, not the org address. Want liquidity for your own token instead? See <span className="text-peri-deep font-medium">Liquidity for your token</span>.</p>
+      <div className="max-w-[640px] mx-auto">
+        <PageHead
+          back={{ href: `/app/org/${slug}`, label: org?.name || 'Org' }}
+          icon={<IconGrow size={24} />}
+          title="Treasury yield"
+          status={{ tone: 'building', label: 'Testnet · unaudited' }}
+          lede={<>Supply <span className="font-semibold text-ink">USDC</span> to a yield vault. Idle USDC is lent through the vault&apos;s lending adapter, a live buffer covers withdrawals, and larger withdrawals unwind from the adapter on demand. The position is held by <span className="font-semibold text-ink">your connected wallet</span>, not the org address.</>}
+        />
 
         {org && !org.vault ? (
-          <div className="soft-card p-5 mt-6">
-            <div className="text-[13.5px] font-semibold text-ink">One-time setup</div>
+          <div className="mw-raise rounded-[24px] p-6 mt-7">
+            <div className="text-[16px] font-semibold text-ink">One-time setup</div>
             <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Treasury yield runs on an on-chain yield vault that&apos;s provisioned once — then you just supply. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
-            <div className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft mt-3 mb-1.5">Operator — deploy once</div>
-            <code className="block font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2.5 overflow-x-auto whitespace-nowrap">pnpm forge:deploy:savings:base-sepolia</code>
+            <div className="text-[13px] font-semibold text-ink-mid mt-4 mb-1.5">Operator: deploy once</div>
+            <code className="block font-geist-mono text-[12.5px] text-ink-mid rounded-[12px] px-3.5 py-3 overflow-x-auto whitespace-nowrap" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>pnpm forge:deploy:savings:base-sepolia</code>
             {isOwner ? (
               <div className="flex gap-2 mt-4 max-[520px]:flex-col">
-                <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… yield vault address" className="flex-1 rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri" />
-                <select value={recChain} onChange={(e) => setRecChain(Number(e.target.value))} className="rounded-[10px] border border-hair px-3 py-2.5 text-[13px] bg-white outline-none focus:border-peri">{CHAINS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-                <button onClick={record} className="rounded-full bg-peri text-white px-4 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors">Record</button>
+                <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… yield vault address" className="flex-1 rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[44px] px-3.5 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[13px] font-mono" />
+                <select value={recChain} onChange={(e) => setRecChain(Number(e.target.value))} className="rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[44px] px-3.5 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[13px] bg-white">{CHAINS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                <button onClick={record} className="mw-btn !min-h-[40px]">Record</button>
               </div>
             ) : <p className="text-[12px] text-ink-soft mt-3">Only the org owner can set up Treasury yield.</p>}
           </div>
         ) : org ? (
           <>
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              <div className="soft-card p-4">
-                <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Your position (your wallet)</div>
-                <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">{fmtUsd(myAssets as bigint | undefined)}</div>
-              </div>
-              <div className="soft-card p-4">
-                <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Available now</div>
-                <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">{fmtUsd(buffer as bigint | undefined)}</div>
-                <div className="text-[11px] text-ink-soft mt-0.5">instant buffer; more unwinds from the lending adapter on demand</div>
-              </div>
+            <div className="grid grid-cols-2 max-[480px]:grid-cols-1 gap-3 mt-7">
+              <Kpi k="Your position (your wallet)" v={fmtUsd(myAssets as bigint | undefined)} />
+              <Kpi k="Available now" v={fmtUsd(buffer as bigint | undefined)} s="Instant buffer; more unwinds from the lending adapter on demand" />
             </div>
 
-            <div className="soft-card p-5 mt-3">
-              <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Amount (USDC)</span>
-                <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0.00" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[15px] tabular-nums outline-none focus:border-peri" />
+            <div className="mw-raise rounded-[24px] p-6 mt-3">
+              <label className="block"><span className="text-[13px] font-semibold text-ink-mid">Amount (USDC)</span>
+                <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0.00" className="mt-1.5 w-full rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[56px] px-4 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[24px] font-geist-mono" />
               </label>
               <div className="flex gap-2 mt-4 max-[520px]:flex-col">
-                <button onClick={deposit} className="flex-1 rounded-full bg-peri text-white px-4 py-3 text-[13.5px] font-semibold hover:bg-peri-deep transition-colors">Supply</button>
-                <button onClick={() => withdraw(false)} className="flex-1 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-4 py-3 text-[13.5px] font-semibold hover:border-peri transition-colors">Withdraw</button>
+                <button onClick={deposit} className="flex-1 mw-btn !min-h-[48px]">Supply</button>
+                <button onClick={() => withdraw(false)} className="flex-1 mw-btn-quiet !min-h-[48px]">Withdraw</button>
               </div>
-              <button onClick={() => withdraw(true)} className="text-[12px] text-ink-soft mt-2.5 hover:text-peri-deep transition-colors">Withdraw all →</button>
-              <p className="text-[11.5px] text-ink-soft mt-3">Supplied USDC earns the lending adapter&apos;s variable rate (not fixed, not guaranteed). Withdrawals pull from the buffer first, then unwind from the adapter for anything larger — no lockup. Testnet only.</p>
+              <button onClick={() => withdraw(true)} className="text-[13px] text-ink-mid mt-3 bg-transparent border-0 cursor-pointer hover:text-ink">Withdraw all →</button>
+              <p className="text-[12.5px] text-ink-soft mt-3 leading-[1.5]">Supplied USDC earns the lending adapter&apos;s variable rate (not fixed, not guaranteed). Withdrawals pull from the buffer first, then unwind from the adapter for anything larger — no lockup. Testnet only.</p>
             </div>
           </>
         ) : null}
 
-        {status && <div className="mt-4 rounded-[var(--radius-card)] border border-hair bg-ground-cool p-3.5 text-[13px] text-ink">{status}</div>}
+        {status && <div role="status" className="mt-4 rounded-[16px] px-4 py-3 text-[14px] text-ink" style={{ background: 'var(--mw-band)' }}>{status}</div>}
       </div>
     </MwAuthGuard>
   )

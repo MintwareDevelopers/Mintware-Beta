@@ -29,17 +29,20 @@ export function PostSwapSummary({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] bg-ink/40 backdrop-blur-[6px] flex items-center justify-center p-[16px]"
+      className="fixed inset-0 z-[1000] bg-[rgba(21,21,29,.32)] backdrop-blur-[6px] flex items-center justify-center p-[16px] font-geist"
       onClick={(e) => { if (e.target === e.currentTarget) onDismiss() }}
     >
-      <div className="bg-white border border-hair rounded-[var(--radius-panel)] w-full max-w-[380px] shadow-lift overflow-hidden">
-        <div className="bg-ground-cool border-b border-hair-soft px-[24px] pt-[28px] pb-[20px] text-center">
-          <div className="flex justify-center mb-[10px]">
-            <span className="w-10 h-10 rounded-full grid place-items-center text-white text-[18px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 4px 14px rgba(108,108,240,0.35)' }}>✓</span>
+      <div className="mw-raise-lg rounded-[26px] w-full max-w-[400px] overflow-hidden">
+        <div className="relative overflow-hidden px-[24px] pt-[30px] pb-[22px] text-center">
+          <div aria-hidden="true" className="absolute -right-20 -top-24 w-64 h-64 rounded-full opacity-30 blur-[50px]" style={{ background: 'var(--mw-sheen)' }} />
+          <div className="relative flex justify-center mb-[12px]">
+            <span className="w-12 h-12 rounded-full grid place-items-center text-white" style={{ background: '#0F7A43', boxShadow: '0 0 0 6px rgba(15,122,67,.12)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4 10-10" /></svg>
+            </span>
           </div>
-          <div className="font-atx-display text-[20px] font-medium text-ink tracking-[-0.01em]">Swap confirmed</div>
+          <div className="relative text-[20px] font-semibold text-ink tracking-[-0.02em]">Swap confirmed</div>
           {buyAmount && buyToken && (
-            <div className="font-mono text-[14px] text-peri-deep font-semibold mt-[4px]">
+            <div className="relative font-geist-mono text-[15px] mt-[6px]" style={{ color: 'var(--mw-gain)' }}>
               {parseFloat(buyAmount).toFixed(6)} {buyToken.symbol} received
             </div>
           )}
@@ -48,19 +51,19 @@ export function PostSwapSummary({
         <div className="px-[24px] pb-[24px] flex flex-col gap-[8px]">
           {referralUrl && (
             <button
-              className="w-full py-[10px] rounded-full border border-hair bg-white text-ink-mid text-[13px] font-semibold cursor-pointer transition-all duration-150 hover:text-ink hover:border-[rgba(108,108,240,0.4)]"
+              className="mw-btn-quiet w-full !rounded-[14px] text-[14px]"
               onClick={copyReferralLink}
             >
               Copy your referral link
             </button>
           )}
           <button
-            className="w-full py-[10px] rounded-full bg-peri text-white text-[13px] font-semibold cursor-pointer transition-all duration-150 hover:bg-peri-deep"
+            className="mw-btn w-full !min-h-[48px] !rounded-[14px] text-[15px]"
             onClick={onDismiss}
           >
             Done
           </button>
-          <div className="font-mono text-[10px] text-ink-soft text-center mt-[6px] break-all">
+          <div className="font-geist-mono text-[12px] text-ink-soft text-center mt-[6px] break-all">
             tx: {txHash.slice(0, 20)}…{txHash.slice(-8)}
           </div>
         </div>

@@ -7,6 +7,7 @@
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSignMessage } from 'wagmi'
+import { PageHead, SLabel, StatusChip, IconTile, IconPeople, IconShield } from '@/components/web2/TeamKit'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
@@ -75,77 +76,87 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
   return (
     <MwAuthGuard>
       <div className="max-w-[900px] mx-auto">
-        <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {orgName || 'Org'}</Link>
-        <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Members &amp; roles</h1>
-        <p className="text-[13px] text-ink-mid mt-1.5 max-w-[64ch]">Invite by email; when they sign in, their wallet is attested as an OrgMembership on-chain. Each role is a fixed spend preset — pick from four.</p>
-
-        {/* Next step in the flow: once teammates accept, secure the treasury with them as signers. Owner-only. */}
-        {isOwner && (
-        <Link href={`/app/org/${slug}/control/setup`} className="mt-4 flex items-center justify-between gap-3 rounded-[12px] border border-[rgba(108,108,240,0.3)] px-4 py-3 no-underline hover:bg-ground-cool transition-colors" style={{ background: 'linear-gradient(120deg, rgba(108,108,240,0.06), transparent)' }}>
-          <span className="text-[13px] text-ink-mid"><b className="text-ink">Secure the treasury with these people.</b> Once they&apos;ve accepted, set up an M-of-N multisig — they become your passkey signers.</span>
-          <span className="text-peri-deep font-semibold text-[13px] shrink-0">Set up multisig →</span>
-        </Link>
-        )}
+        <PageHead
+          back={{ href: `/app/org/${slug}`, label: orgName || 'Org' }}
+          icon={<IconPeople size={24} />}
+          title="Members & roles"
+          lede="Invite by email and pick a role. When they sign in, their wallet is attested as an OrgMembership on-chain. Each role is a fixed spend preset."
+        />
 
         {/* invite — owner-only (the invite route is owner-gated server-side; hide the form from everyone else). */}
         {!isOwner ? (
-          <div className="soft-card p-5 mt-6 text-[13px] text-ink-mid">You're viewing this org's members. Only the <span className="font-semibold text-ink">owner</span> can invite teammates or change roles.</div>
+          <div className="mw-inset rounded-[20px] p-5 mt-7 text-[14px] text-ink-mid">You&apos;re viewing this org&apos;s members. Only the <span className="font-semibold text-ink">owner</span> can invite teammates or change roles.</div>
         ) : (<>
-        <div className="soft-card p-5 mt-6">
-          <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Invite email</span>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@org.xyz" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
+        <SLabel>Invite a teammate</SLabel>
+        <div className="mw-raise rounded-[24px] p-6">
+          <label className="block"><span className="text-[13px] font-semibold text-ink-mid"><span className="font-geist-mono text-ink-soft mr-1.5">1</span>Their email</span>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@org.xyz" className="mt-1.5 w-full rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[44px] px-3.5 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[14px]" />
           </label>
           <div className="mt-4">
-            <span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Role</span>
-            <div className="grid grid-cols-3 max-[640px]:grid-cols-1 gap-2 mt-1.5">
+            <span className="text-[13px] font-semibold text-ink-mid"><span className="font-geist-mono text-ink-soft mr-1.5">2</span>Their role</span>
+            <div className="grid grid-cols-3 max-[640px]:grid-cols-1 gap-2 mt-1.5 p-1.5 rounded-[16px]" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>
               {ROLE_PRESET_LIST.filter((p) => p.preset !== 'owner').map((p) => {
                 const on = inviteRole === p.preset
                 return (
                   <button key={p.preset} type="button" onClick={() => setInviteRole(p.preset)} aria-pressed={on}
-                    className={`text-left rounded-[12px] border p-3 transition-colors ${on ? 'border-peri bg-[rgba(108,108,240,0.06)]' : 'border-hair hover:border-[rgba(108,108,240,0.4)]'}`}>
+                    className="text-left rounded-[12px] border-0 p-3 cursor-pointer transition-[box-shadow,background] duration-200"
+                    style={on ? { background: '#fff', boxShadow: 'var(--mw-raise-sm), 0 0 0 2px rgba(91,91,230,.4)' } : { background: 'transparent' }}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13.5px] font-semibold text-ink">{p.label}</span>
-                      {on && <span className="text-peri-deep text-[13px]" aria-hidden>✓</span>}
+                      <span className="text-[14.5px] font-semibold text-ink">{p.label}</span>
+                      {on && <span className="text-[14px]" style={{ color: 'var(--mw-peri-deep)' }} aria-hidden>✓</span>}
                     </div>
-                    <div className="text-[11px] font-mono tabular-nums text-peri-deep mt-0.5">{capText(p.dailyCapUsdc)}</div>
-                    <div className="text-[11.5px] text-ink-soft mt-1 leading-[1.4]">{p.blurb}</div>
+                    <div className="text-[12.5px] font-geist-mono mt-0.5" style={{ color: 'var(--mw-peri-deep)' }}>{capText(p.dailyCapUsdc)}</div>
+                    <div className="text-[12.5px] text-ink-mid mt-1 leading-[1.4]">{p.blurb}</div>
                   </button>
                 )
               })}
             </div>
           </div>
-          <button onClick={invite} disabled={busy === 'invite' || !email} className="mt-4 rounded-full bg-peri text-white px-5 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy === 'invite' ? 'Signing…' : `Invite as ${ROLE_PRESET_LIST.find((p) => p.preset === inviteRole)?.label ?? 'member'}`}</button>
+          <button onClick={invite} disabled={busy === 'invite' || !email} className="mt-5 mw-btn !min-h-[44px] disabled:opacity-50 disabled:cursor-default">{busy === 'invite' ? 'Signing…' : `Invite as ${ROLE_PRESET_LIST.find((p) => p.preset === inviteRole)?.label ?? 'member'}`}</button>
         </div>
-        {msg && <div className="text-[12.5px] text-ink-mid mt-3">{msg}</div>}
+        {msg && <div role="status" className="mt-3 rounded-[14px] bg-[#FBE9E7] px-4 py-3 text-[13.5px] text-[#B42318]">{msg}</div>}
         {lastLink && (
-          <div className="soft-card p-4 mt-3 border border-[rgba(108,108,240,0.25)]">
-            <div className="text-[12.5px] text-ink"><span className="font-semibold">{lastLink.email}</span> invited. Send them this link to accept — sign-in is gated to their email, and accepting mints their membership.</div>
+          <div className="mw-raise rounded-[20px] p-5 mt-3" style={{ outline: '1.5px solid rgba(15,122,67,.25)', outlineOffset: -1.5 }}>
+            <div className="text-[14px] text-ink"><span className="font-semibold">{lastLink.email}</span> invited. Send them this link to accept — sign-in is gated to their email, and accepting mints their membership.</div>
             <div className="flex items-center gap-2 mt-2.5 max-[560px]:flex-col max-[560px]:items-stretch">
-              <code className="flex-1 font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2 overflow-x-auto whitespace-nowrap">{lastLink.url}</code>
-              <button onClick={() => { navigator.clipboard?.writeText(lastLink.url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[12.5px] font-semibold hover:bg-peri-deep transition-colors">{copied ? 'Copied ✓' : 'Copy link'}</button>
+              <code className="flex-1 font-geist-mono text-[12.5px] text-ink-mid rounded-[12px] px-3.5 py-2.5 overflow-x-auto whitespace-nowrap" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>{lastLink.url}</code>
+              <button onClick={() => { navigator.clipboard?.writeText(lastLink.url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }} className="shrink-0 mw-btn !min-h-[40px]">{copied ? 'Copied ✓' : 'Copy link'}</button>
             </div>
-            <div className="text-[11px] text-ink-soft mt-2">No email is sent automatically — share the link however you like (email, Slack, DM).</div>
+            <div className="text-[12.5px] text-ink-soft mt-2.5">No email is sent automatically — share the link however you like (email, Slack, DM).</div>
           </div>
         )}
         </>
         )}
 
         {/* roster */}
-        <div className="soft-card mt-4 overflow-hidden">
-          {members.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-ink-soft">No members yet — invite your first teammate.</div>}
+        <SLabel>Members · {members.length}</SLabel>
+        <div className="mw-raise rounded-[22px] overflow-hidden">
+          {members.length === 0 && <div className="px-5 py-10 text-center text-[14px] text-ink-soft">No members yet. Invite your first teammate.</div>}
           {members.map((m) => (
-            <div key={m.id} className="flex items-center gap-4 px-5 py-3.5 border-b border-hair-soft last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-2">
+            <div key={m.id} className="flex items-center gap-4 px-5 py-4 border-b border-[rgba(21,21,29,.06)] last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-2.5">
+              <span className="w-10 h-10 rounded-full shrink-0 max-[560px]:hidden" style={{ background: 'var(--mw-sheen)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.6)' }} aria-hidden />
               <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-medium text-ink truncate">{m.wallet ? `${m.wallet.slice(0, 6)}…${m.wallet.slice(-4)}` : m.invited_email}</div>
-                <div className="text-[11.5px] text-ink-soft">{m.status}{m.eas_uid ? ' · attested ✓' : ''}</div>
+                <div className={`text-[15px] font-semibold text-ink truncate ${m.wallet ? 'font-geist-mono' : ''}`}>{m.wallet ? `${m.wallet.slice(0, 6)}…${m.wallet.slice(-4)}` : m.invited_email}</div>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {m.status === 'active' ? <StatusChip tone="live">Active</StatusChip> : <StatusChip tone="building">{m.status === 'pending' ? 'Invited' : m.status}</StatusChip>}
+                  {m.eas_uid && <span className="text-[12.5px]" style={{ color: 'var(--mw-gain)' }}>Attested ✓</span>}
+                </div>
               </div>
               <select value={(m.role || 'contributor') as RolePreset} onChange={(e) => setRole(m.id, e.target.value as RolePreset)} disabled={busy === m.id}
-                className="rounded-[10px] border border-hair px-3 py-2 text-[13px] bg-white outline-none focus:border-peri disabled:opacity-50">
+                className="rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[44px] px-3.5 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[14px] !w-auto disabled:opacity-50">
                 {ROLE_PRESET_LIST.map((p) => <option key={p.preset} value={p.preset}>{p.label}</option>)}
               </select>
             </div>
           ))}
         </div>
+
+        {/* Next step in the flow: once teammates accept, secure the treasury with them as signers. Owner-only. */}
+        {isOwner && (
+          <Link href={`/app/org/${slug}/control/setup`} className="mw-raise mw-lift mt-4 flex items-center justify-between gap-3 rounded-[20px] px-5 py-4 no-underline max-[560px]:flex-col max-[560px]:items-start">
+            <span className="flex items-center gap-3.5"><IconTile><IconShield /></IconTile><span className="text-[14px] text-ink-mid"><b className="text-ink">Next: secure the treasury with these people.</b> Once they&apos;ve accepted, set up an M-of-N multisig and they become your passkey signers.</span></span>
+            <span className="font-semibold text-[14px] shrink-0" style={{ color: 'var(--mw-peri-deep)' }}>Set up multisig →</span>
+          </Link>
+        )}
       </div>
     </MwAuthGuard>
   )

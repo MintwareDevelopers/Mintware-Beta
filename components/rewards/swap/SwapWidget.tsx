@@ -293,14 +293,40 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
     return items.slice(0, 3)
   }, [isConnected, sellToken, buyToken, sellAmount, quote, chainConfig?.name, isGasInsufficient, nativeSymbol])
 
+  // Mineral styles: wells (inset) hold what you type; the raised pieces are what you press.
+  const WELL = { background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }
+  const NOTE = 'px-[14px] py-[11px] rounded-[14px] text-[13px] leading-[1.5]'
+  const WARN = `${NOTE} text-[#B42318]`
+  const WARN_STYLE = { background: '#FDF1EF', boxShadow: 'inset 0 0 0 1px rgba(180,35,24,.18)' }
+
+  function tokenButton(token: Token | null, onClick: () => void) {
+    return (
+      <button
+        className={`inline-flex items-center gap-[8px] pl-[8px] pr-[12px] min-h-[40px] rounded-full cursor-pointer text-[14px] font-semibold border-0 whitespace-nowrap shrink-0 ${token ? 'mw-btn-quiet !px-3' : 'mw-btn !px-4'}`}
+        onClick={onClick}
+      >
+        {token?.logoURI && (
+          <img
+            src={token.logoURI}
+            alt=""
+            className="w-[22px] h-[22px] rounded-full object-cover bg-[#ECECF2]"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+          />
+        )}
+        {token ? token.symbol : 'Select token'}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="opacity-60"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+    )
+  }
+
   return (
     <>
-      <div className="w-full">
+      <div className="w-full font-geist">
         {/* ── Header strip ── */}
-        <div className="px-[22px] py-[18px] flex items-center justify-between bg-white border-b border-hair-soft">
+        <div className="px-[22px] py-[18px] flex items-center justify-between gap-3 bg-white" style={{ borderBottom: '1px solid var(--mw-line)' }}>
           <div>
-            <div className="text-[18px] font-medium text-ink font-atx-display leading-none mb-[3px] tracking-[-0.01em]">Swap</div>
-            <div className="text-[11px] text-ink-soft uppercase tracking-[0.08em]">Best price across chains</div>
+            <div className="text-[18px] font-semibold text-ink leading-none tracking-[-0.02em]">Swap</div>
+            <div className="text-[12.5px] text-ink-soft mt-1">Best route across chains, via LI.FI</div>
           </div>
           <ChainSelector />
         </div>
@@ -308,80 +334,44 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
         {/* ── Content area ── */}
         <div className="bg-white p-[20px] flex flex-col gap-[10px]">
 
-          {/* Slippage bar */}
-          <div className="flex items-center gap-[6px] px-[12px] py-[8px] rounded-xl bg-ground-cool border border-hair">
-            <span className="text-[11px] text-ink-mid uppercase tracking-[0.06em] font-semibold shrink-0">Slippage</span>
-            {SLIPPAGE_PRESETS.map(p => (
-              <button
-                key={p}
-                className={`px-[10px] py-[4px] rounded-full text-[12px] font-semibold cursor-pointer transition-colors duration-[120ms] ${!customSlippage && slippage === p ? 'bg-peri text-white' : 'bg-white border border-hair text-ink-mid hover:text-ink'}`}
-                onClick={() => { setSlippage(p); setCustomSlippage('') }}
-              >
-                {p}%
-              </button>
-            ))}
-            <input
-              className="w-[56px] px-[6px] py-[4px] rounded-lg border border-hair bg-white font-mono text-[12px] text-ink text-center outline-none focus:border-[rgba(108,108,240,0.5)]"
-              type="number"
-              min="0.01"
-              max="50"
-              step="0.1"
-              placeholder="Custom"
-              value={customSlippage}
-              onChange={e => setCustomSlippage(e.target.value)}
-            />
-          </div>
-
           {/* You pay */}
-          <div className="rounded-xl bg-ground-cool border border-hair p-[14px] transition-colors duration-150 focus-within:border-[rgba(108,108,240,0.5)]">
+          <div className="rounded-[18px] p-[16px] transition-shadow duration-150 focus-within:shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_2px_rgba(91,91,230,.45)]" style={WELL}>
             <div className="flex items-center justify-between mb-[8px]">
-              <span className="text-[11px] text-ink-soft uppercase tracking-[0.08em] font-semibold">You pay</span>
+              <span className="text-[13px] text-ink-mid font-medium">You pay</span>
               {balanceFormatted && sellToken && (
-                <span className="text-[12px] text-ink-soft font-mono">
-                  Balance: {balanceFormatted} {sellToken.symbol}
+                <span className="text-[12.5px] text-ink-soft font-geist-mono">
+                  Balance {balanceFormatted} {sellToken.symbol}
                 </span>
               )}
             </div>
             <div className="flex items-center gap-[10px]">
               <div className="flex-1 min-w-0">
                 <input
-                  className="w-full bg-transparent border-0 outline-none font-mono text-[22px] font-semibold text-ink placeholder:text-ink-soft"
+                  className="w-full bg-transparent border-0 outline-none font-geist-mono text-[28px] text-ink placeholder:text-ink-soft tracking-[-0.02em]"
                   type="number"
                   min="0"
                   step="any"
                   placeholder="0"
+                  aria-label="Amount to pay"
                   value={sellAmount}
                   onChange={e => setSellAmount(e.target.value)}
                 />
                 {/* USD value sub-label */}
                 {sellAmountUSD !== null && (
-                  <div className="text-[11px] text-ink-soft font-mono mt-[2px]">
+                  <div className="text-[12.5px] text-ink-soft font-geist-mono mt-[2px]">
                     ≈ ${sellAmountUSD.toFixed(2)}
                   </div>
                 )}
               </div>
-              <button
-                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-full cursor-pointer text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${sellToken ? ' bg-white border border-hair text-ink hover:border-[rgba(108,108,240,0.4)]' : ' bg-peri text-white border border-transparent hover:bg-peri-deep'}`}
-                onClick={() => setShowSellSelector(true)}
-              >
-                {sellToken?.logoURI && (
-                  <img
-                    src={sellToken.logoURI}
-                    alt={sellToken.symbol}
-                    className="w-[18px] h-[18px] object-cover bg-[#e2e8f0]"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                  />
-                )}
-                {sellToken ? sellToken.symbol : 'Select token'}
-                <span className="text-[10px] opacity-60">▾</span>
-              </button>
+              {tokenButton(sellToken, () => setShowSellSelector(true))}
             </div>
             {balanceFormatted && (
-              <div className="flex gap-[4px] mt-[8px]">
+              <div className="flex gap-[6px] mt-[10px]">
                 {[['25%', 0.25], ['50%', 0.5], ['75%', 0.75], ['MAX', 1]].map(([label, pct]) => (
                   <button
                     key={label as string}
-                    className="px-[8px] py-[3px] rounded-full bg-white border border-hair font-mono text-[11px] font-semibold text-ink-mid cursor-pointer transition-colors duration-[120ms] hover:text-ink"
+                    className="px-[10px] min-h-[30px] rounded-[9px] bg-white border-0 font-geist-mono text-[12px] text-ink-mid cursor-pointer hover:text-ink"
+                    style={{ boxShadow: 'var(--mw-raise-sm)' }}
                     onClick={() => setPercent(pct as number)}
                   >
                     {label}
@@ -392,52 +382,72 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           </div>
 
           {/* Flip */}
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center -my-[18px] relative z-[1]">
             <button
-              className="w-[36px] h-[36px] rounded-full bg-white border border-hair text-[18px] cursor-pointer flex items-center justify-center transition-all duration-150 text-peri-deep hover:bg-peri hover:text-white hover:border-transparent hover:rotate-180"
+              className="w-[40px] h-[40px] rounded-[12px] bg-white border-0 cursor-pointer flex items-center justify-center transition-transform duration-200 hover:rotate-180"
+              style={{ boxShadow: 'var(--mw-raise-sm), 0 0 0 4px #fff', color: 'var(--mw-peri-deep)' }}
               onClick={flip}
               title="Flip tokens"
+              aria-label="Flip tokens"
             >
-              ↕
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4" /></svg>
             </button>
           </div>
 
           {/* You receive */}
-          <div className="rounded-xl bg-ground-cool border border-hair p-[14px] transition-colors duration-150">
+          <div className="rounded-[18px] p-[16px]" style={WELL}>
             <div className="flex items-center justify-between mb-[8px]">
-              <span className="text-[11px] text-ink-soft uppercase tracking-[0.08em] font-semibold">You receive (estimate)</span>
+              <span className="text-[13px] text-ink-mid font-medium">You receive (estimate)</span>
             </div>
             <div className="flex items-center gap-[10px]">
-              <span className={`flex-1 font-mono text-[22px] font-semibold text-ink overflow-hidden text-ellipsis whitespace-nowrap${isQuoting ? ' text-ink-soft animate-[blink_1s_step-end_infinite]' : ''}`}>
+              <span className={`flex-1 font-geist-mono text-[28px] text-ink tracking-[-0.02em] overflow-hidden text-ellipsis whitespace-nowrap${isQuoting ? ' text-ink-soft animate-[blink_1s_step-end_infinite]' : ''}`}>
                 {isQuoting ? '…' : buyAmount ? fmt(buyAmount) : <span className="text-ink-soft">0</span>}
               </span>
-              <button
-                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-full cursor-pointer text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${buyToken ? ' bg-white border border-hair text-ink hover:border-[rgba(108,108,240,0.4)]' : ' bg-peri text-white border border-transparent hover:bg-peri-deep'}`}
-                onClick={() => setShowBuySelector(true)}
-              >
-                {buyToken?.logoURI && (
-                  <img
-                    src={buyToken.logoURI}
-                    alt={buyToken.symbol}
-                    className="w-[18px] h-[18px] object-cover bg-[#e2e8f0]"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                  />
-                )}
-                {buyToken ? buyToken.symbol : 'Select token'}
-                <span className="text-[10px] opacity-60">▾</span>
-              </button>
+              {tokenButton(buyToken, () => setShowBuySelector(true))}
+            </div>
+          </div>
+
+          {/* Slippage — a segmented well with the active value raised */}
+          <div className="flex items-center gap-[6px] flex-wrap mt-[2px]">
+            <span className="text-[13px] text-ink-mid font-medium mr-1">Slippage</span>
+            <div className="inline-flex gap-1 p-1 rounded-[12px]" style={WELL}>
+              {SLIPPAGE_PRESETS.map(p => {
+                const on = !customSlippage && slippage === p
+                return (
+                  <button
+                    key={p}
+                    aria-pressed={on}
+                    className="px-[10px] min-h-[30px] rounded-[9px] border-0 font-geist-mono text-[12.5px] cursor-pointer"
+                    style={on ? { background: '#fff', boxShadow: 'var(--mw-raise-sm)', color: 'var(--mw-ink)' } : { background: 'transparent', color: 'var(--mw-ink-2)' }}
+                    onClick={() => { setSlippage(p); setCustomSlippage('') }}
+                  >
+                    {p}%
+                  </button>
+                )
+              })}
+              <input
+                className="w-[64px] px-[6px] min-h-[30px] rounded-[9px] border-0 bg-white font-geist-mono text-[12.5px] text-ink text-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--mw-btn)]"
+                type="number"
+                min="0.01"
+                max="50"
+                step="0.1"
+                placeholder="Custom"
+                aria-label="Custom slippage percent"
+                value={customSlippage}
+                onChange={e => setCustomSlippage(e.target.value)}
+              />
             </div>
           </div>
 
           {/* Route info strip — includes estimated network fee */}
           {quote && sellToken && buyToken && !isQuoting && (
-            <div className="flex items-center justify-between px-[12px] py-[8px] rounded-xl bg-ground-cool border border-hair">
+            <div className="flex items-center justify-between flex-wrap gap-2 px-[14px] py-[10px] rounded-[14px]" style={{ background: 'var(--mw-band)' }}>
               <div className="flex items-center gap-[6px]">
-                <span className="text-[10px] font-semibold text-peri-deep uppercase tracking-[0.08em]">Best route</span>
-                <span className="text-[11px] text-ink-soft">via LI.FI</span>
+                <span className="text-[12.5px] font-semibold" style={{ color: 'var(--mw-peri-deep)' }}>Best route</span>
+                <span className="text-[12.5px] text-ink-soft">via LI.FI</span>
               </div>
-              <div className="flex items-center gap-[8px]">
-                <span className="font-mono text-[12px] text-ink-mid">
+              <div className="flex items-center gap-[8px] flex-wrap">
+                <span className="font-geist-mono text-[12.5px] text-ink-mid">
                   1 {sellToken.symbol} ≈ {parseFloat(quote.price || '0') > 0
                     ? parseFloat(quote.price).toFixed(4)
                     : buyAmount && sellAmount
@@ -446,13 +456,13 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
                   } {buyToken.symbol}
                 </span>
                 {priceImpact !== null && (
-                  <span className={`font-mono text-[12px] px-[6px] py-[2px] rounded-full border ${priceImpact > 2 ? 'border-[rgba(209,67,67,0.4)] text-[#D14343]' : 'border-hair text-coral2-deep'}`}>
+                  <span className={`font-geist-mono text-[12px] px-[7px] py-[2px] rounded-full ${priceImpact > 2 ? 'bg-[#FDF1EF] text-[#B42318]' : 'bg-white text-ink-mid'}`}>
                     {priceImpact > 0 ? '-' : ''}{Math.abs(priceImpact).toFixed(2)}%
                   </span>
                 )}
                 {/* Network fee preview — fiat-first when available */}
                 {(gasCostUSD || gasCostEth) && (
-                  <span className="font-mono text-[11px] text-ink-soft" title="Estimated network fee">
+                  <span className="font-geist-mono text-[12px] text-ink-soft" title="Estimated network fee">
                     {gasCostUSD
                       ? `~$${gasCostUSD} fee`
                       : `~${parseFloat(gasCostEth!).toFixed(5)} ${nativeSymbol} fee`}
@@ -464,7 +474,7 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
 
           {/* Gas insufficiency warning */}
           {isGasInsufficient && quote && (
-            <div className="px-[12px] py-[10px] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] text-[12px] text-[#D14343]">
+            <div className={WARN} style={WARN_STYLE}>
               Your {nativeSymbol} balance may be too low to cover the network fee for this swap.
               Add some {nativeSymbol} before proceeding.
             </div>
@@ -472,64 +482,53 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
 
           {/* Errors */}
           {quoteError && (
-            <div className="px-[14px] py-[10px] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] text-[13px] text-[#D14343]">
+            <div className={WARN} style={WARN_STYLE}>
               {quoteError}
             </div>
           )}
           {swapError && !isSwapping && status === 'error' && (
-            <div className="px-[14px] py-[10px] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] text-[13px] text-[#D14343]">
+            <div className={WARN} style={WARN_STYLE}>
               {swapError}
             </div>
           )}
 
           {/* High price impact warning */}
           {highImpactWarning && (
-            <div className="px-[12px] py-[8px] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] text-[12px] text-[#D14343]">
+            <div className={WARN} style={WARN_STYLE}>
               High price impact ({priceImpact?.toFixed(1)}%) — consider a smaller trade
             </div>
           )}
 
           {quoteSummary && (
-            <div className="px-[12px] py-[10px] rounded-xl bg-ground-cool border border-hair text-[12px] text-ink-mid leading-[1.55]">
+            <div className={`${NOTE} text-ink-mid`} style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
               {quoteSummary}
             </div>
           )}
 
           {readinessItems.length > 0 && (
-            <div className="px-[12px] py-[12px] rounded-xl bg-ground-cool border border-hair">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-soft mb-[8px]">
+            <div className="px-[14px] py-[12px] rounded-[14px]" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+              <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-soft mb-[8px]">
                 Before you trade
               </div>
-              <div className="flex flex-col gap-[6px]">
-                {readinessItems.map((item) => (
-                  <div key={item} className="flex items-start gap-[8px] text-[12px] text-ink-mid leading-[1.5]">
-                    <span className="w-[6px] h-[6px] rounded-full bg-peri inline-block mt-[6px] shrink-0" />
+              <ol className="m-0 p-0 list-none flex flex-col gap-[7px]">
+                {readinessItems.map((item, i) => (
+                  <li key={item} className="flex items-start gap-[9px] text-[13px] text-ink-mid leading-[1.5]">
+                    <span className="w-[20px] h-[20px] rounded-full grid place-items-center text-[11px] font-semibold text-white shrink-0 mt-[1px]" style={{ background: 'var(--mw-btn)' }}>{i + 1}</span>
                     <span>{item}</span>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ol>
             </div>
           )}
 
           {/* Action button — "Review Swap" opens the confirmation sheet */}
           <button
-            className={`w-full py-[14px] rounded-full cursor-pointer text-[14px] font-semibold transition-all duration-150 mt-[2px] disabled:cursor-not-allowed${
-              isActionDisabled()
-                ? ' bg-ground-cool text-ink-soft'
-                : ' bg-peri text-white hover:bg-peri-deep'
-            }`}
+            className={`w-full !min-h-[54px] !rounded-[14px] text-[16px] mt-[4px] ${isActionDisabled() ? 'mw-btn-quiet !text-ink-soft cursor-not-allowed' : 'mw-btn'}`}
             disabled={isActionDisabled()}
             onClick={handleReviewSwap}
           >
             {getActionLabel()}
           </button>
-
-          {/* Score gain live preview */}
-          {sellAmount && parseFloat(sellAmount) > 0 && (
-            <div className="flex items-center justify-center gap-[5px] text-[12px] -mt-[2px]">
-              <span className="text-ink-soft">Every swap builds your Attribution score</span>
-            </div>
-          )}
         </div>
       </div>
 

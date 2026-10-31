@@ -1,6 +1,6 @@
 'use client'
 
-// V1EditProfile — the dark, in-app profile editor (so editing never bounces you to the light V2 page).
+// V1EditProfile — the in-app profile editor (so editing never bounces you to the light V2 page).
 // Reuses the EXACT proven pipeline: the shared idempotent sanitizers, the signed buildProfileUpdateMessage
 // (EIP-191), and POST /api/profile. Only the skin is new.
 //
@@ -8,17 +8,18 @@
 // (sha256), signs `buildProfileAvatarMessage` (wallet + issuedAt + sha256 + size — one signature per exact
 // file), streams the multipart body via XHR so we get real upload progress, and drops the returned public
 // URL into the URL field so the ordinary "Save profile" signature re-affirms it. The image-URL field stays
-// as the fallback for anyone who'd rather link a hosted picture.
+// as the fallback for anyone who'd rather link a hosted picture. Mineral: a raised sheet, inputs as inset wells,
+// grouped into picture / about you / links, one solid primary action.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSignMessage } from 'wagmi'
 import { buildProfileUpdateMessage } from '@/lib/web3/signedActionMessages'
 import { cleanProfileField, cleanProfileHandle, cleanProfileUrl, cleanProfileImageUrl } from '@/lib/rewards/profileSanitize'
 import { AVATAR_ALLOWED_MIMES, AVATAR_MAX_BYTES, buildProfileAvatarMessage, sniffImageMime } from '@/lib/profile/avatarUpload'
 import type { ProfileMeta } from '@/lib/rewards/useProfileMeta'
 
-const INPUT = 'w-full rounded-[10px] px-3 py-2.5 text-[13.5px] font-atx-display outline-none transition-colors'
-const inputStyle = { background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(22,22,44,0.1)', color: '#191923' } as const
+const INPUT = 'w-full rounded-[12px] px-3.5 min-h-[44px] py-2.5 text-[14.5px] font-geist outline-none border-0 focus-visible:outline-2 focus-visible:outline-[var(--mw-btn)]'
+const inputStyle = { background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)', color: '#15151D' } as const
 const ACCEPT = AVATAR_ALLOWED_MIMES.join(',')
 
 type UploadState =
@@ -150,82 +151,99 @@ export function V1EditProfile({ wallet, meta, onClose, onSaved }: { wallet: stri
     : null
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto py-[6vh] px-4 font-atx-display" style={{ background: 'rgba(40,36,90,0.28)', backdropFilter: 'blur(4px)' }} onClick={onClose} role="dialog" aria-modal="true">
-      <div className="w-full max-w-[440px] rounded-[18px] p-6" style={{ background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)' }} onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto py-[6vh] px-4 font-geist" style={{ background: 'rgba(40,36,90,0.28)', backdropFilter: 'blur(4px)' }} onClick={onClose} role="dialog" aria-modal="true">
+      <div className="w-full max-w-[480px] rounded-[26px] p-6 mw-raise-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-[18px]">Edit profile</h2>
-          <button onClick={onClose} className="text-[18px] cursor-pointer" style={{ color: '#8A8A9E' }} aria-label="Close">×</button>
+          <h2 className="m-0 font-semibold text-[20px] tracking-[-0.02em]">Edit profile</h2>
+          <button onClick={onClose} className="mw-btn-quiet !w-10 !h-10 !min-h-0 !px-0" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
         </div>
 
         {/* avatar: picker + preview + progress */}
-        <div className="flex items-center gap-4 mt-5">
+        <Group title="Picture">
+        <div className="flex items-center gap-4">
           <button
             type="button"
             onClick={() => !uploading && fileRef.current?.click()}
             disabled={uploading}
             aria-label="Choose a profile picture"
-            className="relative w-[64px] h-[64px] rounded-full overflow-hidden flex items-center justify-center shrink-0 cursor-pointer disabled:cursor-default"
-            style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', border: '2px solid rgba(22,22,44,0.1)' }}
+            className="relative w-[68px] h-[68px] rounded-full overflow-hidden flex items-center justify-center shrink-0 cursor-pointer disabled:cursor-default border-0 p-0"
+            style={{ background: 'var(--mw-sheen)', boxShadow: 'var(--mw-raise-sm), 0 0 0 3px #fff' }}
           >
             {shownAvatar ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={shownAvatar} alt="" width={64} height={64} style={{ objectFit: 'cover', width: '100%', height: '100%', opacity: uploading ? 0.5 : 1 }} />
             ) : (
-              <span className="font-bold text-[22px] text-white">{wallet.charAt(2).toUpperCase()}</span>
+              <span className="font-bold text-[22px]" style={{ color: '#2E2BA8' }}>{wallet.charAt(2).toUpperCase()}</span>
             )}
             {upload.phase === 'uploading' && (
-              <span className="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: 'rgba(0,0,0,0.5)' }}>
-                <span className="block h-full transition-[width]" style={{ width: `${upload.pct}%`, background: '#4C4CD6' }} />
+              <span className="absolute inset-x-0 bottom-0 h-[5px]" style={{ background: 'rgba(21,21,29,0.25)' }}>
+                <span className="block h-full transition-[width]" style={{ width: `${upload.pct}%`, background: '#5B5BE6' }} />
               </span>
             )}
           </button>
           <div className="flex-1 min-w-0">
-            <Label>Profile picture</Label>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="text-[12.5px] font-semibold px-3 py-1.5 rounded-[9px] cursor-pointer disabled:cursor-default"
-                style={uploading ? { background: 'rgba(22,22,44,0.06)', color: '#8A8A9E' } : { background: 'rgba(138,130,244,0.14)', color: '#4C4CD6', border: '1px solid rgba(138,130,244,0.25)' }}
+                className="mw-btn-quiet !min-h-[40px] disabled:opacity-60 disabled:cursor-default"
               >
                 {uploading ? 'Working…' : avatarUrl ? 'Replace image' : 'Upload image'}
               </button>
-              <span className="text-[11px]" style={{ color: '#8A8A9E' }}>PNG · JPEG · WebP · up to 2 MB</span>
+              <span className="text-[12px]" style={{ color: '#62626F' }}>PNG · JPEG · WebP · up to 2 MB</span>
             </div>
             <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={(e) => void pickFile(e.target.files?.[0] ?? null)} />
-            {statusLine && <div className="text-[12px] mt-1.5" style={{ color: upload.phase === 'done' ? '#7FD6A8' : '#494957' }}>{statusLine}</div>}
-            {upload.phase === 'error' && <div className="text-[12px] mt-1.5" style={{ color: '#DC4A44' }}>{upload.message}</div>}
+            {statusLine && <div className="text-[12.5px] mt-2" style={{ color: upload.phase === 'done' ? '#0F7A43' : '#454552' }} role="status">{statusLine}</div>}
+            {upload.phase === 'error' && <div className="text-[12.5px] mt-2" style={{ color: '#B42318' }} role="alert">{upload.message}</div>}
           </div>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-4">
           <Label>Or an image URL</Label>
           <input className={INPUT} style={inputStyle} placeholder="https://…/pfp.png" value={avatarUrl} onChange={(e) => { setAvatarUrl(e.target.value); if (localPreview) { URL.revokeObjectURL(localPreview); setLocalPreview(null) } if (upload.phase === 'done' || upload.phase === 'error') setUpload({ phase: 'idle' }) }} />
         </div>
 
-        <div className="mt-4"><Label>Display name</Label><input className={INPUT} style={inputStyle} placeholder="Your name" maxLength={40} value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
-        <div className="mt-3"><Label>Bio</Label><textarea className={INPUT} style={{ ...inputStyle, resize: 'none', height: 64 }} placeholder="A line about you" maxLength={200} value={bio} onChange={(e) => setBio(e.target.value)} /></div>
+        </Group>
 
-        <div className="grid grid-cols-2 gap-3 mt-3">
+        <Group title="About you">
+        <div><Label>Display name</Label><input className={INPUT} style={inputStyle} placeholder="Your name" maxLength={40} value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
+        <div className="mt-3"><Label>Bio</Label><textarea className={INPUT} style={{ ...inputStyle, resize: 'none', height: 72 }} placeholder="A line about you" maxLength={200} value={bio} onChange={(e) => setBio(e.target.value)} /></div>
+        </Group>
+
+        <Group title="Links">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
           <div><Label>X / Twitter</Label><input className={INPUT} style={inputStyle} placeholder="handle" value={twitter} onChange={(e) => setTwitter(e.target.value)} /></div>
           <div><Label>Farcaster</Label><input className={INPUT} style={inputStyle} placeholder="handle" value={farcaster} onChange={(e) => setFarcaster(e.target.value)} /></div>
           <div><Label>Telegram</Label><input className={INPUT} style={inputStyle} placeholder="handle" value={telegram} onChange={(e) => setTelegram(e.target.value)} /></div>
           <div><Label>Website</Label><input className={INPUT} style={inputStyle} placeholder="you.xyz" value={website} onChange={(e) => setWebsite(e.target.value)} /></div>
         </div>
+        </Group>
 
-        {error && <div className="text-[12.5px] mt-3" style={{ color: '#DC4A44' }}>{error}</div>}
+        {error && <div className="text-[13px] mt-4" style={{ color: '#B42318' }} role="alert">{error}</div>}
 
         <div className="flex gap-2.5 mt-5">
-          <button onClick={save} disabled={busy || uploading} className="flex-1 text-[14px] font-semibold py-3 rounded-[12px] text-white cursor-pointer disabled:cursor-default" style={busy || uploading ? { background: 'rgba(22,22,44,0.08)', color: '#494957' } : { background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }}>{busy ? 'Sign to save…' : uploading ? 'Finishing upload…' : 'Save profile'}</button>
-          <button onClick={onClose} className="text-[14px] font-semibold px-5 py-3 rounded-[12px] cursor-pointer" style={{ color: '#494957', border: '1px solid rgba(22,22,44,0.12)' }}>Cancel</button>
+          <button onClick={save} disabled={busy || uploading} className="mw-btn flex-1 !min-h-[48px] disabled:opacity-60 disabled:cursor-default">{busy ? 'Sign to save…' : uploading ? 'Finishing upload…' : 'Save profile'}</button>
+          <button onClick={onClose} className="mw-btn-quiet !min-h-[48px] !px-5">Cancel</button>
         </div>
-        <div className="text-[11px] mt-3 leading-[1.5]" style={{ color: '#8A8A9E' }}>Saved on-chain-adjacent: you sign a message to prove this wallet is yours — no gas. Uploads are signed per image, so no one can swap your picture.</div>
+        <div className="text-[12px] mt-3 leading-[1.5]" style={{ color: '#62626F' }}>You sign a message to prove this wallet is yours: no gas, nothing on-chain. Uploads are signed per image, so no one can swap your picture.</div>
       </div>
     </div>
   )
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-[11px] uppercase tracking-[0.06em] font-semibold mb-1.5" style={{ color: '#8A8A9E' }}>{children}</div>
+function Label({ children }: { children: ReactNode }) {
+  return <div className="text-[12.5px] font-medium mb-1.5" style={{ color: '#454552' }}>{children}</div>
+}
+
+/** A titled section of the sheet, separated by a hairline. */
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mt-5 pt-5" style={{ borderTop: '1px solid var(--mw-line)' }}>
+      <div className="text-[12px] font-semibold uppercase tracking-[0.08em] mb-3" style={{ color: '#62626F' }}>{title}</div>
+      {children}
+    </section>
+  )
 }

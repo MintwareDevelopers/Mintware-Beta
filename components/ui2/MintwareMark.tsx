@@ -1,24 +1,11 @@
-// MintwareMark — the Mintware brand mark: a dome rising over a wide base (an
-// abstract "m" / horizon), set in the periwinkle tile the platform already uses.
-// One reusable component so the nav, footer, and favicon all read identically.
+// MintwareMark — the brand mark used across the older surfaces (nav, footers, org pages). Since the Mineral
+// redesign it draws the three-disc stack (liquidity, collateral, credit), so every surface shows one logo.
 //
 // tone:
-//   'tile'    → periwinkle-gradient rounded square, white two-tone mark (default; nav/footer)
-//   'periwinkle' → transparent bg, periwinkle mark (on light surfaces)
-//   'inverse' → transparent bg, white mark (on dark surfaces / dark "pop" pills)
+//   'tile' / 'periwinkle' → the full-colour disc stack (default; light surfaces)
+//   'inverse'             → a white silhouette of the stack (dark surfaces)
 
 type Tone = 'tile' | 'periwinkle' | 'inverse'
-
-// Shared glyph geometry — a flying saucer: a flat disc + a shallow cockpit dome,
-// both the SAME solid fill so they merge into one clean silhouette.
-function Glyph({ fill }: { fill: string }) {
-  return (
-    <>
-      <ellipse cx="50" cy="54" rx="36" ry="8.5" fill={fill} />
-      <path d="M33 54C33 45.4 40.6 38 50 38C59.4 38 67 45.4 67 54Z" fill={fill} />
-    </>
-  )
-}
 
 export function MintwareMark({
   size = 22,
@@ -31,38 +18,16 @@ export function MintwareMark({
   className?: string
   title?: string
 }) {
-  if (tone === 'tile') {
-    return (
-      <span
-        role="img"
-        aria-label={title}
-        className={`inline-grid place-items-center shrink-0 ${className}`}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: Math.round(size * 0.32),
-          background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))',
-          boxShadow: '0 3px 10px rgba(108,108,240,0.35)',
-        }}
-      >
-        <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
-          <Glyph fill="#ffffff" />
-        </svg>
-      </span>
-    )
-  }
-
-  const fill = tone === 'inverse' ? '#ffffff' : 'var(--color-peri)'
+  const inverse = tone === 'inverse'
+  const c = (color: string, op = 1) => (inverse ? { fill: '#ffffff', fillOpacity: op } : { fill: color })
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      role="img"
-      aria-label={title}
-      className={`shrink-0 ${className}`}
-    >
-      <Glyph fill={fill} />
+    <svg width={size} height={size} viewBox="0 0 32 32" role="img" aria-label={title} className={`shrink-0 ${className}`}>
+      <ellipse cx="16" cy="23" rx="13" ry="5" {...c('#E58C66', 0.55)} />
+      <ellipse cx="16" cy="21" rx="13" ry="5" {...c('#F2CBC2', 0.9)} />
+      <ellipse cx="16" cy="15.5" rx="10.5" ry="4.2" {...c('#8E7FE0', 0.55)} />
+      <ellipse cx="16" cy="14" rx="10.5" ry="4.2" {...c('#D6CFF6', 0.9)} />
+      <ellipse cx="16" cy="9" rx="8" ry="3.4" {...c('#5B5BE6', 0.55)} />
+      <ellipse cx="16" cy="7.6" rx="8" ry="3.4" {...c('#B3B2FB')} />
     </svg>
   )
 }

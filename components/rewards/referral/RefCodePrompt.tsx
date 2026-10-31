@@ -114,37 +114,42 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
 
   return (
     <div
-      className={`fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-[1099] flex items-center justify-center p-6 transition-opacity duration-[250ms] ease-out ${animIn ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 bg-[rgba(21,21,29,.32)] backdrop-blur-[4px] z-[1099] flex items-center justify-center p-6 transition-opacity duration-[250ms] ease-out ${animIn ? 'opacity-100' : 'opacity-0'}`}
       onClick={() => dismiss(true)}
     >
       <div
-        className={`rounded-[var(--radius-panel)] bg-white border border-hair shadow-lift z-[1100] p-[36px_28px_28px] w-full max-w-[400px] transition-[transform,opacity] duration-[250ms] ease-out font-atx-display relative ${animIn ? 'scale-100 translate-y-0 opacity-100' : 'scale-[0.94] translate-y-2 opacity-0'}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Referral code"
+        className={`mw-raise-lg rounded-[26px] z-[1100] p-[32px_28px_26px] w-full max-w-[400px] transition-[transform,opacity] duration-[250ms] ease-out font-geist relative overflow-hidden ${animIn ? 'scale-100 translate-y-0 opacity-100' : 'scale-[0.94] translate-y-2 opacity-0'}`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="w-[40px] h-[4px] rounded-full bg-hair mx-auto mb-6" />
+        <div aria-hidden="true" className="absolute -right-20 -top-24 w-64 h-64 rounded-full opacity-25 blur-[50px]" style={{ background: 'var(--mw-sheen)' }} />
 
         {promptState === 'success' ? (
           /* Success state */
-          <div className="text-center py-3">
-            <div className="w-[52px] h-[52px] rounded-2xl grid place-items-center mx-auto mb-4 text-white text-[20px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 4px 14px rgba(108,108,240,0.35)' }}>
-              ✓
+          <div className="relative text-center py-3" role="status">
+            <div className="w-[52px] h-[52px] rounded-full grid place-items-center mx-auto mb-4 text-white" style={{ background: '#0F7A43', boxShadow: '0 0 0 6px rgba(15,122,67,.12)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 4 4 10-10" /></svg>
             </div>
-            <div className="text-[18px] font-medium text-coral2-deep">
+            <div className="text-[19px] font-semibold tracking-[-0.02em]">
               Referral applied
             </div>
           </div>
         ) : (
           /* Input state */
           <>
-            <div className="text-[20px] font-medium text-ink mb-[6px] text-center tracking-[-0.02em]">
+            <div className="relative text-[21px] font-semibold text-ink mb-[6px] text-center tracking-[-0.03em]">
               Do you have a referral code?
             </div>
-            <div className="text-[13px] text-ink-mid text-center mb-6">
-              Enter a code to credit your referrer
+            <div className="relative text-[14px] text-ink-mid text-center mb-6">
+              Enter a code to credit the person who invited you
             </div>
 
             <input
-              className="w-full box-border rounded-xl bg-ground-cool border border-hair p-[14px_16px] font-mono text-[18px] text-ink outline-none transition-[border-color] duration-150 tracking-[0.5px] placeholder:text-ink-soft focus:border-[rgba(108,108,240,0.5)]"
+              aria-label="Referral code"
+              className="relative w-full box-border rounded-[14px] border-0 p-[14px_16px] font-geist-mono text-[18px] text-ink outline-none tracking-[0.5px] placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-[var(--mw-btn)]"
+              style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}
               type="text"
               placeholder="mw_xxxxxx or jake"
               value={code}
@@ -161,13 +166,13 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
 
             {/* Error message */}
             {errorMsg && (
-              <div className="text-[12px] text-[#D14343] mt-2 pl-[2px]">
+              <div role="alert" className="relative text-[13px] text-[#B42318] mt-2 pl-[2px]">
                 {errorMsg}
               </div>
             )}
 
             <button
-              className="w-full p-[14px] rounded-full bg-peri text-white text-[14px] font-semibold cursor-pointer transition-colors duration-150 mt-3 disabled:opacity-50 disabled:cursor-not-allowed hover:not-disabled:bg-peri-deep"
+              className="mw-btn relative w-full !min-h-[50px] !rounded-[14px] text-[15px] mt-3 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!isValid || promptState === 'submitting'}
               onClick={handleApply}
             >
@@ -175,7 +180,7 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
             </button>
 
             <button
-              className="w-full p-3 bg-transparent border-none text-ink-soft text-[12px] cursor-pointer mt-[6px] hover:text-ink"
+              className="relative w-full min-h-[44px] bg-transparent border-none text-ink-mid text-[14px] cursor-pointer mt-[4px] hover:text-ink"
               onClick={() => dismiss(true)}
             >
               Skip

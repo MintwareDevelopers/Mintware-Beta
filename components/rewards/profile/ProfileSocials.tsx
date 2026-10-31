@@ -1,6 +1,6 @@
 'use client'
 
-// Profile 2.0 · Slice 3 — social links row. Design v2 (soft rounded chips).
+// Profile 2.0 · Slice 3 — social links row. Mineral: small raised chips.
 // Renders nothing if no socials are set. Handles are stored bare; URLs full.
 
 import type { ProfileSocials as Socials } from '@/lib/rewards/useProfileMeta'
@@ -25,7 +25,9 @@ export function ProfileSocials({ socials, className = '' }: { socials?: Socials 
           target="_blank"
           rel="noopener noreferrer"
           title={i.label}
-          className="w-7 h-7 rounded-full border border-hair bg-white flex items-center justify-center text-[12px] text-ink-mid no-underline hover:border-[rgba(108,108,240,0.4)] hover:text-peri-deep transition-colors"
+          aria-label={i.label}
+          className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-[13px] text-ink-mid no-underline hover:text-peri-deep transition-colors"
+          style={{ boxShadow: 'var(--mw-raise-sm)' }}
         >
           {i.icon}
         </a>

@@ -34,7 +34,7 @@ interface TokenSelectorProps {
 // Fallback icon rendered as a square chip when logoURI is absent/broken
 function FallbackIcon({ symbol }: { symbol: string }) {
   return (
-    <div className="w-[32px] h-[32px] rounded-full bg-peri flex items-center justify-center font-mono text-[13px] font-semibold text-white shrink-0">
+    <div className="w-[32px] h-[32px] rounded-full flex items-center justify-center font-geist-mono text-[13px] font-semibold shrink-0" style={{ background: 'linear-gradient(160deg,#E4E4FE,#A9A7FA)', color: '#2E2BA8', boxShadow: 'inset 0 1px 0 #fff' }}>
       {symbol[0]}
     </div>
   )
@@ -84,23 +84,23 @@ export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainN
 
   return (
     <div
-      className="fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-[9999] flex items-end justify-center animate-[ts-fade_0.15s_ease]"
+      className="fixed inset-0 bg-[rgba(21,21,29,.32)] backdrop-blur-[3px] z-[9999] flex items-end justify-center animate-[ts-fade_0.15s_ease] font-geist"
       onClick={onClose}
     >
       <div
-        className="bg-white border border-hair rounded-t-[var(--radius-panel)] w-full max-w-[480px] max-h-[76vh] flex flex-col shadow-lift animate-[ts-up_0.22s_ease] overflow-hidden"
+        className="mw-raise-lg rounded-t-[26px] w-full max-w-[480px] max-h-[76vh] flex flex-col animate-[ts-up_0.22s_ease] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-[16px] pt-[16px] pb-[10px] border-b border-hair-soft shrink-0">
+        <div className="px-[18px] pt-[18px] pb-[12px] shrink-0" style={{ borderBottom: '1px solid var(--mw-line)' }}>
           <div className="flex items-center justify-between mb-[12px]">
             <div className="flex items-center gap-[8px]">
-              <span className="font-atx-display text-[15px] font-medium text-ink">Select token</span>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] rounded-full bg-[rgba(108,108,240,0.1)] border border-[rgba(108,108,240,0.28)] text-peri-deep px-2 py-[2px]">
+              <span className="text-[17px] font-semibold text-ink tracking-[-0.02em]">Select token</span>
+              <span className="text-[12px] font-semibold rounded-full px-2.5 py-[3px]" style={{ background: 'var(--mw-band)', color: 'var(--mw-peri-deep)' }}>
                 {chainName}
               </span>
             </div>
             <button
-              className="bg-transparent border-0 cursor-pointer text-ink-soft text-[22px] leading-none px-[4px] transition-colors duration-150 hover:text-ink"
+              className="mw-btn-quiet !w-9 !h-9 !min-h-0 !px-0 text-[18px] leading-none !text-ink-mid"
               onClick={onClose}
               aria-label="Close"
             >
@@ -108,10 +108,12 @@ export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainN
             </button>
           </div>
           <div className="relative">
-            <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-ink-soft text-[14px] pointer-events-none">⌕</span>
+            <span className="absolute left-[14px] top-1/2 -translate-y-1/2 text-ink-soft pointer-events-none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg></span>
             <input
               ref={inputRef}
-              className="w-full font-mono text-[13px] rounded-full border border-hair py-[8px] pr-[10px] pl-[34px] outline-none text-ink bg-ground-cool box-border transition-[border-color,background] duration-150 placeholder:text-ink-soft focus:border-[rgba(108,108,240,0.5)] focus:bg-white"
+              aria-label="Search tokens"
+              className="w-full text-[14px] rounded-[12px] border-0 min-h-[44px] pr-[12px] pl-[38px] outline-none text-ink box-border placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-[var(--mw-btn)]"
+              style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}
               type="text"
               placeholder="Search by name, symbol, or address…"
               value={query}
@@ -122,8 +124,8 @@ export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainN
 
         <div className="overflow-y-auto flex-1 pt-[4px] pb-[8px]">
           {filtered.length === 0 ? (
-            <div className="px-[16px] py-[36px] text-center text-[13px] text-ink-soft">
-              No tokens match "{query}"
+            <div className="px-[16px] py-[36px] text-center text-[14px] text-ink-soft">
+              No tokens match &ldquo;{query}&rdquo;
             </div>
           ) : (
             filtered.slice(0, 150).map((token) => {
@@ -131,15 +133,16 @@ export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainN
               return (
                 <div
                   key={token.address}
-                  className={`flex items-center gap-[10px] px-[16px] py-[8px] cursor-pointer transition-colors duration-100 hover:bg-ground-cool${isSel ? ' bg-ground-cool' : ''}`}
+                  className="flex items-center gap-[12px] mx-[8px] px-[10px] py-[9px] rounded-[12px] cursor-pointer transition-colors duration-100 hover:bg-[#F6F6FA]"
+                  style={isSel ? { background: 'var(--mw-band)' } : undefined}
                   onClick={() => { onSelect(token); onClose() }}
                 >
                   <TokenIcon token={token} />
                   <div className="flex-1 min-w-0">
-                    <div className="font-mono text-[13px] font-semibold text-ink">{token.symbol}</div>
-                    <div className="text-[11px] text-ink-soft whitespace-nowrap overflow-hidden text-ellipsis">{token.name}</div>
+                    <div className="text-[14px] font-semibold text-ink">{token.symbol}</div>
+                    <div className="text-[12.5px] text-ink-soft whitespace-nowrap overflow-hidden text-ellipsis">{token.name}</div>
                   </div>
-                  {isSel && <span className="w-[8px] h-[8px] rounded-full bg-peri inline-block shrink-0" />}
+                  {isSel && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mw-peri-deep)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-label="Selected" className="shrink-0"><path d="m5 12 4 4 10-10" /></svg>}
                 </div>
               )
             })

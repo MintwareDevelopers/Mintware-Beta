@@ -14,6 +14,7 @@ import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
 import { policyForRole } from '@/lib/org/rolePresets'
 import { persistAppMode } from '@/components/web2/AppMode'
+import { StatusChip, FIELD } from '@/components/web2/TeamKit'
 
 function capLabel(role: string | null): string {
   const cap = policyForRole(role ?? 'contributor').dailyCapUsdc
@@ -61,51 +62,52 @@ export default function AcceptPage({ params }: { params: Promise<{ slug: string 
   }, [invite, address, email, signMessageAsync])
 
   return (
-    <div className="min-h-screen font-atx-display bg-white text-ink">
+    <div className="min-h-screen font-geist text-ink" style={{ background: 'var(--mw-ground)' }}>
       <MwNav />
       <main className="mx-auto max-w-[460px] px-6 max-[700px]:px-4 py-[64px]">
-        <div className="soft-card p-6 text-center">
-          <MintwareMark className="w-[30px] h-[30px] mx-auto" />
-          <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-4">{invite?.name || 'A team'} invited you</div>
-          <h1 className="font-atx-display font-semibold text-[24px] tracking-[-0.03em] mt-1.5">Join {invite?.name ?? 'the team'} on Mintware</h1>
+        <div className="mw-raise-lg relative overflow-hidden rounded-[28px] p-7 text-center">
+          <div aria-hidden className="absolute -right-20 -top-24 w-64 h-64 rounded-full opacity-30 blur-[50px]" style={{ background: 'var(--mw-sheen)' }} />
+          <MintwareMark size={40} className="relative block mx-auto" />
+          <div className="relative text-[13px] font-semibold uppercase tracking-[0.08em] mt-4" style={{ color: 'var(--mw-peri-deep)' }}>{invite?.name || 'A team'} invited you</div>
+          <h1 className="relative font-semibold text-[28px] tracking-[-0.035em] leading-[1.1] mt-2">Join {invite?.name ?? 'the team'} on Mintware</h1>
 
           {state === 'done' ? (
-            <div className="mt-5">
-              <div className="inline-flex items-center gap-2 text-mw-green font-semibold text-[15px]"><span className="w-[9px] h-[9px] rounded-full bg-mw-green" />You're in — attested on-chain ✓</div>
-              <p className="text-[13px] text-ink-mid mt-2">Your wallet is a member of {invite?.name ?? 'the team'}{isVendor ? '' : ', with a card to spend from their treasury'}.</p>
-              <Link href={`/app/org/${slug}`} className="mt-5 inline-block rounded-full bg-peri text-white px-5 py-2.5 text-[13.5px] font-semibold no-underline hover:bg-peri-deep transition-colors">{isVendor ? 'Open your org →' : 'Go to your card →'}</Link>
+            <div className="relative mt-6">
+              <StatusChip tone="live">You&apos;re in · attested on-chain</StatusChip>
+              <p className="text-[14px] text-ink-mid mt-3">Your wallet is now a member of {invite?.name ?? 'the team'}.</p>
+              <Link href={`/app/org/${slug}`} className="mt-5 mw-btn !min-h-[44px]">Open your org</Link>
             </div>
           ) : (
             <>
               {/* What you get — role, card, cap. This is what makes the invite land. */}
-              <div className="soft-card bg-ground-cool p-4 mt-5 text-left flex flex-col gap-2.5">
-                <div className="flex items-center gap-2.5"><span className="text-ink-soft">◈</span><span className="text-[13px] text-ink">Your role · <span className="font-semibold">{roleLabel}</span></span></div>
-                {!isVendor && <div className="flex items-center gap-2.5"><span className="text-ink-soft">▤</span><span className="text-[13px] text-ink">A card to spend from their treasury</span></div>}
-                <div className="flex items-center gap-2.5"><span className="text-ink-soft">◆</span><span className="text-[13px] text-ink">{capLabel(role)}</span></div>
-              </div>
+              <ul className="relative mt-6 p-0 list-none text-left flex flex-col gap-2">
+                <li className="flex items-center gap-3 rounded-[14px] px-4 py-3 text-[14px]" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}><span className="text-ink-soft w-[88px] shrink-0">Your role</span><span className="font-semibold">{roleLabel}</span></li>
+                <li className="flex items-center gap-3 rounded-[14px] px-4 py-3 text-[14px]" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}><span className="text-ink-soft w-[88px] shrink-0">Spend cap</span><span className="font-geist-mono text-[13.5px]">{capLabel(role)}</span></li>
+                {!isVendor && <li className="flex items-center gap-3 rounded-[14px] px-4 py-3 text-[14px]" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}><span className="text-ink-soft w-[88px] shrink-0">Card</span><span className="flex items-center gap-2 flex-wrap">A team card, once cards launch <StatusChip tone="building">Not live yet</StatusChip></span></li>}
+              </ul>
 
               {!isConnected ? (
-                <div className="mt-5">
-                  <button onClick={() => login({ loginMethods: ['email', 'wallet'], walletChainType: 'ethereum-only' })} className="w-full rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors">Sign in to accept</button>
-                  <p className="text-[12px] text-ink-soft mt-2.5">{email ? `with ${email} — the email this invite was sent to` : 'with the email this invite was sent to'}</p>
+                <div className="relative mt-6">
+                  <button onClick={() => login({ loginMethods: ['email', 'wallet'], walletChainType: 'ethereum-only' })} className="w-full mw-btn !min-h-[48px]">Sign in to accept</button>
+                  <p className="text-[13px] text-ink-soft mt-3">{email ? `with ${email} — the email this invite was sent to` : 'with the email this invite was sent to'}</p>
                 </div>
               ) : (
-                <div className="mt-5">
+                <div className="relative mt-6">
                   {!email && (
-                    <label className="block text-left mb-3"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Your invited email</span>
-                      <input value={email} onChange={(e) => setEmail(e.target.value.toLowerCase())} placeholder="you@team.xyz" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
+                    <label className="block text-left mb-3"><span className="text-[13px] font-semibold text-ink-mid">Your invited email</span>
+                      <input value={email} onChange={(e) => setEmail(e.target.value.toLowerCase())} placeholder="you@team.xyz" className="mt-1.5 w-full rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[44px] px-3.5 outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6] text-[14px]" />
                     </label>
                   )}
-                  <button onClick={accept} disabled={state === 'accepting' || !email} className="w-full rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">
+                  <button onClick={accept} disabled={state === 'accepting' || !email} className="w-full mw-btn !min-h-[48px] disabled:opacity-50">
                     {state === 'accepting' ? 'Signing + attesting…' : 'Accept invitation'}
                   </button>
-                  {state === 'error' && <p className="text-[12.5px] text-ink-mid mt-3">{msg}</p>}
+                  {state === 'error' && <p role="status" className="mt-3 rounded-[14px] bg-[#FBE9E7] px-4 py-3 text-[13.5px] text-[#B42318]">{msg}</p>}
                 </div>
               )}
             </>
           )}
         </div>
-        <p className="text-[11.5px] text-ink-soft text-center mt-5">Accepting mints a soulbound OrgMembership attestation to your wallet. Testnet-only, unaudited.</p>
+        <p className="text-[12.5px] text-ink-soft text-center mt-5">Accepting mints a soulbound OrgMembership attestation to your wallet. Testnet-only, unaudited.</p>
       </main>
     </div>
   )

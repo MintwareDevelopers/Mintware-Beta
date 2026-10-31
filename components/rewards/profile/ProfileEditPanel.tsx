@@ -14,9 +14,11 @@ import { buildProfileUpdateMessage } from '@/lib/web3/signedActionMessages'
 import { cleanProfileField, cleanProfileHandle, cleanProfileUrl, cleanProfileImageUrl } from '@/lib/rewards/profileSanitize'
 import type { ProfileMeta } from '@/lib/rewards/useProfileMeta'
 
-const LABEL = 'uppercase tracking-[0.12em] text-[10px] font-semibold text-ink-soft mb-1.5 block'
+// Mineral: fields are inset wells; the one action (Sign & save) is the solid button.
+const LABEL = 'text-[13px] font-medium text-ink-mid mb-1.5 block'
 const FIELD =
-  'w-full rounded-xl bg-white border border-hair px-3 py-2 text-[13px] font-atx-display text-ink outline-none focus:border-[rgba(108,108,240,0.5)] transition-colors placeholder:text-ink-soft'
+  'w-full rounded-[12px] border-0 px-3.5 min-h-[44px] py-2.5 text-[14.5px] text-ink outline-none focus-visible:outline-2 focus-visible:outline-[var(--mw-btn)] placeholder:text-ink-soft'
+const WELL = { background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }
 
 export function ProfileEditPanel({
   wallet,
@@ -82,60 +84,62 @@ export function ProfileEditPanel({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-ink/40 backdrop-blur-[3px] py-[6vh] px-4 font-atx-display"
+      className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-[rgba(21,21,29,.32)] backdrop-blur-[4px] py-[6vh] px-4 font-geist"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-[460px] rounded-[var(--radius-panel)] bg-white border border-hair shadow-lift" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-hair-soft">
-          <span className="uppercase tracking-[0.12em] text-[12px] font-semibold text-ink">Edit profile</span>
-          <button onClick={onClose} aria-label="Close" className="w-7 h-7 flex items-center justify-center rounded-full border border-hair bg-white text-ink-mid text-[14px] cursor-pointer hover:text-ink transition-colors">✕</button>
+      <div className="mw-raise-lg w-full max-w-[480px] rounded-[26px]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--mw-line)' }}>
+          <span className="text-[19px] font-semibold tracking-[-0.02em]">Edit profile</span>
+          <button onClick={onClose} aria-label="Close" className="mw-btn-quiet !w-9 !h-9 !min-h-0 !px-0 !text-ink-mid">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
         </div>
 
-        <div className="p-5 flex flex-col gap-4">
+        <div className="p-6 flex flex-col gap-4">
           <div>
             <label className={LABEL}>Display name</label>
-            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={40} placeholder="Your name or handle" className={FIELD} />
+            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={40} placeholder="Your name or handle" className={FIELD} style={WELL} />
           </div>
           <div>
-            <label className={LABEL}>Bio <span className="text-ink-soft normal-case tracking-normal">· {bio.length}/200</span></label>
-            <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={3} placeholder="A line about you." className={`${FIELD} resize-none leading-[1.5]`} />
+            <label className={LABEL}>Bio <span className="text-ink-soft font-geist-mono text-[12px]">· {bio.length}/200</span></label>
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={200} rows={3} placeholder="A line about you." className={`${FIELD} resize-none leading-[1.5]`} style={WELL} />
           </div>
           <div>
             <label className={LABEL}>Avatar image URL</label>
-            <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} maxLength={300} placeholder="https://…/avatar.png" className={FIELD} />
-            <p className="text-[10px] text-ink-soft mt-1.5">Paste an image URL. NFT picker coming soon. Leave blank for the default.</p>
+            <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} maxLength={300} placeholder="https://…/avatar.png" className={FIELD} style={WELL} />
+            <p className="text-[12.5px] text-ink-soft mt-1.5 mb-0">Paste an image URL. NFT picker coming soon. Leave blank for the default.</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>X / Twitter</label>
-              <input value={twitter} onChange={(e) => setTwitter(e.target.value)} maxLength={40} placeholder="handle" className={FIELD} />
+              <input value={twitter} onChange={(e) => setTwitter(e.target.value)} maxLength={40} placeholder="handle" className={FIELD} style={WELL} />
             </div>
             <div>
               <label className={LABEL}>Farcaster</label>
-              <input value={farcaster} onChange={(e) => setFarcaster(e.target.value)} maxLength={40} placeholder="handle" className={FIELD} />
+              <input value={farcaster} onChange={(e) => setFarcaster(e.target.value)} maxLength={40} placeholder="handle" className={FIELD} style={WELL} />
             </div>
             <div>
               <label className={LABEL}>Telegram</label>
-              <input value={telegram} onChange={(e) => setTelegram(e.target.value)} maxLength={40} placeholder="handle" className={FIELD} />
+              <input value={telegram} onChange={(e) => setTelegram(e.target.value)} maxLength={40} placeholder="handle" className={FIELD} style={WELL} />
             </div>
             <div>
               <label className={LABEL}>Website</label>
-              <input value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={200} placeholder="yoursite.xyz" className={FIELD} />
+              <input value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={200} placeholder="yoursite.xyz" className={FIELD} style={WELL} />
             </div>
           </div>
 
-          {error && <div className="text-[11px] text-[#D14343] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] px-3 py-2">{error}</div>}
+          {error && <div role="alert" className="text-[13px] text-[#B42318] rounded-[12px] px-3.5 py-2.5" style={{ background: '#FDF1EF', boxShadow: 'inset 0 0 0 1px rgba(180,35,24,.18)' }}>{error}</div>}
 
           <div className="flex items-center gap-2.5 pt-1">
-            <button onClick={onClose} className="glass-pill glass-pill-sm">Cancel</button>
-            <button onClick={save} disabled={busy} className="ml-auto glass-pill glass-pill-sm disabled:opacity-60">
-              {busy ? 'Sign & save…' : 'Sign & save'}
+            <button onClick={onClose} className="mw-btn-quiet">Cancel</button>
+            <button onClick={save} disabled={busy} className="ml-auto mw-btn disabled:opacity-60">
+              {busy ? 'Waiting for signature…' : 'Sign & save'}
             </button>
           </div>
-          <p className="text-[10px] text-ink-soft -mt-1">You’ll sign a message to prove ownership. No gas, no transaction.</p>
+          <p className="text-[12.5px] text-ink-soft -mt-1 mb-0">You’ll sign a message to prove ownership. No gas, no transaction.</p>
         </div>
       </div>
     </div>

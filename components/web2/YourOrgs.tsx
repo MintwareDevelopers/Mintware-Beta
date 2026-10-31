@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { policyForRole } from '@/lib/org/rolePresets'
+import { StatusChip } from '@/components/web2/TeamKit'
 
 type Org = { id: string; name: string; slug: string; role: string; isOwner: boolean; funded: boolean }
 
@@ -22,20 +23,20 @@ export function YourOrgs({ address }: { address?: string | null }) {
 
   return (
     <section className="max-w-[1040px] mx-auto px-6 max-sm:px-4 mt-8">
-      <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft mb-3">Your organizations</div>
+      <div className="text-[13px] font-semibold uppercase tracking-[0.08em] text-ink-soft mb-3">Your organizations</div>
       <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3">
         {orgs.map((o) => {
-          const receiveOnly = policyForRole(o.role).dailyCapUsdc === 0n
-          const cta = o.isOwner ? 'Manage treasury →' : receiveOnly ? 'Open org →' : 'Go to your card →'
+          // Cards are pre-enable (Bridge + Stripe), so a member's next step is the org itself, not "your card".
+          const cta = o.isOwner ? 'Manage treasury →' : 'Open org →'
           const roleLabel = o.isOwner ? 'Owner' : policyForRole(o.role).label
           return (
-            <Link key={o.id} href={`/app/org/${o.slug}`} className="soft-card p-4 no-underline group hover:shadow-card-hover transition-shadow block">
+            <Link key={o.id} href={`/app/org/${o.slug}`} className="mw-raise mw-lift rounded-[20px] p-5 no-underline block">
               <div className="flex items-center justify-between gap-2">
-                <div className="font-atx-display font-semibold text-[15px] text-ink group-hover:text-peri-deep transition-colors truncate">{o.name}</div>
-                <span className="text-[10px] uppercase tracking-[0.06em] font-semibold text-ink-soft rounded-full border border-hair px-2 py-0.5 shrink-0">{roleLabel}</span>
+                <div className="font-semibold text-[16px] text-ink truncate">{o.name}</div>
+                <StatusChip tone="muted">{roleLabel}</StatusChip>
               </div>
-              <div className="text-[12px] text-ink-soft mt-1">{o.funded ? 'Treasury live' : 'Setting up'}</div>
-              <div className="text-[12.5px] font-semibold text-peri-deep mt-2.5">{cta}</div>
+              <div className="mt-2">{o.funded ? <StatusChip tone="live">Treasury live</StatusChip> : <StatusChip tone="building">Setting up</StatusChip>}</div>
+              <div className="text-[14px] font-semibold mt-3" style={{ color: 'var(--mw-peri-deep)' }}>{cta}</div>
             </Link>
           )
         })}

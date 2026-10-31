@@ -61,7 +61,7 @@ const SECTIONS = [
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen font-atx-display bg-white text-ink overflow-x-clip">
+    <div className="min-h-screen font-geist bg-[#F6F6FA] text-ink overflow-x-clip">
       <V2Nav />
       <div className={wrap}>
         <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mb-3">Legal</div>

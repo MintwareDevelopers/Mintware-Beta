@@ -32,15 +32,15 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
   const ageLeft = live && live.appraisal.maxAgeSecs ? live.appraisal.at + live.appraisal.maxAgeSecs - now : null
 
   return (
-    <div className="rounded-[16px] p-6 glass-card">
+    <div className="rounded-[22px] p-6 max-[640px]:p-4 mw-raise">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-[12px] text-ink-mid"><span className="h-2 w-2 rounded-full bg-mw-live" />{unit.chain.name} · {D.property.symbol}</div>
-          <div className="mt-1 font-atx-display text-[20px] font-semibold">{D.property.name.replace(' (demo)', '')}</div>
+          <div className="mt-1 text-[21px] font-semibold tracking-[-0.025em]">{D.property.name.replace(' (demo)', '')}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {status && <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${STATUS_CLS[status.tone]}`}>{status.t}</span>}
-          <Link href={`/v1/rwas/${unit.slug}`} className="glass-pill glass-pill-sm no-underline">Open market</Link>
+          <Link href={`/v1/rwas/${unit.slug}`} className="mw-btn-quiet !min-h-[40px] no-underline">Open market</Link>
         </div>
       </div>
 
@@ -58,10 +58,10 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-ink-soft">
-        <span>Issuer <a href={ex.addr(D.issuer)} target="_blank" rel="noreferrer" className="font-atx-mono text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.issuer)}</a></span>
-        <span>Vault <a href={ex.addr(D.contracts.vault)} target="_blank" rel="noreferrer" className="font-atx-mono text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts.vault)}</a></span>
-        <span>Hook <a href={ex.addr(D.contracts.hook)} target="_blank" rel="noreferrer" className="font-atx-mono text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts.hook)}</a></span>
-        <span>Registry <a href={ex.addr(D.contracts.registry)} target="_blank" rel="noreferrer" className="font-atx-mono text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts.registry)}</a> (testnet stand-in for your transfer agent)</span>
+        <span>Issuer <a href={ex.addr(D.issuer)} target="_blank" rel="noreferrer" className="font-geist-mono text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.issuer)}</a></span>
+        <span>Vault <a href={ex.addr(D.contracts.vault)} target="_blank" rel="noreferrer" className="font-geist-mono text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts.vault)}</a></span>
+        <span>Hook <a href={ex.addr(D.contracts.hook)} target="_blank" rel="noreferrer" className="font-geist-mono text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts.hook)}</a></span>
+        <span>Registry <a href={ex.addr(D.contracts.registry)} target="_blank" rel="noreferrer" className="font-geist-mono text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts.registry)}</a> (testnet stand-in for your transfer agent)</span>
       </div>
     </div>
   )
@@ -69,10 +69,10 @@ function UnitCard({ unit }: { unit: RwaUnit }) {
 
 function Tile({ k, v, s, tone }: { k: string; v: string; s?: string; tone?: 'warn' }) {
   return (
-    <div className="rounded-[12px] bg-white/75 px-4 py-3">
-      <div className="text-[11px] text-ink-soft">{k}</div>
-      <div className={`mt-0.5 font-atx-display text-[18px] font-semibold tabular-nums ${tone === 'warn' ? 'text-[#B4532A]' : ''}`}>{v}</div>
-      {s && <div className="mt-0.5 text-[11px] text-ink-soft">{s}</div>}
+    <div className="rounded-[14px] px-4 py-3" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+      <div className="text-[12px] text-ink-soft">{k}</div>
+      <div className={`mt-1 font-geist-mono text-[18px] tracking-[-0.02em] ${tone === 'warn' ? 'text-[#9A3F1C]' : ''}`}>{v}</div>
+      {s && <div className="mt-1 text-[11.5px] leading-[1.4] text-ink-soft">{s}</div>}
     </div>
   )
 }

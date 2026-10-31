@@ -35,7 +35,7 @@ const V2_LINKS = [
 
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-3.5" style={{ color: '#8A8A9E' }}>{children}</div>
+  return <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-3.5" style={{ color: '#62626F' }}>{children}</div>
 }
 
 function FootLink({ href, label }: { href: string; label: string }) {
@@ -43,9 +43,9 @@ function FootLink({ href, label }: { href: string; label: string }) {
     <Link
       href={href}
       className="block text-[13.5px] no-underline transition-colors min-h-[30px] flex items-center"
-      style={{ color: '#494957' }}
-      onMouseEnter={(e) => (e.currentTarget.style.color = '#191923')}
-      onMouseLeave={(e) => (e.currentTarget.style.color = '#494957')}
+      style={{ color: '#454552' }}
+      onMouseEnter={(e) => (e.currentTarget.style.color = '#15151D')}
+      onMouseLeave={(e) => (e.currentTarget.style.color = '#454552')}
     >
       {label}
     </Link>
@@ -61,14 +61,14 @@ export function V1Footer() {
           <div className="max-[720px]:col-span-full">
             <div className="flex items-center gap-2.5">
               <MintwareMark size={26} />
-              <span className="font-bold text-[17px] tracking-[-0.01em]" style={{ color: '#191923' }}>Mintware</span>
+              <span className="font-bold text-[17px] tracking-[-0.01em]" style={{ color: '#15151D' }}>Mintware</span>
             </div>
-            <p className="text-[13.5px] leading-[1.6] mt-3.5 max-w-[34ch]" style={{ color: '#494957' }}>
+            <p className="text-[13.5px] leading-[1.6] mt-3.5 max-w-[34ch]" style={{ color: '#454552' }}>
               Never idle. Never locked. Always yours. Curated markets for tokens, stocks and real-world assets,
               on Base and Robinhood Chain.
             </p>
-            <span className="inline-flex items-center gap-1.5 mt-4 text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={{ color: '#B7791F', background: 'rgba(194,122,0,0.1)' }}>
-              <span style={{ width: 6, height: 6, borderRadius: 99, background: '#B7791F' }} />
+            <span className="inline-flex items-center gap-1.5 mt-4 text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={{ color: '#8A5300', background: 'rgba(194,122,0,0.1)' }}>
+              <span style={{ width: 6, height: 6, borderRadius: 99, background: '#8A5300' }} />
               Testnet · unaudited
             </span>
           </div>
@@ -90,10 +90,10 @@ export function V1Footer() {
 
         {/* bottom bar */}
         <div className="flex items-center justify-between gap-4 flex-wrap mt-10 pt-6" style={{ borderTop: '1px solid rgba(22,22,44,0.05)' }}>
-          <div className="text-[12px]" style={{ color: '#8A8A9E' }}>© 2026 Mintware · Liquidity should be a public good</div>
+          <div className="text-[12px]" style={{ color: '#62626F' }}>© 2026 Mintware · Liquidity should be a public good</div>
         </div>
 
-        <p className="text-[11px] leading-[1.6] mt-6" style={{ color: '#A6A6B8' }}>
+        <p className="text-[11px] leading-[1.6] mt-6" style={{ color: '#62626F' }}>
           Testnet · mock tokens · no real value. Metrics live from GeckoTerminal; est. APR is an estimate, not a
           projection; a liquidity position carries impermanent loss. The risk score ranks, it never certifies —
           humans curate every pool. Nothing here is an offer or financial advice. External audit gates real value.

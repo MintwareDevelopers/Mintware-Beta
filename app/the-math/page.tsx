@@ -1,19 +1,19 @@
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
-import { Section, Eyebrow, H2, P, Rows, Kicker, CTA, wrap } from '@/components/marketing/Story'
+import { Page, Section, Eyebrow, H2, P, Rows, Kicker, CTA, Arrow, wrap } from '@/components/marketing/Story'
 import { MathCalculator, BenchmarkTable } from '@/components/marketing/MathCalculator'
 
 export const metadata = { title: 'The math — Mintware', description: 'How a Mintware market earns: trading fees while capital is in the pool, lending yield while it waits. Run the numbers at today’s rates.' }
 
 export default function TheMath() {
-  return <main className="min-h-screen bg-white text-ink">
+  return <Page>
     <V2Nav />
 
-    <section className="bg-white">
+    <section>
       <div className={`${wrap} pt-16 pb-10 max-[800px]:pt-10`}>
         <Eyebrow>The math</Eyebrow>
-        <h1 className="font-atx-display tracking-[-0.04em] leading-[1.02] font-medium text-[clamp(2.8rem,6.4vw,5.2rem)] max-w-[16ch] mt-5">
+        <h1 className="m-0 tracking-[-0.04em] leading-[1.02] font-semibold text-[clamp(2.8rem,6.4vw,5.2rem)] max-w-[16ch] mt-5">
           Two sources of return. <span className="text-ink-soft">One balance.</span>
         </h1>
         <p className="text-ink-mid text-[16.5px] leading-[1.7] max-w-[62ch] mt-7">
@@ -50,8 +50,8 @@ export default function TheMath() {
     </Section>
 
     <CTA title="Put your balance" soft="to work.">
-      <Link href="/v1" className="glass-pill-primary">Explore live markets</Link>
-      <Link href="/markets" className="glass-pill">How markets work</Link>
+      <Link href="/v1" className="mw-btn mw-btn-lg">Explore live markets <Arrow /></Link>
+      <Link href="/markets" className="mw-btn-quiet mw-btn-lg">How markets work</Link>
     </CTA>
-  </main>
+  </Page>
 }

@@ -8,6 +8,7 @@
 import { use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSignMessage } from 'wagmi'
+import { PageHead, StatusChip, Note, IconLedger } from '@/components/web2/TeamKit'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
@@ -36,11 +37,8 @@ const short = (a?: string | null) => (a && a.length > 12 ? `${a.slice(0, 6)}…$
 const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return iso } }
 const TYPE_LABEL: Record<string, string> = { vendor_pay: 'Vendor', payroll: 'Payroll', card_swipe: 'Card', x402: 'x402', deposit: 'Deposit', withdraw: 'Withdraw' }
 
-const STATUS_STYLE: Record<string, string> = {
-  settled: 'bg-mw-green-muted text-mw-green',
-  recorded: 'bg-[rgba(108,108,240,0.11)] text-peri-deep',
-  failed: 'bg-[rgba(194,83,122,0.12)] text-[#B4436A]',
-}
+// Status in the material: settled = solid (confirmed on-chain), recorded = dotted (in the ledger, not yet sent).
+const STATUS_TONE: Record<string, 'live' | 'building' | 'bad'> = { settled: 'live', recorded: 'building', failed: 'bad' }
 
 export default function ActivityPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
@@ -134,48 +132,48 @@ export default function ActivityPage({ params }: { params: Promise<{ slug: strin
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
   }
 
-  const inputCls = 'rounded-[10px] border border-hair bg-white px-3 py-2 text-[13px] outline-none focus:border-peri'
+  const inputCls = 'rounded-[12px] border-0 bg-[#EEEEF4] shadow-[inset_0_1px_2px_rgba(21,21,29,.08),inset_0_0_0_1px_rgba(21,21,29,.05)] min-h-[42px] px-3 text-[14px] outline-none focus-visible:outline-2 focus-visible:outline-[#5B5BE6]'
 
   return (
     <MwAuthGuard>
       <div className="max-w-[1040px] mx-auto">
-        <Link href={`/app/org/${slug}`} className="text-[13px] text-ink-soft hover:text-ink no-underline">← {orgName || 'Org'}</Link>
-        <div className="flex items-end justify-between gap-4 flex-wrap mt-2">
-          <div>
-            <h1 className="font-atx-display font-semibold text-[clamp(1.6rem,3.4vw,2.1rem)] tracking-[-0.03em]">Activity</h1>
-            <p className="text-ink-mid text-[13.5px] mt-1">Every payment from the treasury — vendor pay, payroll, and cards, in one ledger.</p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={load} disabled={loading} className="glass-pill glass-pill-sm disabled:opacity-50">{loading ? 'Loading…' : 'Refresh'}</button>
-            <button onClick={exportCsv} disabled={!filtered.length} className="glass-pill glass-pill-sm disabled:opacity-40">Export CSV</button>
-          </div>
-        </div>
+        <PageHead
+          back={{ href: `/app/org/${slug}`, label: orgName || 'Org' }}
+          icon={<IconLedger size={24} />}
+          title="Activity"
+          lede="Every payment from the treasury (vendor pay, payroll and cards) in one ledger. Filter it, roll it up, export it."
+          actions={<>
+            <button onClick={load} disabled={loading} className="mw-btn-quiet !min-h-[40px] disabled:opacity-50">{loading ? 'Loading…' : 'Refresh'}</button>
+            <button onClick={exportCsv} disabled={!filtered.length} className="mw-btn !min-h-[40px] disabled:opacity-40 disabled:cursor-default">Export CSV</button>
+          </>}
+        />
 
         {/* summary + category rollup */}
         <div className="grid grid-cols-[1fr_1.4fr] gap-3 mt-6 max-[720px]:grid-cols-1">
-          <div className="soft-card p-5">
-            <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Total spend {(from || to || type || status || category || q) ? '· filtered' : ''}</div>
-            <div className="font-atx-display font-semibold text-[clamp(1.8rem,4vw,2.6rem)] tracking-[-0.03em] tabular-nums mt-1">${usd(totalAtomic)}</div>
-            <div className="text-[12.5px] text-ink-soft mt-1">{count} payment{count === 1 ? '' : 's'}</div>
+          <div className="mw-raise-lg relative overflow-hidden rounded-[24px] p-6">
+            <div aria-hidden className="absolute -right-16 -top-20 w-56 h-56 rounded-full opacity-25 blur-[48px]" style={{ background: 'var(--mw-sheen)' }} />
+            <div className="relative text-[13px] font-semibold text-ink-mid">Total spend {(from || to || type || status || category || q) ? '· filtered' : ''}</div>
+            <div className="relative font-geist-mono text-[clamp(32px,4.4vw,46px)] tracking-[-0.04em] mt-1.5">${usd(totalAtomic)}</div>
+            <div className="relative text-[13px] text-ink-soft mt-1">{count} payment{count === 1 ? '' : 's'}</div>
           </div>
-          <div className="soft-card p-5">
+          <div className="mw-raise rounded-[24px] p-6">
             <div className="flex items-center justify-between gap-2 mb-2.5">
-              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">By {groupBy}</div>
-              <div className="flex gap-1">
+              <div className="text-[13px] font-semibold text-ink-mid">By {groupBy}</div>
+              <div className="flex gap-0.5 p-1 rounded-[12px]" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>
                 {(['category', 'member', 'month'] as const).map((g) => (
-                  <button key={g} onClick={() => setGroupBy(g)} className={`text-[11px] font-semibold rounded-full px-2.5 py-1 transition-colors ${groupBy === g ? 'bg-peri text-white' : 'bg-ground-cool text-ink-mid hover:text-ink'}`}>{g[0].toUpperCase() + g.slice(1)}</button>
+                  <button key={g} onClick={() => setGroupBy(g)} aria-pressed={groupBy === g} className="text-[12.5px] font-semibold rounded-[9px] px-2.5 py-1 border-0 cursor-pointer transition-colors" style={groupBy === g ? { background: '#fff', boxShadow: 'var(--mw-raise-sm)', color: 'var(--mw-ink)' } : { background: 'transparent', color: 'var(--mw-ink-2)' }}>{g[0].toUpperCase() + g.slice(1)}</button>
                 ))}
               </div>
             </div>
-            {rollup.length === 0 ? <div className="text-[13px] text-ink-soft">No spend yet.</div> : (
+            {rollup.length === 0 ? <div className="text-[14px] text-ink-soft">No spend yet.</div> : (
               <div className="flex flex-col gap-2">
                 {rollup.slice(0, 6).map(({ k, v }) => {
                   const pct = totalAtomic === '0' ? 0 : Number((BigInt(v) * 100n) / (BigInt(totalAtomic) || 1n))
                   return (
                     <div key={k} className="flex items-center gap-3">
-                      <span className="text-[12.5px] text-ink w-[112px] truncate">{k}</span>
-                      <span className="flex-1 h-2 rounded-full bg-ground-cool overflow-hidden"><span className="block h-full rounded-full bg-peri" style={{ width: `${Math.max(4, pct)}%` }} /></span>
-                      <span className="text-[12.5px] font-mono text-ink-mid tabular-nums w-[84px] text-right">${usd(v)}</span>
+                      <span className="text-[13px] text-ink w-[112px] truncate">{k}</span>
+                      <span className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}><span className="block h-full rounded-full" style={{ width: `${Math.max(4, pct)}%`, background: '#7C7AF0' }} /></span>
+                      <span className="text-[13px] font-geist-mono text-ink-mid w-[90px] text-right">${usd(v)}</span>
                     </div>
                   )
                 })}
@@ -195,34 +193,34 @@ export default function ActivityPage({ params }: { params: Promise<{ slug: strin
         </div>
 
         {/* feed */}
-        <div className="soft-card mt-4 overflow-hidden">
+        <div className="mw-raise rounded-[22px] mt-4 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-[13px] min-w-[720px]">
               <thead>
-                <tr className="bg-ground-cool">
+                <tr style={{ background: 'var(--mw-ground)' }}>
                   {['Date', 'Type', 'Recipient', 'Category', 'By', 'Amount', 'Status'].map((h) => (
-                    <th key={h} className={`text-[10px] uppercase tracking-[0.08em] font-semibold text-ink-soft px-3.5 py-2.5 border-b border-hair ${h === 'Amount' ? 'text-right' : 'text-left'}`}>{h}</th>
+                    <th key={h} className={`text-[12px] font-semibold text-ink-soft px-4 py-3 border-b border-[rgba(21,21,29,.08)] ${h === 'Amount' ? 'text-right' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows === null ? (
-                  <tr><td colSpan={7} className="px-3.5 py-10 text-center text-ink-soft text-[13px]">{loading ? 'Loading…' : ''}</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-12 text-center text-ink-soft text-[14px]">{loading ? 'Loading…' : ''}</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={7} className="px-3.5 py-10 text-center text-ink-soft text-[13px]">{err || 'No spend matches these filters yet.'}</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-12 text-center text-ink-soft text-[14px]">{err || 'No spend matches these filters yet.'}</td></tr>
                 ) : filtered.map((r) => (
-                  <tr key={`${r.source}-${r.id}`} className="border-b border-hair-soft last:border-0">
-                    <td className="px-3.5 py-2.5 text-ink-mid whitespace-nowrap">{fmtDate(r.createdAt)}</td>
-                    <td className="px-3.5 py-2.5"><span className="text-[10px] uppercase tracking-[0.05em] font-semibold rounded-full border border-hair bg-ground-cool px-2 py-0.5 text-ink-mid">{TYPE_LABEL[r.spendType] ?? r.spendType}</span></td>
-                    <td className="px-3.5 py-2.5 font-mono text-[12.5px] text-ink">{r.source === 'card' ? (r.recipient ?? '—') : short(r.recipient)}{r.memo && <span className="block font-sans text-[11px] text-ink-soft not-italic truncate max-w-[220px]">{r.memo}</span>}</td>
-                    <td className="px-3.5 py-2.5 text-ink-mid">{r.category ?? '—'}</td>
-                    <td className="px-3.5 py-2.5 font-mono text-[12px] text-ink-soft">{short(r.initiatedBy)}</td>
-                    <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-ink">${usd(r.amountAtomic)}</td>
-                    <td className="px-3.5 py-2.5">
+                  <tr key={`${r.source}-${r.id}`} className="border-b border-[rgba(21,21,29,.06)] last:border-0">
+                    <td className="px-4 py-3 text-ink-mid whitespace-nowrap">{fmtDate(r.createdAt)}</td>
+                    <td className="px-4 py-3"><StatusChip tone="muted">{TYPE_LABEL[r.spendType] ?? r.spendType}</StatusChip></td>
+                    <td className="px-4 py-3 font-geist-mono text-[13px] text-ink">{r.source === 'card' ? (r.recipient ?? '—') : short(r.recipient)}{r.memo && <span className="block font-sans text-[11px] text-ink-soft not-italic truncate max-w-[220px]">{r.memo}</span>}</td>
+                    <td className="px-4 py-3 text-ink-mid">{r.category ?? '—'}</td>
+                    <td className="px-4 py-3 font-geist-mono text-[12.5px] text-ink-soft">{short(r.initiatedBy)}</td>
+                    <td className="px-4 py-3 text-right font-geist-mono text-ink">${usd(r.amountAtomic)}</td>
+                    <td className="px-4 py-3">
                       {r.settleTx ? (
-                        <a href={`https://sepolia.basescan.org/tx/${r.settleTx}`} target="_blank" rel="noreferrer" className={`inline-block text-[10px] uppercase tracking-[0.05em] font-semibold rounded-full px-2 py-0.5 no-underline ${STATUS_STYLE[r.status]}`}>{r.status} ↗</a>
+                        <a href={`https://sepolia.basescan.org/tx/${r.settleTx}`} target="_blank" rel="noreferrer" className="no-underline"><StatusChip tone={STATUS_TONE[r.status] ?? 'muted'} className="capitalize">{r.status} ↗</StatusChip></a>
                       ) : (
-                        <span className={`inline-block text-[10px] uppercase tracking-[0.05em] font-semibold rounded-full px-2 py-0.5 ${STATUS_STYLE[r.status]}`}>{r.status}</span>
+                        <StatusChip tone={STATUS_TONE[r.status] ?? 'muted'} className="capitalize">{r.status}</StatusChip>
                       )}
                     </td>
                   </tr>
@@ -231,7 +229,7 @@ export default function ActivityPage({ params }: { params: Promise<{ slug: strin
             </table>
           </div>
         </div>
-        <p className="text-[11.5px] text-ink-soft mt-4">Recorded payments are in your ledger; "settled" means the on-chain transaction confirmed. Testnet — no real value moves yet.</p>
+        <Note>Recorded payments are in your ledger; settled means the on-chain transaction confirmed. Testnet: no real value moves yet.</Note>
       </div>
     </MwAuthGuard>
   )

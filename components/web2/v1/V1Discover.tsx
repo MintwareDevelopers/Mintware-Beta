@@ -52,9 +52,9 @@ const projFeesYr = (p: Pool, amount: number) => (p.estFeeAprPct != null && amoun
 const projFmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(0)}`)
 
 function risk(score: number): { label: string; color: string } {
-  if (score < 20) return { label: 'Low', color: '#16A34A' }
-  if (score < 50) return { label: 'Med', color: '#B7791F' }
-  return { label: 'High', color: '#DC4A44' }
+  if (score < 20) return { label: 'Low', color: '#0F7A43' }
+  if (score < 50) return { label: 'Med', color: '#8A5300' }
+  return { label: 'High', color: '#B42318' }
 }
 
 const sortVal = (p: Pool, k: SortKey): number => {
@@ -123,18 +123,18 @@ export function V1Discover() {
   return (
     <div>
       {/* hero */}
-      <div className="text-[12px] uppercase tracking-[0.13em] font-semibold" style={{ color: '#5A57DE' }}>Markets · Base + Robinhood</div>
-      <h1 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.05] text-[clamp(1.7rem,3.4vw,2.4rem)] mt-2.5 max-w-[26ch]">
+      <div className="text-[12.5px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#4643D1' }}>Markets · Base + Robinhood</div>
+      <h1 className="font-geist font-semibold tracking-[-0.04em] leading-[1.04] text-[clamp(2rem,4vw,3rem)] mt-2.5 max-w-[24ch]">
         Put your tokens to work in curated markets —{' '}
-        <span style={{ backgroundImage: 'linear-gradient(100deg,#8A82F4,#F0A183)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>never locked.</span>
+        <span style={{ color: '#62626F' }}>never locked.</span>
       </h1>
-      <p className="text-[14.5px] leading-[1.6] mt-3 max-w-[58ch]" style={{ color: '#494957' }}>
+      <p className="text-[15.5px] leading-[1.6] mt-3 max-w-[58ch]" style={{ color: '#454552' }}>
         Add one or both pool tokens to a curated MarketEngine. Your shares track a quote-valued pool portfolio;
         withdraw pro-rata in both tokens.
       </p>
 
       {/* stats strip */}
-      <div className="flex gap-8 mt-6 flex-wrap">
+      <div className="grid gap-4 mt-7" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
         <Stat k="Live markets" v={markets == null ? '—' : String(markets.length)} />
         <Stat k="Live market value" v={markets == null ? '—' : `${liveNav.toLocaleString('en-US', { maximumFractionDigits: 0 })} test USD`} />
         <Stat k="Live on" v={markets == null ? '—' : liveChains.length ? liveChains.join(' · ') : 'Testnets'} />
@@ -152,7 +152,7 @@ export function V1Discover() {
           {[0, 1].map((i) => <div key={i} className="h-[132px] rounded-[14px] mw-shimmer" />)}
         </div>
       ) : markets.length === 0 ? (
-        <div className="mt-3 rounded-[14px] px-5 py-6 text-[13.5px]" style={{ ...CARD, color: '#494957' }}>
+        <div className="mt-3 rounded-[14px] px-5 py-6 text-[13.5px]" style={{ ...CARD, color: '#454552' }}>
           No market is open right now. New markets open here as each one is deployed and verified on-chain.
         </div>
       ) : (
@@ -171,8 +171,8 @@ export function V1Discover() {
       {/* spotlight — curated screened picks */}
       {!loading && spotlight.length > 0 && (
         <div className="mt-4">
-          <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-2.5" style={{ color: '#8A8A9E' }}>
-            Screened picks <span style={{ color: '#A6A6B8' }}>· lowest-risk, most-established of the feed</span>
+          <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-2.5" style={{ color: '#62626F' }}>
+            Screened picks <span style={{ color: '#62626F' }}>· lowest-risk, most-established of the feed</span>
           </div>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))' }}>
             {spotlight.map((p) => {
@@ -182,25 +182,25 @@ export function V1Discover() {
                   key={p.poolAddress}
                   href={`/markets/${slug(p)}?pair=${encodeURIComponent(p.pairLabel)}`}
                   className="rounded-[14px] p-4 no-underline transition-transform hover:-translate-y-0.5"
-                  style={{ background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)', color: '#191923', display: 'block' }}
+                  style={{ background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)', color: '#15151D', display: 'block' }}
                 >
                   <div className="flex items-center gap-2.5">
                     <TokenPair baseLogo={p.baseLogo} quoteLogo={p.quoteLogo} baseSymbol={p.baseSymbol} quoteSymbol={p.quoteSymbol} size={26} ring="#FFFFFF" />
                     <span className="font-semibold text-[14px] truncate">{pairName(p)}</span>
-                    <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={p.live ? { color: '#16A34A', background: 'rgba(22,163,74,0.14)' } : { color: r.color, background: `${r.color}1A` }}>
+                    <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={p.live ? { color: '#0F7A43', background: 'rgba(22,163,74,0.14)' } : { color: r.color, background: `${r.color}1A` }}>
                       {p.live ? 'Live' : r.label}
                     </span>
                   </div>
                   <div className="flex items-end justify-between mt-3">
                     <div>
                       {/* No fee field upstream ⇒ lead with real 24h volume instead of an empty APR. */}
-                      <div className="font-mono font-bold text-[19px]" style={{ color: p.estFeeAprPct != null ? '#16A34A' : '#191923' }}>{p.estFeeAprPct != null ? aprFmt(p.estFeeAprPct) : usd(p.vol24Usd)}</div>
-                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>{p.estFeeAprPct != null ? 'Est. Fee APR' : '24h Volume'}</div>
-                      {(() => { const y = projFeesYr(p, sim); return y != null ? <div className="font-mono text-[11px] mt-1" style={{ color: '#6E6E80' }}>≈ {projFmt(y)}/yr on ${simStr}</div> : null })()}
+                      <div className="font-mono font-bold text-[19px]" style={{ color: p.estFeeAprPct != null ? '#0F7A43' : '#15151D' }}>{p.estFeeAprPct != null ? aprFmt(p.estFeeAprPct) : usd(p.vol24Usd)}</div>
+                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#62626F' }}>{p.estFeeAprPct != null ? 'Est. Fee APR' : '24h Volume'}</div>
+                      {(() => { const y = projFeesYr(p, sim); return y != null ? <div className="font-mono text-[11px] mt-1" style={{ color: '#5A5A66' }}>≈ {projFmt(y)}/yr on ${simStr}</div> : null })()}
                     </div>
                     <div className="text-right">
                       <div className="font-mono text-[13px]">{usd(p.tvlUsd)}</div>
-                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>TVL</div>
+                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#62626F' }}>TVL</div>
                     </div>
                   </div>
                 </Link>
@@ -218,20 +218,20 @@ export function V1Discover() {
               key={t}
               onClick={() => setTab(t)}
               className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold cursor-pointer transition-colors"
-              style={tab === t ? { background: 'rgba(22,22,44,0.09)', color: '#191923' } : { color: '#494957' }}
+              style={tab === t ? { background: 'rgba(22,22,44,0.09)', color: '#15151D' } : { color: '#454552' }}
             >
               {label}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] uppercase tracking-[0.06em] font-semibold mr-0.5" style={{ color: '#8A8A9E' }}>Sort</span>
+          <span className="text-[11px] uppercase tracking-[0.06em] font-semibold mr-0.5" style={{ color: '#62626F' }}>Sort</span>
           {SORTS.map(([k, label]) => (
             <button
               key={k}
               onClick={() => setSortKey(k)}
               className="px-2.5 py-1 max-[640px]:py-1.5 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
-              style={sortKey === k ? { background: 'rgba(138,130,244,0.16)', color: '#4C4CD6' } : { color: '#494957' }}
+              style={sortKey === k ? { background: 'rgba(138,130,244,0.16)', color: '#4C4CD6' } : { color: '#454552' }}
             >
               {label}
             </button>
@@ -240,25 +240,25 @@ export function V1Discover() {
       </div>
 
       {/* quality-filter note (Krystal's "showing pools ≥…" honesty line) */}
-      <div className="text-[11.5px] mt-2.5" style={{ color: '#A6A6B8' }}>
-        Showing screened <span style={{ color: '#8A8A9E' }}>Uniswap v4 · USDG-quoted</span> pools, risk-ranked — never auto-approved.
+      <div className="text-[11.5px] mt-2.5" style={{ color: '#62626F' }}>
+        Showing screened <span style={{ color: '#62626F' }}>Uniswap v4 · USDG-quoted</span> pools, risk-ranked — never auto-approved.
       </div>
 
       {/* earnings simulator */}
       <div className="mt-4 rounded-[12px] px-4 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap" style={{ background: 'rgba(255,255,255,0.62)', border: '1px solid rgba(138,130,244,0.2)' }}>
         <span className="text-[12.5px] font-semibold" style={{ color: '#4C4CD6' }}>Earnings simulator</span>
-        <span className="text-[13px]" style={{ color: '#494957' }}>If I deposit</span>
+        <span className="text-[13px]" style={{ color: '#454552' }}>If I deposit</span>
         <span className="inline-flex items-center rounded-[10px] px-2.5 py-1.5" style={{ background: 'rgba(255,255,255,0.8)', border: '1px solid rgba(22,22,44,0.1)' }}>
-          <span className="mr-1 text-[13px]" style={{ color: '#8A8A9E' }}>$</span>
+          <span className="mr-1 text-[13px]" style={{ color: '#62626F' }}>$</span>
           <input
             inputMode="decimal"
             aria-label="Deposit amount to simulate"
             value={simStr}
             onChange={(e) => setSimStr(e.target.value.replace(/[^0-9.,]/g, ''))}
             className="bg-transparent outline-none font-mono font-semibold text-[14.5px] w-[84px]"
-            style={{ color: '#191923' }}
+            style={{ color: '#15151D' }}
           />
-          <span className="ml-1 text-[12px]" style={{ color: '#8A8A9E' }}>USDG</span>
+          <span className="ml-1 text-[12px]" style={{ color: '#62626F' }}>USDG</span>
         </span>
         <div className="flex gap-1.5">
           {['100', '1,000', '10,000'].map((v) => (
@@ -266,13 +266,13 @@ export function V1Discover() {
               key={v}
               onClick={() => setSimStr(v)}
               className="px-2.5 py-1 max-[640px]:py-1.5 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
-              style={simStr.replace(/[^0-9.]/g, '') === v.replace(/[^0-9.]/g, '') ? { background: 'rgba(138,130,244,0.16)', color: '#4C4CD6' } : { color: '#494957' }}
+              style={simStr.replace(/[^0-9.]/g, '') === v.replace(/[^0-9.]/g, '') ? { background: 'rgba(138,130,244,0.16)', color: '#4C4CD6' } : { color: '#454552' }}
             >
               ${v}
             </button>
           ))}
         </div>
-        <span className="text-[11.5px] max-[720px]:w-full min-[721px]:ml-auto" style={{ color: '#A6A6B8' }}>
+        <span className="text-[11.5px] max-[720px]:w-full min-[721px]:ml-auto" style={{ color: '#62626F' }}>
           → est. fees/yr per pool below · once fully deployed, gross of IL · an estimate, not a projection
         </span>
       </div>
@@ -282,7 +282,7 @@ export function V1Discover() {
           scrolls sideways, and the Pool identity column stays readable (min-w floor + horizontal scroll) */}
       <GlassFrame className="mt-3" innerClassName="overflow-x-auto">
         <div className="grid items-center px-5 py-3 text-[11px] uppercase tracking-[0.07em] font-semibold min-w-[840px]"
-          style={{ gridTemplateColumns: COLS, color: '#8A8A9E', borderBottom: '1px solid rgba(22,22,44,0.06)' }}>
+          style={{ gridTemplateColumns: COLS, color: '#62626F', borderBottom: '1px solid rgba(22,22,44,0.06)' }}>
           <span>Pool</span>
           <span className="text-center">24h Trend</span>
           <span className="text-right">Est. APR</span>
@@ -308,7 +308,7 @@ export function V1Discover() {
                 key={p.poolAddress}
                 href={`/markets/${slug(p)}?pair=${encodeURIComponent(p.pairLabel)}`}
                 className="grid items-center px-5 py-4 no-underline transition-colors min-w-[840px]"
-                style={{ gridTemplateColumns: COLS, color: '#191923', borderBottom: '1px solid rgba(22,22,44,0.05)' }}
+                style={{ gridTemplateColumns: COLS, color: '#15151D', borderBottom: '1px solid rgba(22,22,44,0.05)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(22,22,44,0.03)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
@@ -318,20 +318,20 @@ export function V1Discover() {
                     <span className="flex items-center gap-2">
                       <span className="font-semibold text-[15px] truncate">{pairName(p)}</span>
                       {p.feePct != null && (
-                        <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-[6px] shrink-0" style={{ color: '#494957', background: 'rgba(22,22,44,0.06)' }}>{p.feePct}%</span>
+                        <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-[6px] shrink-0" style={{ color: '#454552', background: 'rgba(22,22,44,0.06)' }}>{p.feePct}%</span>
                       )}
                     </span>
-                    <span className="font-mono text-[11px]" style={{ color: '#8A8A9E' }}>{short(p.poolAddress)}</span>
+                    <span className="font-mono text-[11px]" style={{ color: '#62626F' }}>{short(p.poolAddress)}</span>
                   </span>
                 </span>
                 <span className="flex justify-center"><Sparkline series={series[p.poolAddress]} /></span>
                 <span className="text-right leading-tight">
-                  <span className="font-mono text-[14px] font-semibold block" style={{ color: p.estFeeAprPct != null ? '#16A34A' : '#8A8A9E' }}>{aprFmt(p.estFeeAprPct)}</span>
-                  {(() => { const y = projFeesYr(p, sim); return y != null ? <span className="font-mono text-[11px] block mt-0.5" style={{ color: '#6E6E80' }}>≈ {projFmt(y)}/yr</span> : null })()}
+                  <span className="font-mono text-[14px] font-semibold block" style={{ color: p.estFeeAprPct != null ? '#0F7A43' : '#62626F' }}>{aprFmt(p.estFeeAprPct)}</span>
+                  {(() => { const y = projFeesYr(p, sim); return y != null ? <span className="font-mono text-[11px] block mt-0.5" style={{ color: '#5A5A66' }}>≈ {projFmt(y)}/yr</span> : null })()}
                 </span>
                 <span className="text-right font-mono text-[14px]">{usd(p.vol24Usd)}</span>
                 <span className="text-right font-mono text-[14px]">{usd(p.tvlUsd)}</span>
-                <span className="text-right font-mono text-[13.5px]" style={{ color: '#494957' }}>
+                <span className="text-right font-mono text-[13.5px]" style={{ color: '#454552' }}>
                   {p.volTvlRatio != null ? `${p.volTvlRatio.toFixed(1)}×` : '—'}
                 </span>
                 <span className="flex justify-center">
@@ -341,9 +341,9 @@ export function V1Discover() {
                 </span>
                 <span className="text-right whitespace-nowrap">
                   {p.live ? (
-                    <span className="text-[13.5px] font-semibold" style={{ color: '#5A57DE' }}>Deposit →</span>
+                    <span className="text-[13.5px] font-semibold" style={{ color: '#4643D1' }}>Deposit →</span>
                   ) : (
-                    <span className="text-[12px] font-semibold" style={{ color: '#8A8A9E' }}>Curating <span style={{ color: '#5A57DE' }}>›</span></span>
+                    <span className="text-[12px] font-semibold" style={{ color: '#62626F' }}>Curating <span style={{ color: '#4643D1' }}>›</span></span>
                   )}
                 </span>
               </Link>
@@ -352,25 +352,25 @@ export function V1Discover() {
         )}
       </GlassFrame>
 
-      <p className="text-[12px] mt-5" style={{ color: '#8A8A9E' }}>
+      <p className="text-[12px] mt-5" style={{ color: '#62626F' }}>
         Live markets read from chain (testnets, test tokens) · watchlist metrics live from GeckoTerminal (Robinhood mainnet) · est. APR = trailing-24h fees ÷ TVL, annualized
         (an estimate, not a projection) · the score ranks, humans curate.{' '}
-        <Link href="/legal" className="no-underline hover:underline" style={{ color: '#5A57DE', fontWeight: 600 }}>Legal →</Link>
+        <Link href="/legal" className="no-underline hover:underline" style={{ color: '#4643D1', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>
   )
 }
 
-const CARD = { background: '#FFFFFF', border: '1px solid rgba(22,22,44,0.08)', boxShadow: '0 1px 2px rgba(20,20,50,0.04), 0 8px 24px -12px rgba(30,30,80,0.10)' }
+const CARD = { background: '#FFFFFF', boxShadow: 'var(--mw-raise)' }
 
 function SectionHead({ title, tag, sub }: { title: string; tag: string; sub: string }) {
   return (
     <div className="mt-9">
       <div className="flex items-center gap-2.5 flex-wrap">
-        <h2 className="font-atx-display font-semibold text-[19px] tracking-[-0.02em]">{title}</h2>
-        <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] px-2 py-0.5 rounded-full" style={{ color: '#5A57DE', background: 'rgba(138,130,244,0.14)' }}>{tag}</span>
+        <h2 className="font-geist font-semibold text-[19px] tracking-[-0.02em]">{title}</h2>
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] px-2 py-0.5 rounded-full" style={{ color: '#4643D1', background: 'rgba(138,130,244,0.14)' }}>{tag}</span>
       </div>
-      <p className="text-[13px] mt-1" style={{ color: '#6E6E80' }}>{sub}</p>
+      <p className="text-[13px] mt-1" style={{ color: '#5A5A66' }}>{sub}</p>
     </div>
   )
 }
@@ -383,24 +383,24 @@ function LiveMarketCard({ m }: { m: LiveMarket }) {
     <Link
       href={`/markets/${encodeURIComponent(m.poolAddress)}?pair=${encodeURIComponent(pair)}`}
       className="block rounded-[14px] p-4 no-underline transition-transform hover:-translate-y-0.5"
-      style={{ ...CARD, color: '#191923' }}
+      style={{ ...CARD, color: '#15151D' }}
     >
       <div className="flex items-center gap-2.5">
         <TokenPair baseLogo={null} quoteLogo={null} baseSymbol={base ?? pair} quoteSymbol={quote ?? ''} size={28} ring="#FFFFFF" />
         <span className="font-semibold text-[15px] truncate">{pair}</span>
-        <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ color: '#16A34A', background: 'rgba(22,163,74,0.12)' }}>● Live</span>
+        <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ color: '#0F7A43', background: 'rgba(22,163,74,0.12)' }}>● Live</span>
       </div>
       <div className="flex items-end justify-between mt-4">
         <div>
           <div className="font-mono font-bold text-[20px]">{m.navQuote == null ? 'Reading…' : m.navQuote.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
-          <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>Market value{m.quoteSymbol ? ` · ${m.quoteSymbol}` : ''}</div>
+          <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#62626F' }}>Market value{m.quoteSymbol ? ` · ${m.quoteSymbol}` : ''}</div>
         </div>
         <div className="text-right">
           <div className="text-[12.5px] font-semibold">{chain?.short ?? `Chain ${m.chainId}`}</div>
-          <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#8A8A9E' }}>{m.feePct != null ? `${m.feePct}% fee · ` : ''}testnet</div>
+          <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#62626F' }}>{m.feePct != null ? `${m.feePct}% fee · ` : ''}testnet</div>
         </div>
       </div>
-      <div className="mt-3 pt-3 text-[12.5px] font-semibold flex justify-between" style={{ borderTop: '1px solid rgba(22,22,44,0.06)', color: '#5A57DE' }}>
+      <div className="mt-3 pt-3 text-[12.5px] font-semibold flex justify-between" style={{ borderTop: '1px solid rgba(22,22,44,0.06)', color: '#4643D1' }}>
         <span>{m.depositable ? 'Deposit or withdraw' : 'View market'}</span><span>→</span>
       </div>
     </Link>
@@ -409,13 +409,13 @@ function LiveMarketCard({ m }: { m: LiveMarket }) {
 
 function Stat({ k, v }: { k: string; v: string }) {
   return (
-    <div>
-      <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#8A8A9E' }}>{k}</div>
-      <div className="font-mono font-bold text-[16px] mt-1">{v}</div>
+    <div className="mw-raise rounded-[20px] px-[clamp(14px,2vw,22px)] py-[clamp(14px,2vw,20px)] min-w-0">
+      <div className="text-[13px]" style={{ color: '#62626F' }}>{k}</div>
+      <div className="font-mono font-medium text-[clamp(18px,2.4vw,26px)] tracking-[-0.03em] mt-2 leading-[1.15] break-words">{v}</div>
     </div>
   )
 }
 
 function Msg({ children }: { children: React.ReactNode }) {
-  return <div className="px-5 py-8 text-[14px]" style={{ color: '#494957' }}>{children}</div>
+  return <div className="px-5 py-8 text-[14px]" style={{ color: '#454552' }}>{children}</div>
 }

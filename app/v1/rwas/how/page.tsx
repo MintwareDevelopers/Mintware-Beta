@@ -7,7 +7,7 @@ import { RWA_UNITS } from '@/lib/rwa/demo'
 
 const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
 const EY = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
-const H2 = 'font-atx-display font-semibold text-ink tracking-[-0.025em] text-[clamp(1.4rem,2.4vw,1.9rem)] leading-[1.15]'
+const H2 = 'font-geist font-semibold text-ink tracking-[-0.025em] text-[clamp(1.4rem,2.4vw,1.9rem)] leading-[1.15]'
 
 const RULES: { k: string; t: string; d: string }[] = [
   { k: 'Band', t: 'Trades stay near the appraisal', d: 'A swap that would end outside the hard band reverts. Inside it, a tighter core band carries the lowest fee.' },
@@ -21,10 +21,10 @@ const RULES: { k: string; t: string; d: string }[] = [
 export default function RwaHow() {
   return (
     <div className="text-ink">
-      <section className="border-b border-hair-soft bg-[radial-gradient(1000px_360px_at_90%_-20%,rgba(108,108,240,0.12),transparent_60%)]">
+      <section className="border-b border-hair-soft bg-[radial-gradient(1000px_360px_at_90%_-20%,rgba(201,192,244,0.5),transparent_60%)]">
         <div className={`${WRAP} pt-10 pb-10`}>
           <div className={EY}>How it works</div>
-          <h1 className="mt-4 max-w-[20ch] font-atx-display text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.04] tracking-[-0.035em]">
+          <h1 className="mt-4 max-w-[20ch] font-geist text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.04] tracking-[-0.035em]">
             Divisible is not liquid. Here is the missing layer.
           </h1>
           <p className="mt-4 max-w-[64ch] text-[15.5px] leading-[1.6] text-ink-mid">
@@ -57,15 +57,15 @@ export default function RwaHow() {
       </section>
 
       {/* RULES */}
-      <section className="border-b border-hair-soft bg-[#FAFAFD]">
+      <section className="border-b border-hair-soft bg-[#F6F6FA]">
         <div className={`${WRAP} py-12`}>
           <div className={EY}>Rules the chain enforces</div>
           <h2 className={`${H2} mt-1.5`}>Anchored to the appraisal, by code</h2>
           <div className="mt-7 grid grid-cols-3 gap-4 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1">
             {RULES.map((r) => (
-              <div key={r.k} className="rounded-[20px] border border-hair bg-white p-6">
+              <div key={r.k} className="rounded-[20px] mw-raise p-6">
                 <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-peri-deep">{r.k}</div>
-                <h3 className="mt-2 font-atx-display text-[17px] font-semibold">{r.t}</h3>
+                <h3 className="mt-2 font-geist text-[17px] font-semibold">{r.t}</h3>
                 <p className="mt-1.5 text-[13.5px] leading-[1.55] text-ink-mid">{r.d}</p>
               </div>
             ))}
@@ -76,13 +76,13 @@ export default function RwaHow() {
       {/* SPLIT OF RESPONSIBILITY */}
       <section className="border-b border-hair-soft">
         <div className={`${WRAP} py-12 grid grid-cols-2 gap-5 max-[820px]:grid-cols-1`}>
-          <div className="rounded-[22px] border border-hair bg-white p-7">
+          <div className="rounded-[22px] mw-raise p-7">
             <div className={EY}>The issuer keeps</div>
             <ul className="mt-4 grid gap-2.5 text-[14px] text-ink-mid">
               {['The licence and the offering', 'Investor verification (the identity registry)', 'The token’s transfer rules', 'The appraisal, by a licensed appraiser'].map((t) => <li key={t} className="flex gap-2.5"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-coral2-deep" />{t}</li>)}
             </ul>
           </div>
-          <div className="rounded-[22px] border border-hair bg-white p-7">
+          <div className="rounded-[22px] mw-raise p-7">
             <div className={EY}>Mintware provides</div>
             <ul className="mt-4 grid gap-2.5 text-[14px] text-ink-mid">
               {['The liquidity vault and the appraisal-banded pool', 'Idle liquidity routed to lending', 'Live market data and on-chain proof', 'The same unit on any EVM chain'].map((t) => <li key={t} className="flex gap-2.5"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-peri" />{t}</li>)}
@@ -92,7 +92,7 @@ export default function RwaHow() {
       </section>
 
       {/* HONEST STATUS */}
-      <section className="border-b border-hair-soft bg-[#FAFAFD]">
+      <section className="border-b border-hair-soft bg-[#F6F6FA]">
         <div className={`${WRAP} py-10`}>
           <div className={EY}>Before real value</div>
           <p className="mt-3 max-w-[78ch] text-[14px] leading-[1.6] text-ink-mid">
