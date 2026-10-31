@@ -8,10 +8,17 @@ solc           = "0.8.26"
 optimizer      = true
 optimizer_runs = 200
 via_ir         = true
-fs_permissions = [{ access = "read", path = "./contracts-v4/script/data" }]
+fs_permissions = [{ access = "read", path = "./contracts-v4/script/data" }, { access = "read", path = "./contracts-v4/out" }]
 
 # Foundry remappings — V4 core + periphery + OZ
 remappings = [
+  "contracts-v4/lib/v4-periphery-permissioned/:permit2/=contracts-v4/lib/v4-periphery-permissioned/lib/permit2/",
+  "contracts-v4/lib/universal-router/:@uniswap/v4-periphery/=contracts-v4/lib/v4-periphery-permissioned/",
+  "@uniswap/v2-core/=contracts-v4/lib/v4-hooks-public/lib/v2-core/",
+  "@uniswap/v3-core/=contracts-v4/lib/v4-hooks-public/lib/v3-core/",
+  "@uniswap/v3-periphery/=contracts-v4/lib/universal-router/lib/v3-periphery/",
+  "contracts-v4/lib/universal-router/:permit2/=contracts-v4/lib/universal-router/lib/permit2/",
+  "contracts-v4/lib/universal-router/:solmate/=contracts-v4/lib/universal-router/lib/solmate/",
   "@uniswap/v4-periphery-permissioned/=contracts-v4/lib/v4-periphery-permissioned/",
   "@uniswap/v4-hooks-public/=contracts-v4/lib/v4-hooks-public/",
   "contracts-v4/lib/v4-hooks-public/:@uniswap/v4-periphery/=contracts-v4/lib/v4-periphery-permissioned/",
@@ -62,3 +69,7 @@ via_ir         = false
 line_length    = 100
 tab_width      = 4
 bracket_spacing = true
+
+# Actual Universal Router + pinned Permit2 runtime proof. Requires the two pinned core imports.
+[profile.permissioned_router]
+test = "contracts-v4/integration"

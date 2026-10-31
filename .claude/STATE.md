@@ -30,7 +30,7 @@ risk content remain on their existing routes. Canonical route inventory is gener
   integration is Bridge + Stripe in pre-enable state; see [`rules/payments-ypn.md`](rules/payments-ypn.md).
 - **Discover and curation** — GeckoTerminal data feeds candidate discovery; risk scores rank candidates and never
   certify them. Curated MarketEngine instances are verified against on-chain configuration.
-- **RWA demo** — the RWAs tab (`/v1/rwas`) and `MintwareRwaAppraisalHook` remain a testnet demo. See
+- **RWA owned pools** — `/v1/rwas` reads the owned MarketEngine + permission/appraisal hook on Base Sepolia; installation is pending and prior proofs are archived. See
   [`rules/rwa-liquidity.md`](rules/rwa-liquidity.md).
 - **Attribution** — the AIAttribution v3 contract is deployed on Base mainnet; this is a fundless attestation
   ledger. User-facing agent reputation surfaces remain documented in [`rules/agents.md`](rules/agents.md).
@@ -113,7 +113,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | deprecated |
 
 **34 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
-**22 of 26 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
+**16 of 20 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
 ---

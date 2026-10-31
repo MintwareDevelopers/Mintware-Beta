@@ -1,4 +1,17 @@
+import { parseAbi } from "viem"
+
 export const MARKET_ENGINE_ABI = [
+  ...parseAbi([
+    'function poolManager() view returns (address)',
+    'function nonQuoteMark() view returns (address)',
+    'function appraisalHook() view returns (address)',
+    'function permissionsAdapter() view returns (address)',
+    'function adapter0() view returns (address)',
+    'function adapter1() view returns (address)',
+    'function positionLiquidity() view returns (uint128)',
+    'function tickLower() view returns (int24)',
+    'function tickUpper() view returns (int24)',
+  ]),
   { type: 'function', name: 'token0', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'token1', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'quoteAsset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -13,3 +26,26 @@ export const MARKET_ENGINE_ABI = [
   { type: 'event', name: 'Deposited', inputs: [{ name: 'account', type: 'address', indexed: true }, { name: 'amount0', type: 'uint256', indexed: false }, { name: 'amount1', type: 'uint256', indexed: false }, { name: 'shares', type: 'uint256', indexed: false }] },
   { type: 'event', name: 'Withdrawn', inputs: [{ name: 'account', type: 'address', indexed: true }, { name: 'recipient', type: 'address', indexed: true }, { name: 'sharesBurned', type: 'uint256', indexed: false }, { name: 'amount0', type: 'uint256', indexed: false }, { name: 'amount1', type: 'uint256', indexed: false }] },
 ] as const
+
+export const RWA_HOOK_ABI = parseAbi([
+  'function permissionsFactory() view returns (address)',
+  'function permissionsAdapter() view returns (address)',
+  'function poolManager() view returns (address)',
+  'function vault() view returns (address)',
+  'function asset() view returns (address)',
+  'function quoteAsset() view returns (address)',
+  'function expectedPoolId() view returns (bytes32)',
+  'function latestMark() view returns (uint256 priceWad, uint64 observedAt)',
+  'function bandStatus() view returns (int24 spotTick, int24 appraisalTick, uint256 deviationTicks, bool inCore, bool inSpec, bool fresh)',
+  'function config() view returns (uint24 coreBandTicks,uint24 specBandTicks,uint24 maxStepTicks,uint32 minUpdateInterval,uint32 maxAppraisalAge,uint24 coreFeePips,uint24 specFeePips,uint24 maxDriftTicksPerDay,uint32 oracleGraceSecs)',
+  'function oracleReady() view returns (bool)',
+  'function tradingPaused() view returns (bool)',
+])
+export const PERMISSIONS_ADAPTER_ABI = parseAbi([
+  'function PERMISSIONED_TOKEN() view returns (address)',
+  'function POOL_MANAGER() view returns (address)',
+  'function allowedWrappers(address wrapper) view returns (bool)',
+  'function isAllowed(address account, bytes2 permission) view returns (bool)',
+  'function swappingEnabled() view returns (bool)',
+])
+export const PERMISSIONS_FACTORY_ABI = parseAbi(['function verifiedPermissionsAdapterOf(address adapter) view returns (address)'])

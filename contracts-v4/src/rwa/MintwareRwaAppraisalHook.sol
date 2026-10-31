@@ -36,13 +36,12 @@ interface IVaultPoolKey {
 }
 
 /// @title MintwareRwaAppraisalHook
-/// @notice One-pool appraisal band with an optional, one-shot official permissioned-pool binding.
+/// @notice One-pool appraisal band with a mandatory, one-shot official permissioned-pool binding.
 /// @dev Owned mode pins adapter/quote before initialization, exposes a dated IMarketAssetMark,
 /// checks issuer permissions on new risk, and never gates removal or collection on freshness.
 /// Swaps ending outside the speculative band must close the gap on the same side of appraisal.
 /// Fees use the pre-swap band. Keeper moves retain step, cadence and rolling absolute drift limits;
 /// keeper/config changes retain the 48-hour timelock. Owned age/grace are frozen at pinning.
-/// Legacy mode preserves the original actor interface and its bounded-unwind swap exemption.
 /// Ticks are in virtual PoolKey space; marks account for underlying decimals and quote orientation.
 contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
     using PoolIdLibrary for PoolKey;
@@ -82,7 +81,7 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
     PoolId  public poolId;         // the one pool this hook serves (bound at initialize)
     bool    public poolBound;
 
-    // One-shot owned-pool mode. Legacy actors retain their original interface and behavior.
+    // One-shot owned-pool binding.
     IPermissionsAdapterFactory public permissionsFactory;
     IPermissionsAdapter public permissionsAdapter;
     address public override asset;
@@ -233,13 +232,14 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
         expectedPoolId = key.toId();
     }
 
-    /// @notice Bind the only LP once. Owned mode checks the pinned pool and mark; legacy mode pins from the actor.
+    /// @notice Bind the only engine once, checking its pinned pool, assets and mark.
     function setVault(address vault_) external onlyOwner {
         if (vault != address(0)) revert AlreadySet();
         if (vault_ == address(0)) revert ZeroAddress();
         (Currency c0, Currency c1, uint24 fee, int24 spacing, IHooks hooks) = IVaultPoolKey(vault_).poolKey();
         if (address(hooks) != address(this)) revert WrongPool();
-        if (address(permissionsFactory) != address(0)) {
+        if (address(permissionsFactory) == address(0)) revert UnverifiedAdapter();
+        {
             PoolKey memory key = PoolKey(c0, c1, fee, spacing, hooks);
             IOwnedMarketBinding engine = IOwnedMarketBinding(vault_);
             if (!poolBound || PoolId.unwrap(key.toId()) != PoolId.unwrap(expectedPoolId)
@@ -261,11 +261,6 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
     // ── appraisal ─────────────────────────────────────────────────────────────
 
     /// @notice The first appraisal, posted before the pool exists. Not step-bounded (there is no prior).
-    function initAppraisal(int24 tick) external {
-        if (address(permissionsFactory) != address(0)) revert InvalidObservation();
-        _initAppraisal(tick);
-    }
-
     function initAppraisal(int24 tick, uint64 observation, bytes32 reportHash) external {
         _recordObservation(tick, observation, reportHash);
         _initAppraisal(tick);
@@ -286,11 +281,6 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
 
     /// @notice Post a new appraisal. Bounded per step, rate-limited, and capped in aggregate per rolling 24 h
     ///         window — the keeper's total walk per day is bounded and every step is public.
-    function postAppraisal(int24 tick) external {
-        if (address(permissionsFactory) != address(0)) revert InvalidObservation();
-        _postAppraisal(tick);
-    }
-
     function postAppraisal(int24 tick, uint64 observation, bytes32 reportHash) external {
         _recordObservation(tick, observation, reportHash);
         _postAppraisal(tick);
@@ -349,19 +339,13 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
 
     /// @notice Trading is allowed only while the appraisal is fresh.
     function isFresh() public view returns (bool) {
-        return hasAppraisal && block.timestamp <= uint256(address(permissionsFactory) == address(0) ? appraisedAt : observedAt) + config.maxAppraisalAge;
+        return hasAppraisal && block.timestamp <= uint256(observedAt) + config.maxAppraisalAge;
     }
 
     /// @notice The vault may value its position while fresh OR inside the exit window that follows.
     function oracleReady() public view returns (bool) {
         Config memory c = config;
-        return hasAppraisal && block.timestamp <= uint256(address(permissionsFactory) == address(0) ? appraisedAt : observedAt) + c.maxAppraisalAge + c.oracleGraceSecs;
-    }
-
-    /// @notice The vault's oracle (the `IJitOracle` shape): the appraisal tick, ready while fresh or in the
-    ///         exit window (trading is halted there, so spot cannot be pushed by anyone but the vault).
-    function oracleTick() external view returns (int24 tick, bool ready) {
-        return (appraisalTick, oracleReady());
+        return hasAppraisal && block.timestamp <= uint256(observedAt) + c.maxAppraisalAge + c.oracleGraceSecs;
     }
 
     /// @notice UI/keeper helper: live pool tick, its distance from the appraisal, and which band it sits in.
@@ -418,7 +402,7 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
 
     // ── emergency ─────────────────────────────────────────────────────────────
 
-    /// @notice Instantly halt trading, never removal/collection. Only legacy actor swaps are exempt.
+    /// @notice Instantly halt trading, never removal/collection. All swaps require current permission.
     function pauseTrading() external {
         if (msg.sender != guardian && msg.sender != owner()) revert OnlyGuardian();
         tradingPaused = true;
@@ -436,12 +420,9 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
         external override onlyPoolManager returns (bytes4)
     {
         if (poolBound) revert PoolAlreadyBound();
-        if (address(permissionsFactory) == address(0)) {
-            if (vault == address(0)) revert VaultNotSet();
-        } else {
-            if (sender != owner()) revert Unauthorized();
-            if (permissionsFactory.verifiedPermissionsAdapterOf(address(permissionsAdapter)) != asset) revert UnverifiedAdapter();
-        }
+        if (address(permissionsFactory) == address(0)) revert UnverifiedAdapter();
+        if (sender != owner()) revert Unauthorized();
+        if (permissionsFactory.verifiedPermissionsAdapterOf(address(permissionsAdapter)) != asset) revert UnverifiedAdapter();
         if (address(key.hooks) != address(this) || PoolId.unwrap(key.toId()) != PoolId.unwrap(expectedPoolId)) revert WrongPool();
         if (!LPFeeLibrary.isDynamicFee(key.fee)) revert NotDynamicFee();
         if (!isFresh()) revert NoAppraisal();
@@ -460,7 +441,7 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
     {
         _checkPool(key);
         if (sender != vault || sender == address(0)) revert OnlyVault();
-        if (address(permissionsFactory) != address(0)) _verifyPermission(sender, PermissionFlags.LIQUIDITY_ALLOWED);
+        _verifyPermission(sender, PermissionFlags.LIQUIDITY_ALLOWED);
         return IHooks.beforeAddLiquidity.selector;
     }
 
@@ -479,14 +460,9 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
     {
         _checkPool(key);
         Config memory c = config;
-        if (sender == vault && address(permissionsFactory) == address(0)) {
-            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, c.coreFeePips | LPFeeLibrary.OVERRIDE_FEE_FLAG);
-        }
-        if (address(permissionsFactory) != address(0)) {
-            if (vault == address(0)) revert VaultNotSet();
-            if (!permissionsAdapter.swappingEnabled()) revert SwappingDisabled();
-            _verifyPermission(sender, PermissionFlags.SWAP_ALLOWED);
-        }
+        if (vault == address(0)) revert VaultNotSet();
+        if (!permissionsAdapter.swappingEnabled()) revert SwappingDisabled();
+        _verifyPermission(sender, PermissionFlags.SWAP_ALLOWED);
         if (tradingPaused) revert TradingIsPaused();
         if (!isFresh()) revert AppraisalStale();
 
@@ -505,7 +481,6 @@ contract MintwareRwaAppraisalHook is IHooks, Ownable2Step, IMarketAssetMark {
         external override onlyPoolManager returns (bytes4, int128)
     {
         _checkPool(key);
-        if (sender == vault && address(permissionsFactory) == address(0)) return (IHooks.afterSwap.selector, 0);
 
         int24 pre;
         uint256 set;

@@ -1,6 +1,6 @@
-import { keccak256, isAddress } from 'viem'
+import { keccak256, isAddress, zeroAddress, erc20Abi, parseAbi, type PublicClient } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
-import { MARKET_ENGINE_ABI } from '@/lib/web3/artifacts/marketEngine'
+import { MARKET_ENGINE_ABI, RWA_HOOK_ABI, PERMISSIONS_ADAPTER_ABI, PERMISSIONS_FACTORY_ABI } from '@/lib/web3/artifacts/marketEngine'
 import { computePoolId, type ReadClient, type MarketPoolKey } from '@/lib/gateway/registry'
 import { MARKET_CHAINS } from '@/lib/chains/marketChains'
 
@@ -21,7 +21,7 @@ export function marketEngineConfig(env: Record<string, string | undefined> = pro
 }
 
 export type EngineVerification = { ok: true; codeHash: string; owner: string; quoteAsset: `0x${string}`; token0: `0x${string}`; token1: `0x${string}`; poolKey: MarketPoolKey } | { ok: false; error: string }
-export async function verifyMarketEngine(opts: { client: ReadClient; address: `0x${string}`; expectedPool?: string | null; expectedOwner?: string | null; allowedCodeHashes?: string[]; chainId?: number }): Promise<EngineVerification> {
+export async function verifyMarketEngine(opts: { client: ReadClient; address: `0x${string}`; expectedPool?: string | null; expectedOwner?: string | null; allowedCodeHashes?: string[]; allowedOwnedCodeHashes?: string[]; allowInactive?: boolean; chainId?: number }): Promise<EngineVerification> {
   const { client, address } = opts
   const suffix = opts.chainId == null ? '' : `_${opts.chainId}`
   const expectedQuote = process.env[`MARKET_ENGINE_QUOTE_ASSET${suffix}`] ?? process.env.MARKET_ENGINE_QUOTE_ASSET
@@ -33,7 +33,9 @@ export async function verifyMarketEngine(opts: { client: ReadClient; address: `0
     if (!code || code === '0x') return { ok: false, error: 'engine_code_missing' }
     const codeHash = keccak256(code).toLowerCase()
     const allow = opts.allowedCodeHashes ?? (process.env[`MARKET_ENGINE_CODEHASHES${suffix}`] ?? process.env.MARKET_ENGINE_CODEHASHES ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)
-    if (!allow.includes(codeHash)) return { ok: false, error: 'engine_codehash_not_allowlisted' }
+    const ownedAllow = opts.allowedOwnedCodeHashes ?? (process.env[`MARKET_OWNED_ENGINE_CODEHASHES${suffix}`] ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)
+    const owned = ownedAllow.includes(codeHash)
+    if (!allow.includes(codeHash) && !owned) return { ok: false, error: 'engine_codehash_not_allowlisted' }
     const [owner, quote, token0, token1, activated, rawKey] = await Promise.all([
       client.readContract({ address, abi: MARKET_ENGINE_ABI, functionName: 'owner' }),
       client.readContract({ address, abi: MARKET_ENGINE_ABI, functionName: 'quoteAsset' }),
@@ -42,12 +44,36 @@ export async function verifyMarketEngine(opts: { client: ReadClient; address: `0
       client.readContract({ address, abi: MARKET_ENGINE_ABI, functionName: 'activated' }),
       client.readContract({ address, abi: MARKET_ENGINE_ABI, functionName: 'poolKey' }),
     ])
-    const key = rawKey as MarketPoolKey
+    const key = Array.isArray(rawKey)
+      ? { currency0: rawKey[0], currency1: rawKey[1], fee: rawKey[2], tickSpacing: rawKey[3], hooks: rawKey[4] } as MarketPoolKey
+      : rawKey as MarketPoolKey
     const normalized = { currency0: key.currency0.toLowerCase() as `0x${string}`, currency1: key.currency1.toLowerCase() as `0x${string}`, fee: Number(key.fee), tickSpacing: Number(key.tickSpacing), hooks: key.hooks.toLowerCase() as `0x${string}` }
-    if (!activated) return { ok: false, error: 'engine_inactive' }
+    if (!activated && !opts.allowInactive) return { ok: false, error: 'engine_inactive' }
     if (!expectedOwner) return { ok: false, error: 'engine_owner_unconfigured' }
     if (String(owner).toLowerCase() !== expectedOwner.toLowerCase()) return { ok: false, error: 'engine_owner_mismatch' }
-    if (String(token0).toLowerCase() !== normalized.currency0 || String(token1).toLowerCase() !== normalized.currency1) return { ok: false, error: 'engine_token_mismatch' }
+    if (owned) {
+      // An explicitly approved concrete owned wrapper is the trust root; never infer ownership from a hook.
+      if (opts.chainId !== 84532 || String(quote).toLowerCase() !== BASE_SEPOLIA_USDC) return { ok: false, error: 'owned_engine_quote_mismatch' }
+      const read = (target: `0x${string}`, abi: typeof MARKET_ENGINE_ABI | typeof RWA_HOOK_ABI | typeof PERMISSIONS_ADAPTER_ABI | typeof PERMISSIONS_FACTORY_ABI, functionName: string, args?: unknown[]) => client.readContract({ address: target, abi, functionName, ...(args ? { args } : {}) })
+      const [hook, adapter, mark, manager] = await Promise.all(['appraisalHook','permissionsAdapter','nonQuoteMark','poolManager'].map((name) => read(address, MARKET_ENGINE_ABI, name)))
+      const h = String(hook).toLowerCase() as `0x${string}`
+      const a = String(adapter).toLowerCase() as `0x${string}`
+      if (h === zeroAddress || h !== normalized.hooks || h !== String(mark).toLowerCase() || normalized.fee !== 0x800000) return { ok: false, error: 'owned_engine_hook_mismatch' }
+      const [factory, hookAdapter, boundEngine, hookAsset, hookQuote, hookManager, pinnedPool, underlying, adapterManager] = await Promise.all([
+        ...['permissionsFactory','permissionsAdapter','vault','asset','quoteAsset','poolManager','expectedPoolId'].map((name) => read(h,RWA_HOOK_ABI,name)),
+        read(a,PERMISSIONS_ADAPTER_ABI,'PERMISSIONED_TOKEN'), read(a,PERMISSIONS_ADAPTER_ABI,'POOL_MANAGER'),
+      ])
+      const verified = await read(String(factory) as `0x${string}`,PERMISSIONS_FACTORY_ABI,'verifiedPermissionsAdapterOf',[a])
+      const asset = String(underlying).toLowerCase()
+      const q = String(quote).toLowerCase()
+      if (asset === zeroAddress || asset === q || String(verified).toLowerCase() !== asset || String(hookAsset).toLowerCase() !== asset
+        || String(hookAdapter).toLowerCase() !== a || String(boundEngine).toLowerCase() !== address.toLowerCase()
+        || String(hookQuote).toLowerCase() !== q || String(hookManager).toLowerCase() !== String(manager).toLowerCase()
+        || String(adapterManager).toLowerCase() !== String(manager).toLowerCase() || String(pinnedPool).toLowerCase() !== computePoolId(normalized).toLowerCase()
+        || (normalized.currency0 !== a && normalized.currency1 !== a)
+        || String(token0).toLowerCase() !== (normalized.currency0 === a ? asset : q)
+        || String(token1).toLowerCase() !== (normalized.currency1 === a ? asset : q)) return { ok: false, error: 'owned_engine_mapping_mismatch' }
+    } else if (normalized.hooks !== zeroAddress || String(token0).toLowerCase() !== normalized.currency0 || String(token1).toLowerCase() !== normalized.currency1) return { ok: false, error: 'engine_token_mismatch' }
     const q = String(quote).toLowerCase()
     if (q !== normalized.currency0 && q !== normalized.currency1) return { ok: false, error: 'engine_quote_mismatch' }
     if (q !== expectedQuote.toLowerCase()) return { ok: false, error: 'engine_quote_asset_not_allowlisted' }
@@ -113,4 +139,28 @@ export async function marketEngineConfigForPool(db: SupabaseClient, pool: string
   const chains = [...new Set((data ?? []).map((r: { chain_id: number }) => Number(r.chain_id)))]
   if (chains.length !== 1 || chains[0] === cfg?.chainId) return cfg
   return marketEngineConfigs(env).find((c) => c.chainId === chains[0]) ?? cfg
+}
+
+export const BASE_SEPOLIA_USDC = '0x036cbd53842c5426634e7929541ec2318f3dcf7e' as const
+
+/** Shared engine reads, all at the caller's block. Values remain decimal strings without precision loss. */
+export async function readMarketEngineSnapshot(client: Pick<PublicClient, 'readContract'>, address: `0x${string}`, blockNumber: bigint, account?: `0x${string}`) {
+  const read = (functionName: 'totalNav' | 'totalSupply' | 'token0' | 'token1' | 'adapter0' | 'adapter1' | 'positionLiquidity' | 'tickLower' | 'tickUpper' | 'activated') => client.readContract({ address, abi: MARKET_ENGINE_ABI, functionName, blockNumber })
+  const [nav, supply, token0, token1, adapter0, adapter1, liquidity, lower, upper, activated, shares] = await Promise.all([
+    // A stale mark may block NAV while full in-kind exits remain available.
+    read('totalNav').catch(() => null), read('totalSupply'), read('token0'), read('token1'), read('adapter0'), read('adapter1'),
+    read('positionLiquidity'), read('tickLower'), read('tickUpper'), read('activated'),
+    account ? client.readContract({ address, abi: MARKET_ENGINE_ABI, functionName: 'balanceOf', args: [account], blockNumber }) : null,
+  ])
+  const balances = await Promise.all(([token0,token1] as `0x${string}`[]).map(async (token, i) => {
+    const [balance, idle, decimals, wallet] = await Promise.all([
+      client.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [address], blockNumber }),
+      client.readContract({ address: (i === 0 ? adapter0 : adapter1) as `0x${string}`, abi: parseAbi(['function totalAssets() view returns (uint256)']), functionName: 'totalAssets', blockNumber }),
+      client.readContract({ address: token, abi: erc20Abi, functionName: 'decimals', blockNumber }),
+      account ? client.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [account], blockNumber }) : null,
+    ])
+    return { token, decimals, engine: balance.toString(), idle: idle.toString(), wallet: wallet?.toString() ?? null }
+  }))
+  return { address, activated: Boolean(activated), nav: nav?.toString() ?? null, supply: supply.toString(), shares: shares?.toString() ?? null,
+    balances, position: { liquidity: liquidity.toString(), tickLower: Number(lower), tickUpper: Number(upper) } }
 }

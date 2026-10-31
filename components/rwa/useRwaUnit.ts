@@ -3,58 +3,44 @@
 // One live read of an RWA liquidity unit (GET /api/rwa/unit, polled), shared by the overview, the market
 // page and the proof page so they can never disagree about the numbers.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-export type RwaUnitLive = {
-  ok: boolean
-  /** live = read this request · cached = last good read (RPC outage) · recorded = the lifecycle run's snapshot */
-  source: 'live' | 'cached' | 'recorded'
-  block: number
-  blockTime: number
-  appraisal: { tick: number; usd: number; at: number; fresh: boolean; oracleReady: boolean; maxAgeSecs: number | null; minUpdateSecs: number | null }
-  spot: { tick: number; usd: number; deviationTicks: number; inCore: boolean; inSpec: boolean }
-  band: { core: [number, number]; spec: [number, number]; coreFeePct: number; specFeePct: number } | null
-  tradingPaused: boolean
-  vault: { seniorUsd: number; deployedUsd: number; juniorUnits: number; juniorUsd: number; lockExpiry: number }
-  lending: { balanceUsd: number; pendingUsd: number; aprPct: number; interestMintedUsd: number; simulated: boolean }
-  trades: { tx: string; block: number; ts: number | null; trader: string | null; side: 'buy' | 'sell'; usd: number; units: number; priceUsd: number }[]
-  tradeCount: number
-  priceSeries: { block: number; ts: number | null; usd: number; byVault: boolean }[]
-  appraisalSeries: { block: number; ts: number | null; usd: number }[]
-}
+import type { RwaUnitLive } from '@/lib/rwa/read'
+export type { RwaUnitLive } from '@/lib/rwa/read'
 
-export function useRwaUnit(slug: string, pollMs = 12_000) {
+export function useRwaUnit(slug: string, pollMs = 12_000, account?: string) {
   const [unit, setUnit] = useState<RwaUnitLive | null>(null)
   const [failed, setFailed] = useState(false)
   const [now, setNow] = useState(() => Date.now() / 1000)
+
+  const scope = `${slug}:${account ?? ''}`
+  const request = useRef({ scope, version: 0 })
+  if (request.current.scope !== scope) request.current = { scope, version: request.current.version + 1 }
 
   const unavailable = useCallback(() => {
     setFailed(true)
     setUnit((previous) => previous?.source === 'live' ? { ...previous, source: 'cached' } : previous)
   }, [])
 
-  const load = useCallback((fresh = false) =>
-    fetch(`/api/rwa/unit?unit=${slug}${fresh ? '&fresh=1' : ''}`, { cache: 'no-store' })
+  const load = useCallback(() => {
+    const version = ++request.current.version
+    const current = () => request.current.scope === scope && request.current.version === version
+    return fetch(`/api/rwa/unit?unit=${slug}${account ? `&account=${account}` : ''}`, { cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error('RWA read unavailable'); return r.json() })
-      .then((d: RwaUnitLive) => { if (d.ok) { setUnit(d); setFailed(d.source !== 'live') } else unavailable() })
-      .catch(unavailable), [slug, unavailable])
+      .then((d: RwaUnitLive) => { if (!current()) return; if (d.ok) { setUnit(d); setFailed(d.source === 'cached') } else unavailable() })
+      .catch(() => { if (current()) unavailable() })
+  }, [slug, account, scope, unavailable])
 
   useEffect(() => {
+    setUnit(null)
+    setFailed(false)
     load()
     const poll = setInterval(() => load(), pollMs)
     const tick = setInterval(() => setNow(Date.now() / 1000), 1_000)
-    return () => { clearInterval(poll); clearInterval(tick) }
+    return () => { ++request.current.version; clearInterval(poll); clearInterval(tick) }
   }, [load, pollMs])
 
-  // Interest keeps accruing between polls: extrapolate client-side at the venue's rate.
-  const interest = useMemo(() => {
-    if (!unit) return null
-    if (failed || unit.source !== 'live') return unit.lending.interestMintedUsd + unit.lending.pendingUsd
-    const perSec = (unit.lending.balanceUsd * unit.lending.aprPct) / 100 / (365 * 86400)
-    return unit.lending.interestMintedUsd + unit.lending.pendingUsd + perSec * Math.max(0, now - unit.blockTime)
-  }, [unit, now, failed])
-
-  return { unit, failed, now, interest, reload: load }
+  return { unit, failed, now, reload: load }
 }
 
 export const usd = (n: number, d = 0) => `$${n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}`
@@ -68,13 +54,15 @@ export const ago = (secs: number) => {
 export type RwaStatus = { t: string; tone: 'good' | 'info' | 'warn' }
 export function rwaStatus(unit: RwaUnitLive | null): RwaStatus | null {
   if (!unit) return null
-  if (unit.source === 'recorded') return { t: 'Recorded run', tone: 'info' }
+  if (unit.source === 'undeployed') return { t: 'Not deployed yet', tone: 'info' }
   if (unit.source === 'cached') return { t: 'Current appraisal status unavailable — cached data', tone: 'warn' }
-  if (unit.tradingPaused) return { t: 'Trading paused', tone: 'warn' }
-  if (!unit.appraisal.fresh && unit.appraisal.oracleReady) return { t: 'Appraisal stale — trading halted, exit window open', tone: 'warn' }
-  if (!unit.appraisal.fresh) return { t: 'Appraisal expired — awaiting a new appraisal', tone: 'warn' }
-  if (unit.spot.inCore) return { t: 'Trading inside the core band', tone: 'good' }
-  if (unit.spot.inSpec) return { t: 'Trading inside the band', tone: 'info' }
+  if (!unit.engine?.activated) return { t: 'Engine inactive', tone: 'info' }
+  if (!unit.hook) return { t: 'Appraisal unavailable', tone: 'warn' }
+  if (unit.hook.paused || !unit.hook.permissions.swappingEnabled) return { t: 'Trading paused', tone: 'warn' }
+  if (!unit.hook.fresh && unit.hook.oracleReady) return { t: 'Appraisal stale — trading halted, exit window open', tone: 'warn' }
+  if (!unit.hook.fresh) return { t: 'Appraisal expired — awaiting a new appraisal', tone: 'warn' }
+  if (unit.hook.inCore) return { t: 'Trading inside the core band', tone: 'good' }
+  if (unit.hook.inSpec) return { t: 'Trading inside the band', tone: 'info' }
   return { t: 'Outside the band — gap-closing trades only', tone: 'warn' }
 }
 export const STATUS_CLS: Record<RwaStatus['tone'], string> = {

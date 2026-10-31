@@ -47,7 +47,7 @@ abstract contract OwnedPoolEngineFixture is Test {
     int24 initialTick;
     function propertyFirst() internal pure virtual returns (bool);
 
-    function setUp() public {
+    function setUp() public virtual {
         vm.warp(10 days);
         manager = IPoolManager(address(new PoolManager(address(this))));
         checker = new IssuerAllowlist();
@@ -154,6 +154,9 @@ abstract contract OwnedPoolEngineFixture is Test {
         assertEq(usdc.balanceOf(address(adapter)), 0);
     }
 
+}
+
+abstract contract OwnedPoolEngineBehavior is OwnedPoolEngineFixture {
     function test_deployActivateLPAndUnderlyingCustody() public {
         _seed();
         assertGt(engine.positionLiquidity(), 0);
@@ -234,7 +237,7 @@ abstract contract OwnedPoolEngineFixture is Test {
     }
     function test_observationCannotBeRejuvenatedOrFutureOrZero() public {
         vm.warp(vm.getBlockTimestamp() + 1 hours);
-        vm.expectRevert(MintwareRwaAppraisalHook.InvalidObservation.selector); hook.postAppraisal(initialTick);
+        (bool heartbeat,) = address(hook).call(abi.encodeWithSignature("postAppraisal(int24)", initialTick)); assertFalse(heartbeat);
         vm.expectRevert(MintwareRwaAppraisalHook.InvalidObservation.selector); hook.postAppraisal(initialTick, 10 days, keccak256("repeat"));
         vm.expectRevert(MintwareRwaAppraisalHook.InvalidObservation.selector); hook.postAppraisal(initialTick, uint64(vm.getBlockTimestamp() + 1), keccak256("future"));
         vm.expectRevert(MintwareRwaAppraisalHook.InvalidObservation.selector); hook.postAppraisal(initialTick, 0, keccak256("zero"));
@@ -394,9 +397,9 @@ abstract contract OwnedPoolEngineFixture is Test {
     }
 }
 
-contract OwnedPoolProperty0Test is OwnedPoolEngineFixture {
+contract OwnedPoolProperty0Test is OwnedPoolEngineBehavior {
     function propertyFirst() internal pure override returns (bool) { return true; }
 }
-contract OwnedPoolProperty1Test is OwnedPoolEngineFixture {
+contract OwnedPoolProperty1Test is OwnedPoolEngineBehavior {
     function propertyFirst() internal pure override returns (bool) { return false; }
 }
