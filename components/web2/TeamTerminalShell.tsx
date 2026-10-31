@@ -63,7 +63,7 @@ export function TeamTerminalShell({ children }: { children: React.ReactNode }) {
       groups={groups}
       padded
       footer={
-        <div className={`rounded-[14px] px-3.5 py-3 text-[12px] text-ink-mid leading-[1.45] ${active ? 'mw-raise-sm' : 'mw-tex-dots'}`} style={active ? undefined : { backgroundColor: '#EDE9FB' }}>
+        <div className={`rounded-[14px] px-3.5 py-3 text-[12px] text-ink-mid leading-[1.45] ${active ? 'mw-raise-sm' : ''}`} style={active ? undefined : { background: '#EDE9FB' }}>
           <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] font-semibold" style={{ color: 'var(--mw-peri-deep)' }}>
             <span className="w-[7px] h-[7px] rounded-full inline-block" style={{ background: active ? '#22A45D' : 'var(--mw-btn)' }} />{active ? 'Treasury' : 'Preview'}
           </span>

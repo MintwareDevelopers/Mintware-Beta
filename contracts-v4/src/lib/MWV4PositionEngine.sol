@@ -78,6 +78,21 @@ library MWV4PositionEngine {
         receivedB = assetB.balanceOf(address(this)) - balanceBBefore;
     }
 
+    /// @notice Measured settlement in PoolKey order, including verified virtual currencies.
+    function modifyAssets(
+        IPoolManager manager, PoolKey memory key, ModifyLiquidityParams memory params,
+        IERC20 asset0, IERC20 asset1
+    ) internal returns (uint256 amount0, uint256 amount1) {
+        uint256 before0 = asset0.balanceOf(address(this));
+        uint256 before1 = asset1.balanceOf(address(this));
+        BalanceDelta delta = modify(manager, key, params, bytes(""));
+        MWV4Settlement.settleAssetDelta(manager, key, delta, asset0, asset1);
+        uint256 after0 = asset0.balanceOf(address(this));
+        uint256 after1 = asset1.balanceOf(address(this));
+        return params.liquidityDelta > 0 ? (before0 - after0, before1 - after1)
+            : (after0 - before0, after1 - before1);
+    }
+
     /// @notice Collect position fees and return the amounts actually received by this caller.
     /// @dev The caller must already be inside its PoolManager unlock. Measured receipts are shared;
     ///      fee ownership, conversion, and accounting remain with the typed position owner.

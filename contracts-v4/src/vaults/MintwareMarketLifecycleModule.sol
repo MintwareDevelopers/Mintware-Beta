@@ -40,8 +40,8 @@ contract MintwareMarketLifecycleModule {
         uint128 currentLiquidity
     ) external returns (uint128 nextLiquidity, bytes memory result) {
         if (action == 0) {
-            (uint256 amount0, uint256 amount1) = MWV4PositionEngine.collectMeasured(
-                poolManager, poolKey, tickLower, tickUpper, token0, token1, bytes("")
+            (uint256 amount0, uint256 amount1) = MWV4PositionEngine.modifyAssets(
+                poolManager, poolKey, ModifyLiquidityParams(tickLower, tickUpper, 0, bytes32(0)), token0, token1
             );
             return (currentLiquidity, abi.encode(amount0, amount1));
         }
@@ -52,7 +52,7 @@ contract MintwareMarketLifecycleModule {
             if (delta <= 0 || max0 > type(uint128).max || max1 > type(uint128).max) {
                 revert InvalidConfiguration();
             }
-            (uint256 used0, uint256 used1) = MWV4PositionEngine.modifyAndSettleMeasured(
+            (uint256 used0, uint256 used1) = MWV4PositionEngine.modifyAssets(
                 poolManager,
                 poolKey,
                 ModifyLiquidityParams({
@@ -61,7 +61,6 @@ contract MintwareMarketLifecycleModule {
                     liquidityDelta: delta,
                     salt: bytes32(0)
                 }),
-                bytes(""),
                 token0,
                 token1
             );
@@ -72,7 +71,7 @@ contract MintwareMarketLifecycleModule {
         if (action == 2) {
             (, int128 delta) = abi.decode(data, (uint8, int128));
             if (delta >= 0 || uint128(-delta) > currentLiquidity) revert InsufficientLiquidity();
-            (uint256 received0, uint256 received1) = MWV4PositionEngine.modifyAndSettleReceived(
+            (uint256 received0, uint256 received1) = MWV4PositionEngine.modifyAssets(
                 poolManager,
                 poolKey,
                 ModifyLiquidityParams({
@@ -81,7 +80,6 @@ contract MintwareMarketLifecycleModule {
                     liquidityDelta: delta,
                     salt: bytes32(0)
                 }),
-                bytes(""),
                 token0,
                 token1
             );
@@ -118,7 +116,7 @@ contract MintwareMarketLifecycleModule {
             (uint160 sqrtPriceBefore,,,) = poolManager.getSlot0(poolKey.toId());
             uint256 before0 = token0.balanceOf(address(this));
             uint256 before1 = token1.balanceOf(address(this));
-            MWV4PositionEngine.modifyAndSettleReceived(
+            MWV4PositionEngine.modifyAssets(
                 poolManager,
                 poolKey,
                 ModifyLiquidityParams({
@@ -127,7 +125,6 @@ contract MintwareMarketLifecycleModule {
                     liquidityDelta: -int128(currentLiquidity),
                     salt: bytes32(0)
                 }),
-                bytes(""),
                 token0,
                 token1
             );
@@ -146,7 +143,7 @@ contract MintwareMarketLifecycleModule {
                 recenteredLiquidity < minLiquidity || recenteredLiquidity == 0
                     || recenteredLiquidity > uint128(type(int128).max)
             ) revert InsufficientLiquidity();
-            (uint256 used0, uint256 used1) = MWV4PositionEngine.modifyAndSettleMeasured(
+            (uint256 used0, uint256 used1) = MWV4PositionEngine.modifyAssets(
                 poolManager,
                 poolKey,
                 ModifyLiquidityParams({
@@ -155,7 +152,6 @@ contract MintwareMarketLifecycleModule {
                     liquidityDelta: int128(recenteredLiquidity),
                     salt: bytes32(0)
                 }),
-                bytes(""),
                 token0,
                 token1
             );

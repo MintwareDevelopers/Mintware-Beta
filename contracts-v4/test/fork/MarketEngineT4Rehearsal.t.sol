@@ -28,7 +28,7 @@ contract MarketEngineT4RehearsalTest is Test {
     address constant WETH = 0x4200000000000000000000000000000000000006;
     address constant MODULE = 0x00006A0e0564b5b4300a46a7EB7c936b44653BAD;
     address constant EXISTING_MARK = 0x693aA5Bb6E113eAf5C49580Cd2584A5584eCDB55;
-    bytes32 constant MODULE_HASH = 0x166985aa111748ed70d00e8956c48fe285b5ba59f50555ca71ec8487139871f9;
+    bytes32 constant MODULE_HASH = 0x9fb68029d316c682a41b625177cc8a7431cd03df38ee5878e3c045edb634bc01;
     uint256 constant Q96 = 1 << 96;
 
     function test_full_funded_market_rehearsal() external {

@@ -90,6 +90,7 @@ contracts-v4/test`.
 - `lib/rewards/vault/weightedEpochCloser.test.ts`
 - `lib/rewards/vault/weightedEpochOrchestrator.test.ts`
 - `lib/rwa/demo.test.ts`
+- `lib/rwa/read.test.ts`
 - `lib/web2/routeHandler.bearerBypass.test.ts`
 - `lib/web2/routeHandler.test.ts`
 - `lib/web2/router/adapters.test.ts`
