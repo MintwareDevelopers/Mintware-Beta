@@ -80,11 +80,12 @@ export default function TeamPolicy() {
         <Panel title="Spending limits · below the threshold">
           <div className="flex flex-col gap-2.5">
             {LIMITS.map((l) => (
-              <div key={l.who} className="flex items-center gap-3 text-[14px] rounded-[12px] px-3.5 py-2.5" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
-                <span className="font-semibold text-ink w-[76px] shrink-0 truncate">{l.who}</span>
-                <span className="font-geist-mono text-ink">{l.cap}</span>
-                <span className="text-ink-soft">/ {l.period}</span>
-                <span className="text-ink-soft truncate max-[520px]:hidden">· {l.dest}</span>
+              <div key={l.who} className="text-[14px] rounded-[12px] px-3.5 py-2.5" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-semibold text-ink truncate">{l.who}</span>
+                  <span className="shrink-0 whitespace-nowrap"><span className="font-geist-mono text-ink">{l.cap}</span> <span className="text-ink-soft">/ {l.period}</span></span>
+                </div>
+                <div className="text-[12.5px] text-ink-soft mt-0.5 truncate">{l.dest}</div>
               </div>
             ))}
           </div>

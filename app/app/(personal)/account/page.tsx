@@ -222,7 +222,7 @@ function AccountContent() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-4">
+            <div className="@container flex flex-col gap-4">
               <div className="rounded-[18px] overflow-hidden" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
                 <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--mw-line)' }}>
                   <span className="font-semibold text-[14px]">Recent spend</span>
@@ -236,7 +236,7 @@ function AccountContent() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-1 min-[560px]:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-1 @min-[480px]:grid-cols-3 gap-2.5">
                 {([
                   ['A small card balance', 'You spend from it like any card.', <IconCard key="c" size={18} />],
                   ['Refills what you spend', 'Only that amount, within your daily limit.', <IconExit key="e" size={18} />],
