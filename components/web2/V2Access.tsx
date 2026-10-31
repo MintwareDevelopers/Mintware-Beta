@@ -1,7 +1,7 @@
 'use client'
 
 // V2 access screen — what every /app workspace layout (V2AppGate) renders until the visitor enters the V2 password
-// (POST /api/v2/unlock → the same http-only cookie the Launch modal sets; lib/v2/gate.ts#hasV2Unlock). Two variants:
+// (POST /api/v2/unlock sets an http-only cookie; lib/v2/gate.ts#hasV2Unlock). Two variants:
 // the general V2 preview, and the RWA partner framing. Light-only. Nothing behind the gate is rendered before unlock.
 
 import { useState } from 'react'

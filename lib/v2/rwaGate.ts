@@ -4,7 +4,7 @@ export { hasV2Unlock }
 
 // V2-RWAs gate (user decision 2026-10-02: "the V2 password is enough" — no separate RWA password):
 //   1. EXISTS — NEXT_PUBLIC_V2_RWA_ENABLED === 'true'. Off ⇒ the vertical does not exist (pages + APIs 404).
-//   2. OPEN   — the visitor holds a VALID V2 unlock cookie, i.e. they entered V2_PASSWORD (Launch modal or the
+//   2. OPEN   — the visitor holds a VALID V2 unlock cookie, i.e. they entered V2_PASSWORD (the Team access screen or the
 //               RWA access screen, both POST /api/v2/unlock). Fail-closed: V2_PASSWORD unset ⇒ nobody is ever in.
 export function v2RwaFlagOn(): boolean {
   return process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'

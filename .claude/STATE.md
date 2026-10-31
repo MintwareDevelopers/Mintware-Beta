@@ -173,7 +173,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/agents/leaderboard` | `app/(web3)/agents/leaderboard/page.tsx` |
 | `/angels` | `app/angels/page.tsx` |
 | `/app` | `app/app/page.tsx` |
-| `/app/agents` | `app/app/(personal)/agents/page.tsx` |
 | `/app/markets` | `app/app/(personal)/markets/page.tsx` |
 | `/app/markets/[pool]` | `app/app/(personal)/markets/[pool]/page.tsx` |
 | `/app/org` | `app/app/org/(guarded)/page.tsx` |

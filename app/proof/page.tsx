@@ -197,7 +197,7 @@ export default function ProofPage() {
             A past sandbox demonstration on 2026-08-20 recorded a test authorization and a
             card-originated settleSpend that burned $2 of testnet senior shares on-chain (linked above). Bridge + Stripe card integrations are in development; no customer purchase is authorized or settled through Mintware today. This same run also
             surfaced a real bug — the settle core was marking a reverted tx as settled — now fixed.{' '}
-            <Link href="/app/team/cards" className="text-peri-deep no-underline hover:underline">The card surface →</Link>
+            <Link href="/cards" className="text-peri-deep no-underline hover:underline">How the card works →</Link>
           </p>
         </div>
 
