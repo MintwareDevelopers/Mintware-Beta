@@ -18,11 +18,13 @@ remove liquidity, collect fees, swap idle balances with explicit limits, and gua
 Automated zapping, JIT liquidity, and a staged-buffer flow are not implemented.
 
 Live deployments are testnet-only and unaudited; external audit gates real value. The Robinhood Chain testnet
-instance is `0x38E426D6671FB2c07C07a468e59f954Dcd0eDeb8`, registered for pool
+instance is `0xC5d44829a719FC4A87bd29A32839c4d92610D8d8`, registered for pool
 `0x07340da7…0dfa2` (tUSDG/tPONS); its mark is fixed with a one-year maximum age. Base Sepolia engine (USDC/WETH, relaunched
-2026-10-30 because the first one's immutable fixed mark went stale — `StaleMark()`): `0x961534db8C0EbB7cEb729E74CaB698A83A9c827e`,
+2026-10-30 because the first one's immutable fixed mark went stale — `StaleMark()`): `0xC8D6D490Da6Fa4451311464d154A32D876a3679B`,
 same one-year-max-age fixed-mark shape; registering it needs `MARKET_ENGINE_{CODEHASHES,OWNER,QUOTE_ASSET}_84532`. Robinhood lifecycle module:
-`0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421`. Full addresses belong in [`config/deployments.json`](../../config/deployments.json).
+`0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421`. Both engines were redeployed 2026-10-31 with the PR #551 audit fixes (MW-01/MW-02) via
+`scripts/ops/redeploy-engines.sh`; the deployer's position moved over and the previous engines are empty and inactive in
+the registry. Vercel keeps the old and new code hashes in `MARKET_ENGINE_CODEHASHES_<chain>`. Full addresses belong in [`config/deployments.json`](../../config/deployments.json).
 
 ## Discovery, curation, registry
 
