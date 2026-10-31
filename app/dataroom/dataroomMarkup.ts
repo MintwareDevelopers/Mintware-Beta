@@ -27,30 +27,30 @@ b{color:var(--ink)}
 <div class='top'><h1>Mintware — Investor Data Room</h1><p>Read-only preview of the drafts. Source files (editable) are in ~/Desktop/MintWare/data-room/.</p></div>
 <div class='toc'><a href='#s0'>One-Pager</a><a href='#s1'>V1 Revenue Model</a><a href='#s2'>Entity &amp; Deal Structure</a><a href='#s3'>Security Overview</a><a href='#s4'>Roadmap</a><a href='#s5'>Team &amp; Advisors</a><a href='#s6'>Data-Room Index</a></div>
 <section id='s0'><h2 class='doctitle'>MINTWARE — One-Page Summary</h2>
-<h3>Idle crypto treasuries, put to work — without ever locking them up</h3>
+<h3>Every asset deserves a market — deep, fair liquidity for tokenized stocks, RWAs and stablecoins</h3>
 <p class='sub'>Confidential — prepared for prospective investors · December 2025</p>
-<p class=''>Mintware is designed to turn a crypto company’s idle stablecoin treasury into on-chain liquidity. The planned account combines lending yield and trading fees with card spendability. The plan is a 10% performance fee on yield generated, never on principal.</p>
+<p class=''>Mintware gives tokenized assets deep, fair markets funded by the people who hold them. A holder adds one asset; the MarketEngine keeps it in a shared Uniswap V4 position while the market trades and in curated lending while it waits, and the holder can withdraw at any time. The plan is a 10% performance fee on trading fees earned, never on principal.</p>
 <h3>The problem</h3>
-<p class=''>Exchanges, funds, and web3 startups sit on billions in stablecoins that earn almost nothing. Today the choice is binary: keep it spendable and earn ~0%, or lock it up to earn and lose access. So the cash sits idle.</p>
+<p class=''>Stocks, real-world assets and stablecoins are moving on-chain faster than markets can form around them. Thin liquidity means wide spreads, prices that jump on a single sale, and holders who cannot exit at a fair price. Issuers rent depth from market makers, who keep the trading income and leave when the contract ends.</p>
 <h3>The solution</h3>
-<p class=''>Mintware is designed to put treasury balances to work as liquidity in on-chain markets. The roadmap combines lending and trading fees with planned card or transfer spendability; principal protection is not a current feature.</p>
+<p class=''>Mintware turns holders into the market. One asset in, one share out: capital earns trading fees while it is in the pool and lending yield while it is idle, in curated markets that are reviewed before they open. Issuers get community-funded depth from day one; holders earn what market makers earn.</p>
 <h3>Why now</h3>
-<p class=''>Stablecoins now settle trillions of dollars a year, and the on-chain tools to put idle balances to work safely have only just matured. Crypto treasuries are piling up, and no one has made putting them to work simple, safe, and spendable.</p>
+<p class=''>Around $300B of stablecoins and $38B+ of tokenized real-world assets are on-chain, and tokenized stocks grew from under $1B to over $3B in a year. Robinhood has issued around 2,000 stock tokens on Robinhood Chain, where most on-chain value now sits in tokenized equities. The assets have arrived; the markets around them have not.</p>
 <h3>Where we are</h3>
 <ul>
-<li>In development — MarketEngine is on Robinhood Chain testnet; its adapters hold test assets without yield.</li>
-<li>Past testnet demo — an end-to-end flow was recorded on test networks; it is not a live customer product.</li>
+<li>Live on testnet — MarketEngine is deployed on Robinhood Chain testnet, with deposit and withdraw verified end-to-end through the production app; its adapters hold test assets without yield.</li>
+<li>Backed — incubated by Firma Labs, which is anchoring this round; agent x402 payments are live in production.</li>
 <li>Security-first — an independent audit is the gate before real customer funds move; we build to that bar.</li>
 </ul>
 <h3>Business model</h3>
-<p class=''>The plan is a 10% performance fee on yield generated for the customer. No account fees, no lock-ins. We earn only when the customer’s money does.</p>
+<p class=''>The plan is a 10% performance fee on trading fees a market earns, plus issuer fees for curated market launches and card interchange. No account fees, no lock-ins. We earn only when the market does.</p>
 <h3>The ask</h3>
-<p class=''>Raising $250,000 for ≈10% on a SAFE ($2.5M post-money cap) — ~12 months of runway to a guarded launch with our first crypto-company treasuries, then a seed round at a higher valuation.</p>
+<p class=''>Raising $250,000 for ≈10% on a SAFE ($2.5M post-money cap) — ~12 months of runway to a guarded launch with our first issuer markets on Robinhood Chain, then a seed round at a higher valuation.</p>
 <p class='sub'>Mintware LLC · Delaware · team@mintware.org · mintware.finance</p></section><section id='s1'>
 <h2 class='doctitle'>V1 Revenue Model</h2>
 <p class='sub'>Editable spreadsheet — Mintware-V1-Revenue-Model.xlsx. Revenue is driven by trading volume, not depth.</p>
 <h3>What V1 is</h3><p>MarketEngine is live on Robinhood Chain testnet with a tUSDG/tPONS pool. Its adapters hold test assets without yield; historical proof records describe past testnet runs.</p>
-<h3>How Mintware earns</h3><p>The plan is to take a 10% performance fee on yield generated for the customer. This fee is planned and is not currently collected from customer positions.</p>
+<h3>How Mintware earns</h3><p>The plan is to take a 10% performance fee on the trading fees a market earns. This fee is planned and is not currently collected from customer positions.</p>
 <h3>The model</h3><p><b>Mintware revenue = trading volume (earning fees) × pool fee tier × 10%.</b> The driver is volume, not the size of the deposit. Breakeven ≈ $500M annual volume at a 0.30% tier (far less on higher-fee pools).</p>
 <h3>Revenue by annual volume (0.30% tier)</h3><table>
 <tr class='hdr'><th>Annual volume</th><th>Gross fees</th><th>Mintware revenue</th></tr>
@@ -86,7 +86,7 @@ b{color:var(--ink)}
 <tr><th class='k'>Contact</th><td>team@mintware.org</td></tr>
 </table>
 <h3>2 · What Mintware does</h3>
-<p class=''>Mintware is designed to put idle crypto treasuries to work as on-chain liquidity, with a planned 10% performance fee on yield generated — never on principal. MarketEngine is live on Robinhood Chain testnet; its adapters hold test assets without yield. Past testnet demonstrations are not a live customer product. An independent security audit is the gate before real customer funds move. Revenue detail is in the accompanying V1 Revenue Model.</p>
+<p class=''>Mintware gives tokenized assets deep, community-funded on-chain markets, with a planned 10% performance fee on trading fees earned — never on principal. MarketEngine is live on Robinhood Chain testnet; its adapters hold test assets without yield. Past testnet demonstrations are not a live customer product. An independent security audit is the gate before real customer funds move. Revenue detail is in the accompanying V1 Revenue Model.</p>
 <h3>3 · The raise</h3>
 <table>
 <tr><th class='k'>Instrument</th><td>SAFE (Simple Agreement for Future Equity) — see the structural note in §5</td></tr>
@@ -150,29 +150,29 @@ b{color:var(--ink)}
 <li>Guarded launch — a capped amount of value on mainnet first, scaled as it earns trust.</li>
 </ul>
 <p class='sub'>Full technical detail is available to serious investors under diligence.</p></section><section id='s4'><h2 class='doctitle'>MINTWARE — Roadmap</h2>
-<h3>From testnet development to first customers to seed</h3>
+<h3>From testnet to first issuer markets to seed</h3>
 <p class='sub'>Confidential — prepared for prospective investors · December 2025</p>
-<h3>Now — pre-seed (product in development)</h3>
+<h3>Now — pre-seed (live on testnet)</h3>
 <ul>
-<li>Past testnet demonstrations recorded an earn → spend → settle flow; the current product remains in development.</li>
+<li>MarketEngine live on Robinhood Chain testnet, with deposit and withdraw verified in the production app.</li>
 <li>Ongoing internal + independent security hardening.</li>
 </ul>
 <h3>This round — ~12 months, ~$250K</h3>
 <table>
 <tr class='hdr'><th>Phase</th><th>Milestone</th><th>~Timing</th></tr>
 <tr><td>1 · Secure</td><td>Independent audit + public bug bounty complete</td><td>Months 1–4</td></tr>
-<tr><td>2 · Launch</td><td>Guarded mainnet launch — capped treasury value live and earning</td><td>Months 4–6</td></tr>
-<tr><td>3 · Land</td><td>First crypto-company treasuries onboarded, live and earning</td><td>Months 5–9</td></tr>
+<tr><td>2 · Launch</td><td>Guarded mainnet launch on Robinhood Chain — capped value live and earning</td><td>Months 4–6</td></tr>
+<tr><td>3 · Land</td><td>First issuer partners and stock-token markets live and earning</td><td>Months 5–9</td></tr>
 <tr><td>4 · Prove</td><td>Real usage + revenue metrics; expand the capped ceiling</td><td>Months 9–12</td></tr>
 </table>
 <h3>Next — seed round ($1.5M–$2.5M)</h3>
 <ul>
-<li>Goal: launch a safe product for crypto-company treasuries and build a metrics story for the seed round. Revenue tracks trading volume; modeled breakeven on the lean team is roughly $500M annual volume at a ~0.30% fee tier — less on higher-fee pools (see V1 Revenue Model).</li>
+<li>Goal: launch safe, curated markets for tokenized assets and build a metrics story for the seed round. Revenue tracks trading volume; modeled breakeven on the lean team is roughly $500M annual volume at a ~0.30% fee tier — less on higher-fee pools (see V1 Revenue Model).</li>
 <li>Marquee third-party audit as TVL grows.</li>
-<li>Extend from company treasuries toward every wallet — “win the treasury, then give every balance the same superpower.”</li>
+<li>Extend from stock tokens to every RWA — “start with stock tokens, then give every asset on earth a market.”</li>
 </ul>
 <h3>What “done” looks like for this round</h3>
-<p class=''>Goal: launch a safe product for crypto-company treasuries and build a metrics story for the seed round. Revenue tracks trading volume; modeled breakeven on the lean team is roughly $500M annual volume at a ~0.30% fee tier — less on higher-fee pools (see V1 Revenue Model).</p></section><section id='s5'><h2 class='doctitle'>MINTWARE — Team &amp; Advisors</h2>
+<p class=''>Goal: launch safe, curated markets for tokenized assets and build a metrics story for the seed round. Revenue tracks trading volume; modeled breakeven on the lean team is roughly $500M annual volume at a ~0.30% fee tier — less on higher-fee pools (see V1 Revenue Model).</p></section><section id='s5'><h2 class='doctitle'>MINTWARE — Team &amp; Advisors</h2>
 <p class='sub'>Confidential — prepared for prospective investors · December 2025</p>
 <div class='callout'>DRAFT — please confirm the bracketed items before sending. Titles/bios marked [confirm] are placeholders.</div>
 <h3>Founders</h3>
