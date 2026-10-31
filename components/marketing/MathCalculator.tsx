@@ -83,13 +83,13 @@ export function MathCalculator() {
       </div>
 
       <div className="glass-card p-8 max-[800px]:p-5 flex flex-col">
-        <div className="text-[13px] font-semibold">Blended return</div>
+        <div className="text-[13px] font-semibold">Modeled return</div>
         <div className="font-atx-display font-medium text-[clamp(3rem,7vw,4.6rem)] tracking-[-0.04em] leading-none mt-2 bg-clip-text text-transparent"
           style={{ backgroundImage: 'linear-gradient(120deg, var(--color-peri-deep), var(--color-coral2))' }}>
           {blended != null ? pct(blended) : '—'}
         </div>
         <div className="text-[15px] text-ink-mid mt-3">
-          {blended != null ? <>About <b className="text-ink">{money(amount * blended / 100)}</b> a year on {money(amount)}.</> : feed?.ok === false ? 'Live rates are unavailable right now.' : 'Loading live rates…'}
+          {blended != null ? <>About <b className="text-ink">{money(amount * blended / 100)}</b> a year on {money(amount)} if today’s rates held. They won’t stay fixed.</> : feed?.ok === false ? 'Live rates are unavailable right now.' : 'Loading live rates…'}
         </div>
         <div className="space-y-3 mt-8">
           {compare.map(c => <div key={c.label}>
@@ -99,7 +99,7 @@ export function MathCalculator() {
             </div>
           </div>)}
         </div>
-        <p className="text-[11.5px] text-ink-soft mt-auto pt-6 leading-[1.5]">Modeled at today’s rates. Lending and pool fees: DefiLlama, 30-day averages. T-bills: FRED. Savings: FDIC national average.</p>
+        <p className="text-[11.5px] text-ink-soft mt-auto pt-6 leading-[1.5]">Illustration at today’s rates, not a forecast or a promise. It leaves out impermanent loss, price moves, gas and fees. Mintware markets run on testnet today. Lending and pool fees: DefiLlama, 30-day averages. T-bills: FRED. Savings: FDIC national average.</p>
       </div>
 
       {lending != null && <div className="lg:col-span-2 mt-4">
