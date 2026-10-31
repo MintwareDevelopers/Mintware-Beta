@@ -11,13 +11,13 @@ export const FIELD =
 
 export type Status = 'live' | 'building' | 'planned' | 'preview' | 'warn' | 'bad' | 'muted'
 
-// Status is carried in the material, as on the landing: solid = live, dotted = in progress or preview,
-// hatched = planned.
+// Status chips are plain fills (the dotted/hatched textures read as noise behind text); the textures stay on
+// non-text fills like allocation bars.
 const CHIP: Record<Status, { cls: string; bg?: string; dot?: string }> = {
   live: { cls: 'bg-[#E3F4EA] text-[#0F7A43]', dot: '#22A45D' },
-  building: { cls: 'mw-tex-dots text-[#4B2FA0]', bg: '#EDE9FB' },
-  preview: { cls: 'mw-tex-dots text-[#4B2FA0]', bg: '#EDE9FB' },
-  planned: { cls: 'mw-tex-hatch text-ink-mid', bg: '#F2F2F5' },
+  building: { cls: 'text-[#4B2FA0]', bg: '#EDE9FB' },
+  preview: { cls: 'text-[#4B2FA0]', bg: '#EDE9FB' },
+  planned: { cls: 'text-ink-mid', bg: '#F2F2F5' },
   warn: { cls: 'bg-[#FDF1DE] text-[#8A5300]' },
   bad: { cls: 'bg-[#FBE9E7] text-[#B42318]' },
   muted: { cls: 'text-ink-mid', bg: '#EEEEF4' },
@@ -60,7 +60,7 @@ export function PageHead({ icon, title, status, lede, actions, back }: {
       {back && <div className="mb-4"><BackLink href={back.href}>{back.label}</BackLink></div>}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-start gap-4 min-w-0">
-          {icon && <IconTile size={48}>{icon}</IconTile>}
+          {icon && <span className="max-[520px]:hidden"><IconTile size={48}>{icon}</IconTile></span>}
           <div className="min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="m-0 font-semibold text-[clamp(26px,3.2vw,34px)] tracking-[-0.035em] leading-[1.1] text-ink">{title}</h1>

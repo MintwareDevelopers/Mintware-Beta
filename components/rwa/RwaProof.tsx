@@ -9,7 +9,7 @@ import { Disclosure, ChainTabs, IconTile, IconChainLink, IconRefused, IconVerifi
 
 import { RefusalCards } from './RwaProofVisuals'
 
-const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5'
+const WRAP = 'max-w-[1160px] mx-auto px-8 max-[900px]:px-5 max-[640px]:px-3'
 const displayLabel = (l: string) => l.replace(' deposits ', ' supplies ')
 
 export function RwaProof({ slug }: { slug: string }) {

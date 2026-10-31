@@ -19,8 +19,8 @@ const FEATURES: [string, string, ReactNode][] = [
 
 const JOBS = [
   { name: 'Liquidity', body: 'Provide to an asset’s market. The engine pairs it into that asset’s pool and fees build on your position.', pill: 'Testnet', pillCls: 'bg-[#E3F4EA] text-[#0F7A43]', side: '#6B69E6', top: '#C3C2FD', dot: true },
-  { name: 'Collateral', body: 'Use a position as collateral without pulling it out of the market. It keeps providing depth while it backs a loan.', pill: 'In development', pillCls: 'bg-[#EDE9FB] text-[#4B2FA0] mw-tex-dots', side: '#9C8EE6', top: '#E1DBFA', tex: 'dots' },
-  { name: 'Credit', body: 'Borrowing that unwinds gradually inside the pool, on fresh marks only. No outside liquidator racing a closed market.', pill: 'Roadmap', pillCls: 'bg-[#F2F2F5] text-[#454552] mw-tex-hatch', side: '#E08A62', top: '#FAD3C1', tex: 'hatch' },
+  { name: 'Collateral', body: 'Use a position as collateral without pulling it out of the market. It keeps providing depth while it backs a loan.', pill: 'In development', pillCls: 'bg-[#EDE9FB] text-[#4B2FA0]', side: '#9C8EE6', top: '#E1DBFA', tex: 'dots' },
+  { name: 'Credit', body: 'Borrowing that unwinds gradually inside the pool, on fresh marks only. No outside liquidator racing a closed market.', pill: 'Roadmap', pillCls: 'bg-[#F2F2F5] text-[#454552]', side: '#E08A62', top: '#FAD3C1', tex: 'hatch' },
 ]
 
 const FLOW: [string, string, string][] = [
@@ -105,8 +105,8 @@ export default function HomePage() {
           </h1>
           <p className="m-0 max-w-[500px] text-[clamp(17px,1.6vw,20px)] leading-[1.55]" style={{ color: 'var(--mw-ink-2)' }}>Liquidity, collateral and credit for tokenized stocks, gold and property. Each asset gets its own isolated, non‑custodial market.</p>
           <div className="flex flex-wrap gap-3">
-            <Link href="/markets" className="mw-btn !min-h-[54px] !px-[26px] !rounded-[14px] text-[16px]">Explore markets <Arrow /></Link>
-            <a href="#how" className="mw-btn-quiet !min-h-[54px] !px-[22px] !rounded-[14px] text-[16px]">How it works</a>
+            <Link href="/markets" className="mw-btn !min-h-[54px] !px-[26px] !rounded-[14px] text-[16px] max-[520px]:w-full">Explore markets <Arrow /></Link>
+            <a href="#how" className="mw-btn-quiet !min-h-[54px] !px-[22px] !rounded-[14px] text-[16px] max-[520px]:w-full">How it works</a>
           </div>
           <div className="flex flex-wrap gap-[18px] text-[14px]" style={{ color: 'var(--mw-ink-3)' }}>
             {['Never idle', 'Never locked', 'Always yours'].map((t) => (

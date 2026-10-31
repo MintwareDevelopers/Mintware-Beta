@@ -63,7 +63,7 @@ export function MathCalculator() {
             className={`glass-pill !px-3 !py-1.5 text-[12.5px] ${amount === v ? 'glass-pill-primary' : ''}`}>{money(v)}</button>)}
         </div>
 
-        <div className="mt-8 flex items-baseline justify-between">
+        <div className="mt-8 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <span className="text-[13px] font-semibold">Time in the pool</span>
           <span className="font-mono text-[13px] text-ink-mid">{inPool}% in pool · {100 - inPool}% idle</span>
         </div>

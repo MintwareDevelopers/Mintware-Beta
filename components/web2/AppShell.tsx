@@ -96,21 +96,32 @@ export function AppShell({
     .sort((a, b) => b.href.length - a.href.length)[0]?.href
   const current = all.find((n) => n.href === activeHref)
 
+  // On phones the menu is one horizontal strip; keep the current page in view instead of off the right edge.
+  const strip = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = strip.current
+    const el = nav?.querySelector<HTMLElement>('[data-on]')
+    if (!nav || !el) return
+    nav.scrollLeft = el.offsetLeft - (nav.clientWidth - el.offsetWidth) / 2
+  }, [activeHref])
+
   const link = (n: ShellNavItem, mobile: boolean) => {
     const on = n.href === activeHref
     return (
       <Link
         key={n.href}
         href={n.href}
+        data-on={on ? '' : undefined}
         aria-current={on ? 'page' : undefined}
         className={
           mobile
-            ? `shrink-0 rounded-[10px] px-3 py-1.5 text-[13px] font-medium whitespace-nowrap no-underline transition-colors ${on ? 'text-ink' : 'text-ink-mid'}`
+            ? `shrink-0 inline-flex items-center rounded-[10px] px-3 min-h-[36px] text-[13.5px] font-medium whitespace-nowrap no-underline transition-colors ${on ? 'text-ink' : 'text-ink-mid'}`
             : `flex items-center justify-between gap-2 rounded-[10px] px-3 py-2 text-[14px] font-medium no-underline transition-colors ${on ? 'text-ink' : 'text-ink-mid hover:text-ink'}`
         }
         style={on ? { background: '#fff', boxShadow: 'var(--mw-raise-sm)' } : undefined}
       >
-        <span className="truncate">{n.label}{mobile && n.hint ? ` · ${n.hint}` : ''}</span>
+        <span className={mobile ? '' : 'truncate'}>{n.label}</span>
+        {mobile && n.hint && <span className="ml-1.5 text-[10.5px] font-semibold rounded-full px-1.5 py-0.5" style={{ background: '#EDE9FB', color: '#4B2FA0' }}>{n.hint}</span>}
         {!mobile && n.hint && <span className="text-[10.5px] font-semibold shrink-0 rounded-full px-2 py-0.5" style={{ background: '#EDE9FB', color: '#4B2FA0' }}>{n.hint}</span>}
       </Link>
     )
@@ -153,7 +164,7 @@ export function AppShell({
             </button>
             <WalletControl />
           </div>
-          <nav className="md:hidden mx-3 mb-2.5 flex gap-1 p-1 rounded-[12px] overflow-x-auto" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>{all.map((n) => link(n, true))}</nav>
+          <nav ref={strip} aria-label="Sections" className="md:hidden relative mx-3 mb-2.5 flex gap-1 p-1 rounded-[12px] overflow-x-auto after:content-[''] after:shrink-0 after:w-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)', maskImage: 'linear-gradient(to right,#000 calc(100% - 28px),transparent)', WebkitMaskImage: 'linear-gradient(to right,#000 calc(100% - 28px),transparent)' }}>{all.map((n) => link(n, true))}</nav>
         </header>
         <div className="flex-1 min-w-0">
           {padded ? <div className="max-w-[1120px] mx-auto px-6 py-8 max-[800px]:px-4 max-[800px]:py-6">{children}</div> : children}
