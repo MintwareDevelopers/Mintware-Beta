@@ -297,7 +297,7 @@ export default function HomePage() {
           <h2 className="m-0 font-semibold text-[clamp(30px,3.6vw,44px)] tracking-[-0.035em] leading-[1.08]">See a market up close.</h2>
           <p className="mt-3 mb-0 text-[17px] leading-[1.55]" style={{ color: 'var(--mw-ink-2)' }}>Browse the live markets on testnet, with mock tokens and no real funds.</p>
         </div>
-        <Link href="/v1" className="mw-btn relative !min-h-[54px] !px-[26px] !rounded-[14px]">Launch app <Arrow /></Link>
+        <Link href="/app/markets" className="mw-btn relative !min-h-[54px] !px-[26px] !rounded-[14px]">Launch app <Arrow /></Link>
       </div>
       <p className="mx-auto max-w-[1200px] mt-8 text-[13px] leading-[1.55]" style={{ color: 'var(--mw-ink-3)' }}>Testnet software, not an offer. Tokenized assets carry issuer, market, liquidity and smart‑contract risk, and you bear impermanent loss on liquidity you provide. Figures in the market illustration are examples. <Link href="/risk-disclosures" style={{ color: 'var(--mw-peri-deep)' }}>Risk disclosures</Link></p>
     </section>

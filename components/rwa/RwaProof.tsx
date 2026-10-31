@@ -1,6 +1,6 @@
 'use client'
 
-// /v1/rwas/proof — the recorded lifecycle run as a timeline (every step a transaction you can open), the two
+// /app/rwas/proof — the recorded lifecycle run as a timeline (every step a transaction you can open), the two
 // on-chain refusals, and the source-verified contract set. Per chain (?unit=).
 
 import Link from 'next/link'
@@ -24,8 +24,8 @@ export function RwaProof({ slug }: { slug: string }) {
       <section className="bg-[radial-gradient(1000px_380px_at_90%_-20%,rgba(201,192,244,0.5),transparent_60%)]" style={{ borderBottom: '1px solid var(--mw-line)' }}>
         <div className={`${WRAP} pt-9 pb-10`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link href={`/v1/rwas/${u.slug}`} className="text-[13.5px] font-semibold text-ink-mid no-underline hover:text-ink">← Back to the market</Link>
-            <ChainTabs units={RWA_UNITS} active={u.slug} href={(s) => `/v1/rwas/proof?unit=${s}`} />
+            <Link href={`/app/rwas/${u.slug}`} className="text-[13.5px] font-semibold text-ink-mid no-underline hover:text-ink">← Back to the market</Link>
+            <ChainTabs units={RWA_UNITS} active={u.slug} href={(s) => `/app/rwas/proof?unit=${s}`} />
           </div>
           <div className={`${EY} mt-7`}>On-chain proof</div>
           <h1 className="mt-2 max-w-[22ch] font-geist text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.04] tracking-[-0.04em]">Every step, a transaction you can open.</h1>

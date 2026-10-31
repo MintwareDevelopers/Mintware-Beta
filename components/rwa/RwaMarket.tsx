@@ -1,7 +1,7 @@
 'use client'
 
 // V1 RWAs — the live market for one RWA liquidity unit. Every number is read from the chain via /api/rwa/unit
-// (useRwaUnit, polled). The lifecycle proof + contracts live on /v1/rwas/proof. Light-only.
+// (useRwaUnit, polled). The lifecycle proof + contracts live on /app/rwas/proof. Light-only.
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -31,8 +31,8 @@ export function RwaMarket({ slug }: { slug: string }) {
       <section className="bg-[radial-gradient(1000px_380px_at_90%_-20%,rgba(201,192,244,0.5),transparent_60%)]" style={{ borderBottom: '1px solid var(--mw-line)' }}>
         <div className={`${WRAP} pt-9 pb-9`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link href="/v1/rwas" className="text-[13.5px] font-semibold text-ink-mid no-underline hover:text-ink">← Real-world assets</Link>
-            <ChainTabs units={RWA_UNITS} active={u.slug} href={(s) => `/v1/rwas/${s}`} />
+            <Link href="/app/rwas" className="text-[13.5px] font-semibold text-ink-mid no-underline hover:text-ink">← Real-world assets</Link>
+            <ChainTabs units={RWA_UNITS} active={u.slug} href={(s) => `/app/rwas/${s}`} />
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-4">
             <span className="w-14 h-14 rounded-[16px] grid place-items-center" style={{ background: 'linear-gradient(160deg,#EAF4E4,#B9D9A6)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.8), var(--mw-raise-sm)', color: '#15151D' }}><IconParcel size={26} /></span>
@@ -128,7 +128,7 @@ export function RwaMarket({ slug }: { slug: string }) {
       {/* 5 — the proof behind it */}
       <section className="pb-12">
         <div className={WRAP}>
-          <Link href={`/v1/rwas/proof?unit=${u.slug}`} className="mw-raise mw-lift relative overflow-hidden rounded-[26px] p-7 max-[640px]:p-5 flex flex-wrap items-center justify-between gap-5 no-underline text-ink">
+          <Link href={`/app/rwas/proof?unit=${u.slug}`} className="mw-raise mw-lift relative overflow-hidden rounded-[26px] p-7 max-[640px]:p-5 flex flex-wrap items-center justify-between gap-5 no-underline text-ink">
             <div aria-hidden="true" className="absolute -right-24 -top-28 w-72 h-72 rounded-full opacity-25 blur-[50px]" style={{ background: 'var(--mw-sheen)' }} />
             <div className="relative flex items-center gap-4">
               <IconTile><IconChainLink /></IconTile>

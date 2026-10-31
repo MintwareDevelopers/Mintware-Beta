@@ -145,7 +145,7 @@ function AccountContent() {
               <div className="text-[15px] text-ink-mid mt-3">Across {POSITIONS.length} market positions and your card balance · <span className="font-geist-mono" style={{ color: 'var(--mw-gain)' }}>+{usd(fees)}</span> in fees so far</div>
             </div>
             <div className="flex flex-wrap gap-2.5">
-              <Link href="/v1" className="mw-btn !min-h-[48px] !px-5">Add liquidity <Arrow size={16} /></Link>
+              <Link href="/app/markets" className="mw-btn !min-h-[48px] !px-5">Add liquidity <Arrow size={16} /></Link>
               <Link href="/app/swap" className="mw-btn-quiet !min-h-[48px]">Swap</Link>
               <button disabled title="Coming soon" className="mw-btn-quiet mw-tex-hatch !min-h-[48px] cursor-default opacity-80 !text-ink-mid">Move money · soon</button>
             </div>
@@ -168,11 +168,11 @@ function AccountContent() {
         <section>
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div><div className={LABEL}>Market positions</div><div className="text-[22px] font-semibold tracking-[-0.02em] mt-1">Where your liquidity is working</div></div>
-            <Link href="/v1" className="inline-flex items-center gap-1.5 text-[14px] font-semibold no-underline hover:underline" style={{ color: 'var(--mw-peri-deep)' }}>Browse markets <Arrow size={15} /></Link>
+            <Link href="/app/markets" className="inline-flex items-center gap-1.5 text-[14px] font-semibold no-underline hover:underline" style={{ color: 'var(--mw-peri-deep)' }}>Browse markets <Arrow size={15} /></Link>
           </div>
           <div className="grid md:grid-cols-2 gap-4 mt-4">
             {POSITIONS.map((p) => (
-              <Link key={p.pair[0]} href="/v1" className="mw-raise mw-lift rounded-[22px] p-5 no-underline text-ink block">
+              <Link key={p.pair[0]} href="/app/markets" className="mw-raise mw-lift rounded-[22px] p-5 no-underline text-ink block">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="flex shrink-0">

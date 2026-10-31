@@ -1,12 +1,12 @@
-import { V1Shell } from '@/components/web2/v1/V1Shell'
+import { AppContainer } from '@/components/web2/AppShell'
 import { V1Portfolio } from '@/components/web2/v1/V1Portfolio'
 
 export const metadata = { title: 'Mintware — Portfolio' }
 
 export default function V1PortfolioPage() {
   return (
-    <V1Shell>
+    <AppContainer>
       <V1Portfolio />
-    </V1Shell>
+    </AppContainer>
   )
 }
