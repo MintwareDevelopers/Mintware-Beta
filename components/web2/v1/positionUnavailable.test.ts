@@ -53,7 +53,7 @@ it('MW-05: pool displays unavailable value and readable shares, and still simula
   state.values = [meta, 'ok', null, null, position, 'withdraw', '', 100, 'idle', null, null, '']
   const tree = V1PoolDetail({ slug: pool })
   const html = renderToStaticMarkup(tree)
-  expect(html).toMatch(/Position value[\s\S]*?Unavailable/)
+  expect(html).toMatch(/Value<\/div>[\s\S]*?Unavailable/)
   expect(html).toMatch(/Shares[\s\S]*?>2</)
   const button = elements(tree).find((e) => e.type === 'button' && e.props.children === 'Review withdraw')!
   expect(button).toBeDefined()
