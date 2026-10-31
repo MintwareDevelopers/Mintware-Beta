@@ -66,7 +66,7 @@ export function ChainTabs({ units, active, href }: { units: RwaUnit[]; active: s
 }
 
 export function LiveDot({ block, failed, label = 'Live' }: { block?: number; failed?: boolean; label?: string }) {
-  if (failed && !block) return <span className="text-[12px] text-ink-soft">Live read unavailable — showing the recorded run</span>
+  if (failed) return <span className="text-[12px] text-ink-soft">Live read unavailable — {block ? `cached block ${block.toLocaleString()}` : 'showing the recorded run'}</span>
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-mid">
       <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mw-live opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-mw-live" /></span>
@@ -160,7 +160,7 @@ export function LiquidityMap({ unit, interest, symbol }: { unit: RwaUnitLive; in
       </div>
       {interest !== null && (
         <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2 rounded-[14px] px-4 py-3" style={{ background: 'var(--mw-band)' }}>
-          <span className="text-[12.5px] text-ink-mid">Interest earned by idle liquidity, live{unit.lending.simulated ? ' (simulated rate)' : ''}</span>
+          <span className="text-[12.5px] text-ink-mid">Interest earned by idle liquidity, {unit.source === 'live' ? 'live estimate' : 'at snapshot'}{unit.lending.simulated ? ' (simulated rate)' : ''}</span>
           <span className="font-geist-mono text-[19px] text-peri-deep">{usd(interest, 4)}</span>
         </div>
       )}
@@ -256,10 +256,10 @@ export function PriceBandChart({ unit, demo }: { unit: RwaUnitLive; demo: RwaDem
           if (s.ev.kind === 'appraisal') return <rect key={`p${i}`} x={X(i) - 4} y={Y(s.appraisal) - 4} width="8" height="8" transform={`rotate(45 ${X(i)} ${Y(s.appraisal)})`} fill="#4643D1" />
           return <circle key={`p${i}`} cx={X(i)} cy={Y(s.spot)} r="3.4" fill={s.ev.byVault ? '#F4A183' : '#fff'} stroke={s.ev.byVault ? '#E88A67' : '#2E2BA8'} strokeWidth="1.5" />
         })}
-        <text x={X(n - 1) - 8} y={Y(unit.spot.usd) + (unit.spot.usd < unit.appraisal.usd ? 18 : -10)} textAnchor="end" fontSize="12" fontWeight="600" fill="#2E2BA8">now ${unit.spot.usd.toFixed(2)}</text>
+        <text x={X(n - 1) - 8} y={Y(unit.spot.usd) + (unit.spot.usd < unit.appraisal.usd ? 18 : -10)} textAnchor="end" fontSize="12" fontWeight="600" fill="#2E2BA8">{unit.source === 'live' ? 'now' : 'snapshot'} ${unit.spot.usd.toFixed(2)}</text>
         <text x={X(n - 1) - 8} y={Y(unit.appraisal.usd) - 8} textAnchor="end" fontSize="11.5" fontWeight="600" fill="#4643D1">appraisal ${unit.appraisal.usd.toFixed(2)}</text>
         <text x={PL} y={H - 10} fontSize="11" fill="#62626F">pool opened at the appraisal</text>
-        <text x={W - PR} y={H - 10} textAnchor="end" fontSize="11" fill="#62626F">now · block {unit.block.toLocaleString()}</text>
+        <text x={W - PR} y={H - 10} textAnchor="end" fontSize="11" fill="#62626F">{unit.source === 'live' ? 'now' : 'snapshot'} · block {unit.block.toLocaleString()}</text>
       </svg>
       <div className="mt-2 flex flex-wrap gap-4 px-1 text-[12px] text-ink-mid">
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-[#2E2BA8] bg-white" />trade</span>

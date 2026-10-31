@@ -516,7 +516,7 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
     }
 
     /// @notice Redeem a pro-rata portion of the portfolio in kind, retaining shares for any undelivered value.
-    /// @dev Incomplete exits use the least deliverable per-token fraction for both payouts and share burn.
+    /// @dev Recall shortfalls use the least deliverable fraction; failed recipient legs burn only lost NAV.
     ///      Flooring to raw-token and liquidity units may leave sub-unit residual backing for remaining shares.
     function withdraw(uint256 shares, address recipient, uint256 minAmount0, uint256 minAmount1)
         external
@@ -545,6 +545,9 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
         uint256 adapterAssets0 = _adapterAssets(adapter0);
         uint256 adapterAssets1 = _adapterAssets(adapter1);
         uint128 liquidityBefore = positionLiquidity;
+        uint256 navBefore = markAvailable
+            ? _navFrom(idle0 + adapterAssets0, idle1 + adapterAssets1, liquidityBefore, price0, price1, sqrtPriceX96)
+            : 0;
 
         uint256 requestedIdle0 = Math.mulDiv(idle0, shares, supplyBefore);
         uint256 requestedIdle1 = Math.mulDiv(idle1, shares, supplyBefore);
@@ -601,48 +604,36 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
             payout0 = Math.mulDiv(owed0, fraction, 1e18);
             payout1 = Math.mulDiv(owed1, fraction, 1e18);
         }
-        bool canPay0 = _exitTransferAvailable(token0, recipient);
-        bool canPay1 = _exitTransferAvailable(token1, recipient);
-        if (!canPay0 || !canPay1) {
-            if (!markAvailable) revert ExitMarkUnavailable();
-            _assertPoolSpotNearMark(price0, price1, sqrtPriceX96);
-            (uint160 currentSqrtPriceX96,,,) = poolManager.getSlot0(poolKey.toId());
-            _assertPoolSpotNearMark(price0, price1, currentSqrtPriceX96);
-            complete = false;
-            fraction = Math.min(fraction, Math.mulDiv(shares - 1, 1e18, shares));
-            payout0 = canPay0 ? Math.mulDiv(owed0, fraction, 1e18) : 0;
-            payout1 = canPay1 ? Math.mulDiv(owed1, fraction, 1e18) : 0;
+        bool recipientIncomplete;
+        if (payout0 != 0 && !_exitTransferAvailable(token0, recipient)) {
+            payout0 = 0;
+            recipientIncomplete = true;
+        }
+        if (payout1 != 0 && !_exitTransferAvailable(token1, recipient)) {
+            payout1 = 0;
+            recipientIncomplete = true;
         }
         (amount0Out, bucketComplete) = _payExitBucket(token0, recipient, payout0);
-        bool transferFailed = !bucketComplete;
-        if (!bucketComplete) complete = false;
+        if (!bucketComplete) recipientIncomplete = true;
         (amount1Out, bucketComplete) = _payExitBucket(token1, recipient, payout1);
-        if (!bucketComplete) transferFailed = true;
-        if (!bucketComplete) complete = false;
+        if (!bucketComplete) recipientIncomplete = true;
 
         if (amount0Out < minAmount0 || amount1Out < minAmount1) revert ExitMinimumNotMet();
         if (amount0Out == 0 && amount1Out == 0) revert ZeroAmount();
         burned = shares;
-        if (!complete) {
-            if (transferFailed) {
-                if (!markAvailable) revert ExitMarkUnavailable();
-                uint256 requiredBurn;
-                if (amount0Out != 0 && owed0 != 0) {
-                    requiredBurn = Math.mulDiv(shares, amount0Out, owed0, Math.Rounding.Ceil);
-                }
-                if (amount1Out != 0 && owed1 != 0) {
-                    requiredBurn = Math.max(
-                        requiredBurn, Math.mulDiv(shares, amount1Out, owed1, Math.Rounding.Ceil)
-                    );
-                }
-                burned = requiredBurn + 2;
-                if (burned >= shares) {
-                    if (shares == 1) revert MWMarketShareMath.IncompleteExitConsumesRequest();
-                    burned = shares - 1;
-                }
-            } else {
-                burned = Math.mulDiv(shares, fraction, 1e18, Math.Rounding.Ceil);
-            }
+        if (recipientIncomplete) {
+            if (!markAvailable) revert ExitMarkUnavailable();
+            _assertPoolSpotNearMark(price0, price1, sqrtPriceX96);
+            (uint160 currentSqrtPriceX96,,,) = poolManager.getSlot0(poolKey.toId());
+            _assertPoolSpotNearMark(price0, price1, currentSqrtPriceX96);
+            // Price both snapshots at the same mark and spot. Any undelivered leg remains
+            // in NAV and in the holder's shares; ceil charges rounding to the withdrawer.
+            uint256 navAfter = _navAt(price0, price1, sqrtPriceX96);
+            (burned,) = MWMarketShareMath.sharesForPartialExit(
+                shares, navBefore > navAfter ? navBefore - navAfter : 0, navBefore, supplyBefore
+            );
+        } else if (!complete) {
+            burned = Math.mulDiv(shares, fraction, 1e18, Math.Rounding.Ceil);
             if (burned == 0 || burned >= shares) revert MWMarketShareMath.IncompleteExitConsumesRequest();
         }
         _burn(msg.sender, burned);
@@ -762,7 +753,8 @@ abstract contract MintwareMarketEngineCore is MintwareV4PoolVault, ERC20, IUnloc
         uint256 afterBalance = token.balanceOf(address(this));
         if (afterBalance < beforeBalance) revert AdapterReceiptMismatch();
         received = afterBalance - beforeBalance;
-        if (received > amount) revert AdapterReceiptMismatch();
+        // ERC-4626 redeem(previewWithdraw(amount)) can round up. All receipts are idle
+        // portfolio assets; withdraw caps the holder's payout at their in-kind entitlement.
     }
 
     /// @dev NAV failure is intentionally fail-closed: exits cannot fairly size an adapter bucket or

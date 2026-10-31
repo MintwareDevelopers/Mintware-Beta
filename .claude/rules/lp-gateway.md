@@ -13,7 +13,7 @@ Robinhood testnet's adapters are idle-custody adapters, so assets there are held
 
 Deposits can contain either or both pool tokens and require a fresh external mark, spot within the configured
 mark-deviation limit, and a nonzero minimum-shares floor. Withdrawals are pro-rata and in-kind (both pool tokens)
-with caller-supplied minimum outputs; they do not require a fresh mark. Owner/keeper lifecycle actions deploy or
+with caller-supplied minimum outputs; full delivery needs no fresh mark, while a failed recipient leg requires a fresh mark and retains shares worth the undelivered value. Owner/keeper lifecycle actions deploy or
 remove liquidity, collect fees, swap idle balances with explicit limits, and guardedly recenter the band.
 Automated zapping, JIT liquidity, and a staged-buffer flow are not implemented.
 

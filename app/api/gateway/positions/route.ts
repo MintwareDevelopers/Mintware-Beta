@@ -35,12 +35,13 @@ export const GET = createHandler(async (req, ctx) => {
       try {
         const [shares, supply, nav] = await Promise.all([
           client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'balanceOf', args: [address as `0x${string}`] }),
-          client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalSupply' }),
-          client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalNav' }),
+          client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalSupply' }).catch(() => null),
+          client.readContract({ address: inst.engineAddress, abi: MARKET_ENGINE_ABI, functionName: 'totalNav' }).catch(() => null),
         ])
         if (BigInt(shares) === 0n) return { ok: true as const, position: null }
-        const value = BigInt(supply) === 0n ? 0n : BigInt(shares) * BigInt(nav) / BigInt(supply)
-        return { ok: true as const, position: { poolAddress: inst.poolAddress, marketEngine: inst.engineAddress, positionManager: inst.engineAddress, pairLabel: inst.pairLabel ?? inst.poolAddress.slice(0, 12), chainId: inst.chainId, shares: String(shares), positionValueAtomic: value.toString(), costBasisAtomic: null, unrealizedPnlAtomic: null, recorded: recordedKeys.has(`${inst.chainId}:${inst.poolAddress.toLowerCase()}:${inst.engineAddress.toLowerCase()}`), costBasisComplete: true, source: 'source' in inst ? inst.source : 'registry', live: inst.status === 'active' && !('source' in inst && inst.source === 'env-fallback'), bufferBalanceAtomic: null, sourceReadable: true } }
+        const valuationAvailable = supply !== null && nav !== null
+        const value = !valuationAvailable ? null : BigInt(supply) === 0n ? 0n : BigInt(shares) * BigInt(nav) / BigInt(supply)
+        return { ok: true as const, position: { poolAddress: inst.poolAddress, marketEngine: inst.engineAddress, positionManager: inst.engineAddress, pairLabel: inst.pairLabel ?? inst.poolAddress.slice(0, 12), chainId: inst.chainId, shares: String(shares), positionValueAtomic: value?.toString() ?? null, costBasisAtomic: null, unrealizedPnlAtomic: null, recorded: recordedKeys.has(`${inst.chainId}:${inst.poolAddress.toLowerCase()}:${inst.engineAddress.toLowerCase()}`), costBasisComplete: true, source: 'source' in inst ? inst.source : 'registry', live: inst.status === 'active' && !('source' in inst && inst.source === 'env-fallback'), bufferBalanceAtomic: null, sourceReadable: true, valuationAvailable } }
       } catch (e) { ctx.log.warn('market-engine.positions', 'chain read failed', { pool: inst.poolAddress, chainId: inst.chainId, error: String(e) }); return { ok: false as const, poolAddress: inst.poolAddress } }
     })
   }))
