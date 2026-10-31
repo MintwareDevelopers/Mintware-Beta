@@ -98,13 +98,19 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `MintwareEthSettlement` | testnet · base-sepolia | `0x20140811123db9C00CA1dF1023BA4fE758B98c5F` | testnet |
 | `MintwareFixedTestMark` | testnet · base-sepolia | `0x11fbbDC9954A2Ca6C1eA9E5786d3725d7803dC8D` | testnet |
 | `MintwareFixedTestMark` | testnet · robinhood-testnet | `0xA7e84b45E59bccC5F1227e706Cc335dc7ab6ed10` | testnet |
-| `MintwareMarketAdapter_tPONS` | testnet · robinhood-testnet | `0xDc11D311364a175d992bB47484BA9DFaa3A0b73b` | testnet |
-| `MintwareMarketAdapter_tUSDG` | testnet · robinhood-testnet | `0xFC17B41e102DA194083a3BfD0df49F79Fd1FcA62` | testnet |
-| `MintwareMarketAdapter_USDC` | testnet · base-sepolia | `0xc1287f27A79711F6a8945f1B9Dec2Ae9E15cc9E5` | testnet |
-| `MintwareMarketAdapter_WETH` | testnet · base-sepolia | `0xc04a84794782a3F5e6dB1226b68cF46934aE4994` | testnet |
-| `MintwareMarketEngine` | testnet · base-sepolia | `0x961534db8C0EbB7cEb729E74CaB698A83A9c827e` | testnet |
-| `MintwareMarketEngine` | testnet · robinhood-testnet | `0x38E426D6671FB2c07C07a468e59f954Dcd0eDeb8` | testnet |
+| `MintwareMarketAdapter_tPONS` | testnet · robinhood-testnet | `0xDBb2D32da7aa9995563bA0830Eb8C52E09ebCa36` | testnet |
+| `MintwareMarketAdapter_tPONS_v2_superseded` | testnet · robinhood-testnet | `0xDc11D311364a175d992bB47484BA9DFaa3A0b73b` | superseded |
+| `MintwareMarketAdapter_tUSDG` | testnet · robinhood-testnet | `0xf9f904007b72C85f104B106854093BE7300c3Bb9` | testnet |
+| `MintwareMarketAdapter_tUSDG_v2_superseded` | testnet · robinhood-testnet | `0xFC17B41e102DA194083a3BfD0df49F79Fd1FcA62` | superseded |
+| `MintwareMarketAdapter_USDC` | testnet · base-sepolia | `0x1a9268554b41E1fa3f6539d547cB0c8782B23585` | testnet |
+| `MintwareMarketAdapter_USDC_v2_superseded` | testnet · base-sepolia | `0xc1287f27A79711F6a8945f1B9Dec2Ae9E15cc9E5` | superseded |
+| `MintwareMarketAdapter_WETH` | testnet · base-sepolia | `0x3A437C7B803DB46470A29bb391d600eC3cC152b3` | testnet |
+| `MintwareMarketAdapter_WETH_v2_superseded` | testnet · base-sepolia | `0xc04a84794782a3F5e6dB1226b68cF46934aE4994` | superseded |
+| `MintwareMarketEngine` | testnet · base-sepolia | `0xC8D6D490Da6Fa4451311464d154A32D876a3679B` | testnet |
+| `MintwareMarketEngine` | testnet · robinhood-testnet | `0xC5d44829a719FC4A87bd29A32839c4d92610D8d8` | testnet |
 | `MintwareMarketEngine_v1_superseded` | testnet · base-sepolia | `0x18c22836c71ae2dc6f483ab9ac41b4503e18c384` | superseded |
+| `MintwareMarketEngine_v2_superseded` | testnet · base-sepolia | `0x961534db8C0EbB7cEb729E74CaB698A83A9c827e` | superseded |
+| `MintwareMarketEngine_v2_superseded` | testnet · robinhood-testnet | `0x38E426D6671FB2c07C07a468e59f954Dcd0eDeb8` | superseded |
 | `MintwareMarketLifecycleModule` | testnet · robinhood-testnet | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` | testnet |
 | `MintwareStagedLiquidityRouter` | testnet · base-sepolia | `0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3` | deprecated |
 | `MintwareTreasuryGatewayDeployer` | testnet · base-sepolia | `0xfbf781676fe93cd8d8d8e17716461c29f549a644` | testnet |
@@ -118,7 +124,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVHook` | testnet · base-sepolia | `0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8` | deprecated |
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | deprecated |
 
-**34 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**40 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
 **21 of 25 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
