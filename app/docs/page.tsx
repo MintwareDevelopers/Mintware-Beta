@@ -1,560 +1,315 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
-import { MwNav } from '@/components/web2/MwNav'
+// /docs — developer and user docs for the current product (rewritten 2026-10-31 after the simplification). One
+// engine per asset (MarketEngine), the RWA property demo, Swap, Treasury yield (Earn), the card preview, and agent
+// payments. Facts come from .claude/rules/{lp-gateway,payments-ypn,rwa-liquidity,agents}.md and
+// config/deployments.json; keep them in step when those change. Retired designs (LP Gateway, ULV/JIT, am-AMM,
+// matched launch, Liquid Sovereign Account, senior/junior) are not described here.
 
-// ── shared bits ──────────────────────────────────────────────────────────────
+import { useState, type ReactNode } from 'react'
+import Link from 'next/link'
+import { V2Nav } from '@/components/ui2/V2Nav'
+
 type Nav = (id: string) => void
-const EY  = 'font-mono uppercase tracking-[0.18em] text-[11px] text-peri'
-const SUB = 'text-[17px] text-ink-mid mb-6 leading-[1.5]'
+
+const EY = 'text-[12.5px] uppercase tracking-[0.08em] font-semibold'
+const SUB = 'text-[17px] text-ink-mid leading-[1.55] mt-3 mb-2 max-w-[62ch]'
 
 function Ln({ to, nav, children }: { to: string; nav: Nav; children: ReactNode }) {
-  return <button onClick={() => nav(to)} className="text-peri font-medium underline-offset-2 hover:underline cursor-pointer">{children}</button>
+  return <button onClick={() => nav(to)} className="font-semibold underline-offset-2 hover:underline cursor-pointer bg-transparent border-0 p-0" style={{ color: 'var(--mw-peri-deep)' }}>{children}</button>
 }
-function Gap({ k, children }: { k: string; children: ReactNode }) {
+function Note({ k, children, tone = 'info' }: { k: string; children: ReactNode; tone?: 'info' | 'warn' }) {
   return (
-    <div className="rounded-2xl border border-hair border-l-[3px] border-l-coral2-deep bg-ground-cool px-[18px] py-4 my-5">
-      <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-coral2-deep mb-1.5">{k}</div>
-      <div className="text-[14.5px] leading-[1.5] text-ink-mid">{children}</div>
+    <div className="rounded-[16px] px-[18px] py-4 my-5" style={tone === 'warn' ? { background: '#FBEEE7', color: '#7A3416' } : { background: 'var(--mw-band)' }}>
+      <div className="text-[11px] uppercase tracking-[0.1em] font-semibold mb-1.5" style={{ color: tone === 'warn' ? '#9A3F1C' : 'var(--mw-peri-deep)' }}>{k}</div>
+      <div className="text-[14.5px] leading-[1.55]" style={tone === 'warn' ? undefined : { color: 'var(--mw-ink-2)' }}>{children}</div>
     </div>
   )
 }
-function Note({ k, children }: { k: string; children: ReactNode }) {
+function Steps({ items }: { items: [string, string][] }) {
   return (
-    <div className="rounded-2xl border border-hair border-l-[3px] border-l-peri bg-ground-cool px-[18px] py-4 my-5">
-      <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-peri mb-1.5">{k}</div>
-      <div className="text-[14.5px] leading-[1.5] text-ink-mid">{children}</div>
-    </div>
-  )
-}
-function Claim({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative overflow-hidden rounded-2xl bg-ink text-white px-[24px] py-6 my-6 text-[19px] font-medium tracking-[-0.01em] leading-[1.3] [&_b]:text-pas-peri [&_b]:font-semibold">
-      <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full" style={{ background: 'radial-gradient(circle, rgba(108,108,240,0.45), transparent 70%)' }} />
-      <div className="relative">{children}</div>
-    </div>
-  )
-}
-function Spec({ children }: { children: ReactNode }) {
-  return <div className="rounded-xl border border-hair bg-ground-cool font-mono text-[12.5px] px-4 py-3.5 my-4 whitespace-pre-wrap leading-[1.7] overflow-x-auto [&_b]:text-peri [&_.g]:text-ink-soft">{children}</div>
-}
-function Pipe({ items }: { items: [string, string, string][] }) {
-  return (
-    <div className="flex my-4.5 rounded-2xl border border-hair overflow-hidden flex-wrap">
-      {items.map(([n, h, p], i) => (
-        <div key={i} className="flex-1 min-w-[130px] px-3.5 py-3 border-r border-hair last:border-r-0 text-[12.5px] max-[560px]:border-r-0 max-[560px]:border-b max-[560px]:last:border-b-0">
-          <div className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-soft">{n}</div>
-          <div className="font-semibold mt-0.5">{h}</div>
-          <div className="mt-0.5 text-ink-mid">{p}</div>
-        </div>
+    <ol className="!pl-0 list-none my-5 flex flex-col gap-2.5">
+      {items.map(([t, d], i) => (
+        <li key={t} className="!pl-0 before:!content-none flex gap-3.5 rounded-[16px] px-4 py-3.5" style={{ background: 'var(--mw-ground)', boxShadow: 'var(--mw-inset)' }}>
+          <span className="flex-none w-7 h-7 rounded-full grid place-items-center text-[13px] font-semibold text-white" style={{ background: 'var(--mw-btn)' }}>{i + 1}</span>
+          <div><div className="font-semibold text-[15px] text-ink">{t}</div><div className="text-[14px] leading-[1.5] mt-0.5" style={{ color: 'var(--mw-ink-2)' }}>{d}</div></div>
+        </li>
       ))}
-    </div>
+    </ol>
   )
 }
-const TABLE = 'w-full border-collapse text-[13px] my-4 overflow-hidden [&_th]:border [&_th]:border-hair [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-top [&_th]:bg-ground-cool [&_th]:font-mono [&_th]:text-[10px] [&_th]:uppercase [&_th]:tracking-[0.06em] [&_th]:text-ink-soft [&_td]:border [&_td]:border-hair [&_td]:px-3 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-top [&_td]:leading-[1.45]'
+function Status({ s }: { s: 'live' | 'testnet' | 'demo' | 'preview' | 'retired' }) {
+  const map = {
+    live: ['Live', 'bg-[#E3F4EA] text-[#0F7A43]'],
+    testnet: ['Testnet', 'bg-[#EDE9FB] text-[#4B2FA0]'],
+    demo: ['Testnet demo', 'bg-[#EDE9FB] text-[#4B2FA0]'],
+    preview: ['Simulated preview', 'bg-white text-ink-mid mw-tex-dots'],
+    retired: ['Retired', 'bg-white text-ink-mid'],
+  } as const
+  const [label, cls] = map[s]
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap ${cls}`}>{label}</span>
+}
+const TABLE = 'w-full border-collapse text-[13.5px] my-4 [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-top [&_th]:text-[11px] [&_th]:uppercase [&_th]:tracking-[0.06em] [&_th]:text-ink-soft [&_th]:font-semibold [&_th]:border-b [&_th]:border-[var(--mw-line)] [&_td]:px-3 [&_td]:py-3 [&_td]:text-left [&_td]:align-top [&_td]:leading-[1.45] [&_td]:border-b [&_td]:border-[var(--mw-line)]'
+function Addr({ a }: { a: string }) {
+  return <code className="break-all">{a}</code>
+}
 
-// ── content sections ─────────────────────────────────────────────────────────
+// ── sections ─────────────────────────────────────────────────────────────────
 function Overview({ nav }: { nav: Nav }) {
   return (
     <>
-      <div className={EY}>Start here · Overview</div>
-      <span className="live-chip mb-2"><span className="dot" aria-hidden />Live · Attribution, Agents &amp; Swap on Base mainnet</span>
-      <h1>Mintware — <span className="text-gradient-accent">the liquidity spine</span></h1>
-      <p className={SUB}>One pool of capital that is never idle, never locked to a single job, and always yours. Attribution measures on-chain contribution; the vault engine puts idle capital to work and hands it back the instant a swap needs it.</p>
-      <p>Mintware is built on one idea: a unit of capital should do more than one thing. Deposited liquidity <b>idles in a lending market</b> earning yield, is <b>pulled just-in-time</b> into a Uniswap V4 pool exactly when a swap needs it, and — on the payments surface — stays <b>spendable</b> the whole time. Never idle. Never locked. Always yours (non-custodial throughout).</p>
-      <p>Several surfaces sit on that spine, each at a different maturity. We are precise about status because these are developer docs, not a pitch:</p>
-      <table className={TABLE}>
-        <thead><tr><th>Surface</th><th>What it is</th><th>Status</th></tr></thead>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Start here · Overview</div>
+      <h1>One engine per asset.</h1>
+      <p className={SUB}>Mintware gives each tokenized asset its own isolated, non-custodial market. Liquidity is live on testnet today; collateral and credit come next.</p>
+      <p>Tokenizing a stock, a bar of gold or a land parcel makes it divisible, not liquid. Each Mintware market is one <b>MarketEngine</b> wrapped around one curated Uniswap v4 pool. You provide one or both of the pool&apos;s tokens, receive shares in that market, and withdraw your share in both tokens when you choose. One market&apos;s trouble stays in that market.</p>
+      <div className="overflow-x-auto"><table className={TABLE}>
+        <thead><tr><th>What</th><th>Where</th><th>Status</th></tr></thead>
         <tbody>
-          <tr><td><b>Attribution</b></td><td>On-chain reputation score — seven dimensions plus a risk penalty (engine <code>attribution-v2.0.0</code>)</td><td>Live — Base mainnet</td></tr>
-          <tr><td><b>AI Agents</b></td><td>ERC-8004 identity + agent reputation (behavior + contribution + interpretability − risk)</td><td>Live — Base mainnet</td></tr>
-          <tr><td><b>Swap</b></td><td>LI.FI cross-chain routing</td><td>Live</td></tr>
-          <tr><td><b>Vaults (ULV engine)</b></td><td>JIT-liquidity Uniswap V4 vaults with an Aave idle sink</td><td>Built &amp; tested — in testing on Base Sepolia</td></tr>
-          <tr><td><b>LP Gateway</b></td><td>Deposit USDG → your full deposit becomes curated-pool liquidity, earning trading fees compounded back in</td><td>Deployed &amp; deposit proven — Robinhood Chain testnet (mock, unaudited)</td></tr>
-          <tr><td><b>Liquid Sovereign Account</b></td><td>USDC that earns yield and stays spendable</td><td>Coming — payment core on Base Sepolia</td></tr>
+          <tr><td><b>Markets</b> — provide liquidity to a curated pool</td><td><Link href="/app/markets">/app/markets</Link></td><td><Status s="testnet" /></td></tr>
+          <tr><td><b>Property market</b> — a fictional land parcel with an appraisal-anchored market</td><td><Link href="/app/rwas">/app/rwas</Link></td><td><Status s="demo" /></td></tr>
+          <tr><td><b>Swap</b> — cross-chain swap routed by LI.FI</td><td><Link href="/app/swap">/app/swap</Link></td><td><Status s="live" /></td></tr>
+          <tr><td><b>Treasury yield</b> — an organisation supplies USDC to an Earn vault</td><td>Team workspace</td><td><Status s="testnet" /></td></tr>
+          <tr><td><b>Card</b> — spend from a card balance that refills from Earn</td><td><Link href="/app/previews/card">/app/previews/card</Link></td><td><Status s="preview" /></td></tr>
+          <tr><td><b>Agent payments</b> — pay and get paid per request over x402</td><td><Link href="/agents">/agents</Link></td><td><Status s="live" /></td></tr>
         </tbody>
-      </table>
-      <Note k="Honest status">Nothing here is externally audited. Attribution, Agents, and Swap are live on Base mainnet. The vault engine is <b>in testing on Base Sepolia</b> — never &ldquo;deposit now.&rdquo; The Liquid Sovereign Account is <b>coming</b>: its payment core is deployed and cast-verified on testnet, but deployed ≠ audited.</Note>
-      <Note k="Where to go next">For the mechanism in one screen, read <Ln to="model" nav={nav}>The model</Ln>. For the score, <Ln to="attribution" nav={nav}>Attribution</Ln>. For the engine, <Ln to="vaults" nav={nav}>Vaults</Ln>.</Note>
+      </table></div>
+      <Note k="Honest status" tone="warn">Everything except Swap and agent payments runs on testnets with mock tokens. Nothing is externally audited, and an external audit gates any real value. Swap trades real tokens on mainnet.</Note>
+      <Note k="Next">How a market works: <Ln to="markets" nav={nav}>Markets</Ln>. What can go wrong: <Ln to="risks" nav={nav}>Risks</Ln>. Every address: <Ln to="contracts" nav={nav}>Contracts</Ln>.</Note>
     </>
   )
 }
-function Model() {
-  return (
-    <>
-      <div className={EY}>Start here · The model</div>
-      <h1>The model in one page</h1>
-      <p className={SUB}>Three proofs, one screen. Everything else is implementation detail on top of these.</p>
-      <h3>1 · Never idle — capital earns while it waits</h3>
-      <p>Depositor principal sits in Aave v3 via <code>AaveV3YieldAdapter.sol</code> (supply-only — no borrow, no liquidation risk) and is pulled into the pool <b>just-in-time</b> on a swap, then re-supplied. Idle capital is tracked by price-free settled counters, never by a live aToken read (which would be donation-inflatable — the &ldquo;Bunni bug&rdquo;).</p>
-      <h3>2 · Never locked — one unit, many jobs</h3>
-      <p>A share is a pro-rata claim on both legs of the pair — pooled and idled principal together. On the payments surface the same USDC earns yield <b>and</b> authorizes a card charge in under 150ms, settled async by burning exactly enough shares. The capital is doing two jobs at once.</p>
-      <h3>3 · Always yours — non-custodial, provable</h3>
-      <p>You interact with the vault contracts directly; keys stay with you via Privy. Rewards settle as signed Merkle roots you claim yourself — the oracle never takes custody. On-chain guards (over-allocation caps, no-claims-after-sweep, a guardian kill-switch) enforce the rules, not a promise.</p>
-      <Claim>Never idle. Never locked. <b>Always yours.</b></Claim>
-      <Note k="Reputation weighting is not everywhere">Reputation- and referral-weighting applies to the <b>Growth (pair) vault</b> reward path only. The matched-liquidity vault pays strictly <b>pro-rata</b>. We flag which is which throughout.</Note>
-    </>
-  )
-}
-function Attribution() {
-  return (
-    <>
-      <div className={EY}>How it works · Attribution</div>
-      <h1>Attribution — the score</h1>
-      <p className={SUB}>A chain-agnostic reputation score computed from seven on-chain dimensions plus a risk penalty. Pure, deterministic, and weighted so a whale is not 10× a minnow.</p>
-      <p>Attribution reads a wallet&apos;s on-chain history and reduces it to one number in <b>[0, 925]</b> (engine <code>attribution-v2.0.0</code>, in <code>lib/attribution/*</code>). <code>computeScore(activity, nowMs)</code> is pure and deterministic. The score you see is computed off-chain in this repo, not read from a contract. A separate <b>AIAttribution v3</b> attestation contract is registered on Base mainnet for agents to reference, but it does not source the number here.</p>
 
-      <h2>Seven dimensions + a risk penalty</h2>
-      <p>The positive weights sum to exactly <b>925</b> (<code>MAX_SCORE</code>). There are seven positive dimensions and a separate deduction — not &ldquo;eight signals.&rdquo;</p>
-      <table className={TABLE}>
-        <thead><tr><th>Dimension</th><th>Weight</th><th>Reads</th></tr></thead>
+function Markets({ nav }: { nav: Nav }) {
+  return (
+    <>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Products · Markets</div>
+      <h1>Markets <span className="text-ink-soft">— the MarketEngine</span></h1>
+      <p className={SUB}>One engine per curated Uniswap v4 pool. One share token per engine, valued in the pool&apos;s quote asset.</p>
+      <h2>How it works</h2>
+      <Steps items={[
+        ['Provide one or both tokens', 'Deposit either pool token, or both. The engine values what you bring against a fresh price mark and mints shares in that market. You set a minimum number of shares, so a moved price can’t short you.'],
+        ['The engine puts it to work', 'Capital sits in a resting liquidity band in the pool and in per-token holding adapters. The engine’s operator deploys and removes liquidity, collects trading fees and re-centres the band within fixed limits.'],
+        ['Withdraw your share in both tokens', 'Withdrawals are pro-rata and in kind: you get your share of each token the market holds. You set a minimum for each token. There is no lockup.'],
+      ]} />
+      <h2>Rules the contract enforces</h2>
+      <ul>
+        <li>A deposit needs a fresh price mark, and the pool’s price must sit within a set distance of it.</li>
+        <li>Total value and the share held in the pool are capped per market.</li>
+        <li>Pausing a market blocks new deposits. It never blocks withdrawals.</li>
+        <li>If one token can’t be delivered on a withdrawal, you keep shares worth what wasn’t delivered.</li>
+      </ul>
+      <h2>Live markets (testnet)</h2>
+      <div className="overflow-x-auto"><table className={TABLE}>
+        <thead><tr><th>Pair</th><th>Chain</th><th>Notes</th></tr></thead>
         <tbody>
-          <tr><td><b>Liquidity</b></td><td>200</td><td>LP depth × duration</td></tr>
-          <tr><td><b>Holding</b></td><td>150</td><td>Value held, duration-weighted</td></tr>
-          <tr><td><b>Activity</b></td><td>150</td><td>Consistency + chain breadth + tx depth</td></tr>
-          <tr><td><b>Longevity</b></td><td>150</td><td>Wallet age</td></tr>
-          <tr><td><b>Volume</b></td><td>100</td><td>Lifetime traded USD, log-scaled</td></tr>
-          <tr><td><b>Network</b></td><td>100</td><td>Referral-tree quality</td></tr>
-          <tr><td><b>Governance</b></td><td>75</td><td>Votes / proposals / delegations</td></tr>
-          <tr><td><b>Risk</b></td><td>−200</td><td>Deduction (see below)</td></tr>
+          <tr><td><b>PONS / USDG</b></td><td>Robinhood Chain testnet</td><td>0.3% pool fee. Mock tokens. Holding adapters hold assets ready and earn nothing. Fixed test price mark.</td></tr>
+          <tr><td><b>WETH / USDC</b></td><td>Base Sepolia</td><td>0.25% pool fee. Fixed test price mark.</td></tr>
         </tbody>
-      </table>
-
-      <h2>The math (normalize.ts)</h2>
-      <p>Each dimension maps a raw input to <b>0..1</b>, then rounds <code>raw × weight</code>. The core curves:</p>
-      <Spec>{'logCurve(v, mid)   = 1 − 2^(−v/mid)     '}<span className="g">// saturating; 10× input is NOT 10× score</span>{'\nlinearCap(v, cap)  = clamp01(v / cap)\nrecencyDecay       = 0.5^(daysSinceLastSeen / halfLife)'}</Spec>
-      <p>Worked examples straight from the engine:</p>
-      <Spec><b>Liquidity</b>{'  = logCurve( Σ lp.usdDepth × clamp01(durationDays/180), 20000 ) × 200\n'}<b>Longevity</b>{'  ageScore = logCurve(ageDays, 730)  '}<span className="g">// 2yr ≈ 0.5; gates tenure+recency → 1-day wallet ≈ 0</span>{'\n'}<b>Network</b>{'   qualitySum = Σ referredScore × (retained ? 1 : 0.5)\n          = logCurve(qualitySum, 1200) × 100  '}<span className="g">// 1 real referral &gt; 100 sybils</span></Spec>
-      <p>Because <code>logCurve</code> saturates, the score is <b>whale-resistant</b> by construction. <b>Network</b> is quality-weighted, not a headcount — an unretained referral is worth half, and a sybil that never earns a score contributes nothing.</p>
-
-      <h2>The Risk penalty (RISK_MAX 200)</h2>
-      <p>Risk flags carry a severity in <b>0..1</b> times a weight; the penalty is capped and subtracted last.</p>
-      <Spec>{`penalty = min(200, Σ severity × weight)
-final   = clamp(raw − penalty, 0, 925)
-
-weights: sanctioned 200 · mixer 120 · scam 100 · sybil_cluster 100 · wash_trading 80`}</Spec>
-
-      <h2>Sybil scoring (sybil.ts)</h2>
-      <p>The sybil detector emits a <i>graded</i> <code>sybil_cluster</code> flag with auditable reason codes. Soft heuristics — <code>shared_funder</code>, <code>dormant_burst</code>, <code>batch_scripting</code>, <code>low_diversity</code>, <code>wash_roundtrip</code>, <code>referral_farm</code> — are each capped so none condemns a wallet alone. Only a graph-confirmed ring forces a high severity:</p>
-      <Spec>{`forced severity ≥ 0.9  ⟺  sharedFunderCount ≥ 5
-                        &  seqSimilarity ≥ 0.8
-                        &  temporalBatchFraction ≥ 0.6
-
-severity < minSeverity(0.15) → needs_review, NOT a penalty`}</Spec>
-      <p>Below <code>minSeverity</code> the wallet is marked <code>needs_review</code> rather than penalized — protecting real users from false positives.</p>
-
-      <h2>Tiers, percentile, drivers</h2>
-      <Spec>{`gold   ≥ 617
-silver ≥ 308
-bronze  otherwise`}</Spec>
-      <p><code>topDrivers</code> returns ≤ 4 FICO / FCRA-style reason codes explaining the score. Data sources fall through <b>Etherscan V2 (multichain) → Zerion → mock</b>.</p>
-      <Gap k="✕ Percentile is an estimate today">The reported percentile is a calibrated <b>estimate</b>: <code>100 × clamp01((score/925)^0.7)</code>. It becomes a real population percentile only when a frozen ECDF artifact is supplied. Until then, treat it as an estimate.</Gap>
+      </table></div>
+      <h2>Discover and curation</h2>
+      <p>The watchlist on <Link href="/app/markets">Markets</Link> reads real Robinhood Chain mainnet pools from GeckoTerminal and ranks them on depth, age and trading. The score ranks; it never certifies. A person curates which pools get a market, and markets open on mainnet only after an external audit.</p>
+      <Note k="Read next">What can go wrong with a position: <Ln to="risks" nav={nav}>Risks</Ln>.</Note>
     </>
   )
 }
-function Vaults({ nav }: { nav: Nav }) {
+
+function Rwa({ nav }: { nav: Nav }) {
   return (
     <>
-      <div className={EY}>How it works · Vaults · ULV engine</div>
-      <h1>Vaults — the ULV engine</h1>
-      <p className={SUB}>Dual-sided Uniswap V4 liquidity where depositor capital idles in Aave and is pulled just-in-time into the pool on a swap. The canonical vault is <code>MintwareDeFiPairVault.sol</code>.</p>
-      <Note k="Status">The ULV engine is <b>built and tested, in testing on Base Sepolia</b> — feature-flagged, not on mainnet. Do not treat any address here as &ldquo;deposit now.&rdquo;</Note>
-
-      <h2>The stack</h2>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Products · Real-world assets</div>
+      <h1>The property market <span className="text-ink-soft">— a demo</span></h1>
+      <p className={SUB}>A live market for a fictional land parcel, Willow Creek Parcel 7, on Base Sepolia. It shows how a regulated asset can trade without breaking its ownership rules.</p>
       <ul>
-        <li><b>Vault:</b> <code>MintwareDeFiPairVault.sol</code> — the canonical dual-sided &ldquo;Growth&rdquo; vault.</li>
-        <li><b>Hook:</b> <code>MWHookCoordinator.sol</code> with <code>MWOracleGuard.sol</code> (truncated-tick oracle) and <code>MWDynamicFee.sol</code>.</li>
-        <li><b>Idle sink:</b> <code>AaveV3YieldAdapter.sol</code>.</li>
-        <li><b>Libs</b> (delegatecall, for EIP-170 code-size relief): <code>MWJitLib</code>, <code>MWIdleLib</code>, <code>MWPositionLib</code>.</li>
+        <li><b>Priced around an appraisal.</b> A Uniswap v4 hook keeps trades within a band around the issuer’s appraisal. A swap that would end outside the band reverts, unless it moves the price back toward the appraisal.</li>
+        <li><b>Appraisals can’t jump.</b> Each update is step-capped and rate-limited, with a rolling 24-hour cap on total movement. Keeper and configuration changes wait 48 hours once the pool is live.</li>
+        <li><b>Only verified holders own it.</b> The property token is permissioned: both sides of every transfer must be verified, so an unverified buyer can’t receive it.</li>
+        <li><b>A stale appraisal stops trading, not exits.</b> Trading halts, and liquidity providers keep a grace window to withdraw.</li>
       </ul>
-      <Gap k="✕ Deprecated — do not use">The single-sided <code>MintwareDeFiVault4626.sol</code> has a known NAV/solvency flaw (principal-pegged shares vs two-token backing → late-redeemer loss) and carries an in-code deprecation notice. Legacy <code>FeeVault.sol</code> is superseded too. The <b>pair vault is canonical.</b></Gap>
+      <Note k="Demo only" tone="warn">The property, its token, the dollar token and the lending yield are testnet stand-ins with no value. Open the <Link href="/app/rwas">property market</Link> and its <Link href="/app/rwas/proof">on-chain proof</Link>. Addresses are under <Ln to="contracts" nav={nav}>Contracts</Ln>.</Note>
+    </>
+  )
+}
 
-      <h2>JIT liquidity, mid-swap</h2>
-      <p>Depositor capital idles in Aave and is pulled into the pool only for the swap that needs it, then returned. Three steps, price-free:</p>
-      <Pipe items={[
-        ['1 · Gate', 'Size filter', 'Only |amountSpecified| ≥ jitThreshold on a jitEnabled pool triggers JIT.'],
-        ['2 · Open', 'beforeSwap → jitOpen', 'Pulls OUTPUT-side principal from Aave, sized from |amountSpecified| — no oracle read.'],
-        ['3 · Close', 'afterSwap → jitClose', 'Removes the position, takes both sides, re-supplies to Aave.'],
-      ]} />
-      <p>The JIT position opens a tight single-sided range to one side of the live tick at a dedicated salt <code>keccak256(&quot;MW_JIT&quot;)</code> — a physically separate V4 position, never co-mingled with the main range. A <code>jitActive</code> guard blocks vault entrypoints while JIT is open. At rest, <code>jitLiquidity</code> MUST be zero and is never counted in share math.</p>
-      <Gap k="✕ The settlement gotcha (found by fuzzing)">The swapper settles its <b>input</b> token <b>last</b> — after <code>afterSwap</code> — so at close the PoolManager may not yet hold the input reserves the JIT removal is owed. Reverting would brick the swap. The fix: take physical up to what&apos;s available and <b>mint an ERC-6909 claim for the shortfall</b> (real backing, counted in solvency), redeemed later via <code>sweepJitClaims()</code>.</Gap>
+function Swap() {
+  return (
+    <>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Products · Swap</div>
+      <h1>Swap</h1>
+      <p className={SUB}>A cross-chain swap routed by LI.FI across Ethereum, Base and Arbitrum.</p>
+      <p>You pick the network and the two tokens. The route, the platform fee and the network fee show before your wallet opens. Keep a little of the network’s native token for gas.</p>
+      <Note k="Real funds" tone="warn">Swap is the one part of Mintware that moves real tokens on mainnet. Everything else runs on testnet.</Note>
+      <p><Link href="/app/swap">Open Swap →</Link></p>
+    </>
+  )
+}
 
-      <h2>The idle buffer (MWIdleLib)</h2>
-      <p><code>bufferRatioBps</code> sets the fraction kept hot in the active range; the remainder idles in Aave. Crucially, <code>idle0</code> / <code>idle1</code> are <b>price-free settled counters</b> — the vault&apos;s own record of principal it supplied — never derived from <code>adapter.totalAssets()</code>:</p>
-      <Spec>{'managed = positionLiquidity + idleLiquidity\ndeposit → mints shares against managed, VIRTUAL_LIQUIDITY = 1e3  '}<span className="g">// inflation defense</span>{'\n\nharvest: yield = adapter.totalAssets() − idle\n         MINTWARE_FEE_BPS = 2500 (25%)  '}<span className="g">// protocol cut on the HARVEST leg only</span></Spec>
-      <p>A live aToken balance is donation-inflatable, so it is used only to measure <b>harvestable yield</b>, never to value shares. A share is a pro-rata claim on both legs — pooled plus idled principal.</p>
-
-      <h2>The Aave adapter</h2>
+function Earn() {
+  return (
+    <>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Products · Treasury yield</div>
+      <h1>Treasury yield <span className="text-ink-soft">— the Earn vault</span></h1>
+      <p className={SUB}>A single-asset ERC-4626 vault (<code>MintwareYieldVault</code>, shares called <code>mwEARN</code>) over one yield adapter. Organisations use it in the Team workspace.</p>
       <ul>
-        <li>Direct <code>IPool.supply</code> / <code>withdraw</code>, <b>supply-only</b> — no borrow, no collateral, no liquidation risk.</li>
-        <li>Withdraw is <b>best-effort and never reverts</b>: clamps to headroom and a per-block cap, wrapped in try/catch.</li>
-        <li>The aToken is verified in the constructor; <code>maxSuppliable()</code> models Aave&apos;s supply cap.</li>
+        <li>You supply USDC and receive shares; your position is held by your own wallet.</li>
+        <li>The rate is whatever the adapter earns. It varies, it isn’t guaranteed, and it is zero when a vault uses a no-yield adapter, as some testnet vaults do.</li>
+        <li>Pausing blocks deposits only. Withdrawals stay open.</li>
+        <li>If the yield source can’t pay everything at once, a withdrawal pays what it can and you keep the shares for the rest.</li>
       </ul>
-
-      <h2>Fee split</h2>
-      <p>Position/swap fees split <b>60% LP / 30% treasury / 10% buyback-and-burn</b> by default — configurable, but <code>MAX_NON_LP_FEE_BPS = 4000</code> guarantees LPs always keep <b>≥ 60%</b>, and rounding favors LPs. If <code>buybackSink == 0</code>, the buyback cut folds into treasury.</p>
-      <p>The <b>LP leg</b> routes one of two ways: if a <code>weightedDistributor</code> is set, LP rewards are <b>reputation + referral weighted</b> (computed off-chain); otherwise a legacy MasterChef-style per-share accumulator pays flat. This is why reputation-weighting is a <b>Growth-vault-only</b> property.</p>
-
-      <h2>Lock tiers &amp; redemption</h2>
-      <table className={TABLE}>
-        <thead><tr><th>Tier</th><th>Lock</th><th>Multiplier</th></tr></thead>
-        <tbody>
-          <tr><td><b>Flex</b></td><td>none</td><td>1.0×</td></tr>
-          <tr><td><b>Committed</b></td><td>30 days</td><td>1.1×</td></tr>
-          <tr><td><b>Aligned</b></td><td>90 days</td><td>1.25×</td></tr>
-          <tr><td><b>Core</b></td><td>180 days</td><td>1.5×</td></tr>
-        </tbody>
-      </table>
-      <p>Early exit pays a penalty to treasury by elapsed fraction: <b>&lt; 20% → 2.0%</b>, <b>20–50% → 1.0%</b>, <b>50–80% → 0.5%</b>. Redemption is async: <code>requestRedeem</code> (after a 24h <code>MIN_HOLD</code>) → a 7-day <code>NOTICE_PERIOD</code> → <code>executeRedeem</code>.</p>
-      <Note k="Reward routing">Vault-weighted epoch rewards use the <Ln to="rewards" nav={nav}>weighted distributor</Ln>. For the pro-rata launch variant, see <Ln to="matched" nav={nav}>Matched liquidity</Ln>.</Note>
+      <Note k="Status">Testnet, unaudited. The Team workspace is in private preview.</Note>
     </>
   )
 }
-function Mev({ nav }: { nav: Nav }) {
+
+function Card() {
   return (
     <>
-      <div className={EY}>How it works · MEV · am-AMM</div>
-      <h1>MEV — the <span className="text-gradient-accent">am-AMM engine</span></h1>
-      <p className={SUB}>Instead of leaking loss-versus-rebalancing (LVR) to searchers for free, the vault&apos;s Uniswap V4 hook auctions its own fee-setting right and routes the proceeds back to LPs. Canonical hook: <code>MWHookCoordinator.sol</code>, auction: <code>MWAmAuction.sol</code> / <code>MWAmAuctionLib.sol</code>.</p>
-      <Note k="Status">Built and tested, wired into the same <code>MWHookCoordinator</code> as the ULV vault — <b>in testing on Base Sepolia</b>, not mainnet. <b>79</b> unit / invariant tests green across <code>MWAmAuctionTest</code>, <code>MWAmAuctionLibTest</code>, and the coordinator&apos;s am-AMM suites, plus <b>2 fuzzed invariants at 256 runs × 128,000 calls each, 0 reverts</b>. Nothing here is externally audited.</Note>
-
-      <h2>Three levers, one hook</h2>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Products · Card</div>
+      <h1>Card <span className="text-ink-soft">— in development</span></h1>
+      <p className={SUB}>A card that spends from a small card balance, which refills from your Earn balance by only what you spent.</p>
       <ul>
-        <li><b>Truncated oracle guard</b> (<code>MWOracleGuard.sol</code>) — an identity-blind reference tick that lags spot; see <Ln to="security" nav={nav}>Security</Ln> for the circuit breaker.</li>
-        <li><b>Deviation-priced surge fee</b> (<code>MWDynamicFee.sol</code>) — the further spot drifts from the oracle, the more expensive the swap.</li>
-        <li><b>am-AMM auction</b> (<code>MWAmAuction.sol</code>) — the pool&apos;s fee-setting right itself is bid on, Harberger-lease style, and the winner&apos;s rent flows to the vault&apos;s LPs.</li>
+        <li>Cards will be issued with Bridge and Stripe. They are not live, and nothing in the app is a live card or an offer.</li>
+        <li>The refill contract (<code>MintwarePaymentGateway</code>) only refills: it redeems a member’s Earn shares to that member’s own registered card wallet, within daily caps.</li>
+        <li>A new refill destination waits 48 hours before it can be used, and the member can revoke it at any time.</li>
+        <li>Purchases are never settled from vault shares directly.</li>
       </ul>
-
-      <h2>The am-AMM auction — market-making rights, not order flow</h2>
-      <p>A normal AMM lets anyone trade at whatever fee the pool happens to charge; the value in setting that fee optimally (higher when a big price move is coming, lower to attract volume) gets captured by whoever is fastest — usually a searcher, not the LP. am-AMM instead lets a <b>manager</b> bid a per-block <b>rent</b> for the right to set the pool&apos;s fee within bounds. The rent is charged every block and pushed straight to <code>rentSink</code> — the pair vault, i.e. the depositors themselves.</p>
-      <Spec>{`topBid    — the current manager: { manager, rent, deposit, feePips }
-nextBid   — a challenger, held pending
-poke()    — coordinator-driven tick: charges rent, evicts on unpaid rent
-             or a stronger challenger, promotes nextBid → topBid
-fundRent(token, amount)  →  IAmAmmRentSink   // pushed to the LP each charge`}</Spec>
-      <p>Custody is split into a push side and a pull side on purpose. Rent is <b>pushed</b> to the LP every charge — LPs never have to claim anything. A manager&apos;s own standing deposit is returned <b>directly</b> on withdrawal (CEI + <code>nonReentrant</code>). Everything else — a displaced deposit, a captured manager fee — is credited to a <b>pull ledger</b> (<code>owed[account][token]</code>) and withdrawn via <code>claim()</code>, so an evicted manager can never block the auction from progressing by reverting on receive.</p>
-
-      <h2>Deviation-priced surge fee</h2>
-      <p>Independent of whether a manager is currently active, every swap still prices in how far spot has drifted from the truncated oracle:</p>
-      <Spec>{'fee = clamp(baseFeePips + slopePipsPerTick × deviationTicks, maxFeePips)\n\nrateLimit(last, target, maxStep):\n  '}<span className="g">// clamps target to within maxStep of last — a single block can&apos;t</span>{'\n  '}<span className="g">// jump from base straight to max, which is exactly what would let a</span>{'\n  '}<span className="g">// searcher cleanly front-run a predictable hike or back-run a drop</span></Spec>
-      <p>For a pool with <b>no active manager</b>, the hook takes <code>max(auction default fee, surge fee)</code> — LPs always get whichever is better — clamped to a <b>10%</b> fallback ceiling so a configuration slip can never runaway.</p>
-
-      <h2>Why route it to LPs instead of searchers</h2>
-      <p>The two levers are complementary, not redundant. The surge fee protects against toxic flow and manipulation <b>whether or not</b> a manager is active — it is the floor. The am-AMM auction captures the <b>upside</b>: when a manager can price the pool&apos;s fee better than the static curve (because they see order flow the static curve can&apos;t), that skill is worth paying rent for, and the rent lands with the vault&apos;s own depositors instead of a searcher&apos;s wallet.</p>
-      <Note k="Where to go next">The auction and the surge fee both live inside the same hook as the JIT engine — see <Ln to="vaults" nav={nav}>Vaults — the ULV engine</Ln>. For the access-control and reentrancy guarantees around all of it, see <Ln to="security" nav={nav}>Security</Ln>.</Note>
-    </>
-  )
-}
-function Matched({ nav }: { nav: Nav }) {
-  return (
-    <>
-      <div className={EY}>How it works · Matched liquidity</div>
-      <h1>Matched liquidity</h1>
-      <p className={SUB}>A launch vault where a team commits project tokens and the community matches with quote (USDC), under a hard 90-day cliff. Contract: <code>MintwareMatchedLiquidityVault.sol</code>.</p>
-
-      <h2>The shape</h2>
-      <p>A team commits <b>T</b> project tokens; the community matches with quote (USDC). <code>MIN_LOCK_DURATION = 90 days</code> is a hard cliff. Team funds are <b>locked but not owned by the protocol</b> — there is no team-initiated early withdrawal, and a guardian can <b>freeze but never release</b>.</p>
-
-      <h2>Lifecycle</h2>
-      <Pipe items={[
-        ['1', 'commitTeam', 'Team locks its token side.'],
-        ['2', 'depositCommunity', 'Community escrows quote; the team is barred from this side.'],
-        ['3', 'activate / abort', 'Activate is permissionless; abort refunds everyone.'],
-      ]} />
-      <p><code>activate</code> is permissionless once it clears a threshold fill and a minimum number of depositors: it forms a <b>50/50</b> team-locked / community-free position and refunds any unmatched team remainder. The alternative terminal state is <code>abort</code> — a full refund to both sides.</p>
-
-      <h2>Fees are pro-rata — not reputation-weighted</h2>
-      <p>This is the key honest distinction from the Growth vault. Community fees are strictly <b>pro-rata to quote contribution</b>. While the position is locked, <code>teamFeesRedirected</code> excludes the team: the <b>team earns 0%</b> and the <b>community earns 100%</b> of fees for the duration of the lock.</p>
-      <Note k="Which vault weights reputation?">Only the <Ln to="vaults" nav={nav}>Growth (pair) vault</Ln> routes rewards through reputation/referral weighting. The matched vault is pure pro-rata by design.</Note>
-    </>
-  )
-}
-function Rewards() {
-  return (
-    <>
-      <div className={EY}>How it works · Rewards · Epochs</div>
-      <h1>Rewards — epochs &amp; distribution</h1>
-      <p className={SUB}>Off-chain owns the weighting math and the Merkle tree; on-chain enforces provenance and no-over-allocation. Canonical distributor: <code>MintwareWeightedDistributor.sol</code>.</p>
-
-      <h2>Separation of duties</h2>
-      <p>The design deliberately splits responsibilities. <b>Off-chain</b> computes the weighting formula and builds the Merkle tree. <b>On-chain</b> enforces only two things: provenance (a valid oracle signature) and that a signed root can never allocate more than the funded pot. The distributor is multi-tenant by <code>vaultId</code>.</p>
-      <Spec>{`EPOCH_DURATION = 7 days
-CLAIM_EXPIRY   = 90 days
-
-closeEpoch: verify EIP-712 sig  AND  total0 ≤ pot0  &&  total1 ≤ pot1
-claim:      pays BOTH tokens in one leaf · CEI · claim-once · none-after-sweep
-sweep:      after expiry, unclaimed → funder`}</Spec>
-      <p>A guardian kill-switch gates the value paths; the oracle rotates via a <b>48h timelock</b>.</p>
-
-      <h2>The weighting formula (off-chain)</h2>
-      <p>In <code>lib/rewards/vault/weightedDistribution.ts</code> there are <b>two pots</b>. The BASE pot is swap fees, paid pro-rata by a base weight. Referral does <b>not</b> enter the base weight:</p>
-      <Spec><b>baseWeight</b>{' = liquidityUnits × durationMultiplier × attrMultiplier × lockTierMultiplier\n\n'}<span className="g">durationMultiplier</span>{'  ≥180d 1.3 · ≥90d 1.2 · ≥30d 1.1 · else 1.0\n'}<span className="g">attrMultiplier</span>{'      pct ≥67 1.5 · ≥34 1.25 · else 1.0\n'}<span className="g">lockTierMultiplier</span>{'  flex 1.0 · committed 1.1 · aligned 1.25 · core 1.5'}</Spec>
-      <p>The MARGIN pot is a protocol top-up funding referral bonuses:</p>
-      <Spec>{`referee boost   = +10% on own base
-referrer earns  = 20% × referredLP.base × (refereePercentile / 100)`}</Spec>
-      <p>Because the referrer&apos;s share scales by the referee&apos;s percentile, a score-0 sybil earns its referrer <b>~nothing</b> — the same anti-farming property as Attribution&apos;s Network dimension.</p>
-
-      <h2>EIP-712 root</h2>
-      <Spec>{`EPOCH_ROOT_TYPEHASH = keccak256(
-  "EpochRoot(bytes32 vaultId,uint256 epochNumber,bytes32 merkleRoot,
-   uint256 totalAmount0,uint256 totalAmount1,uint256 deadline)"
-)
-domain = EIP712("MintwareWeightedDistributor", "1")`}</Spec>
-      <p>Embedding <code>vaultId</code> and <code>epochNumber</code> in the digest prevents cross-vault and cross-epoch replay of a signed root.</p>
-
-      <h2>Leaf encoding (critical)</h2>
-      <p>Both sides must produce identical hashes or every claim reverts. The two-token leaf and the single-token leaf both use <b><code>abi.encode</code> (64-byte padded)</b> and the OpenZeppelin double-keccak scheme — <b>never <code>abi.encodePacked</code></b>:</p>
-      <Spec>{`two-token:    keccak256(bytes.concat(keccak256(abi.encode(
-                msg.sender, amount0, amount1))))
-              types: ['address','uint256','uint256']
-
-single-token: StandardMerkleTree.of([[wallet, amount]], ['address','uint256'])`}</Spec>
-      <p>Amounts are raw integer units (USDC × 1e6).</p>
-      <Gap k="✕ Legacy path — superseded">The legacy <code>FeeVault</code> split was <b>70/15/10/5</b> (LPs / referrers / protocol / bonus). It is superseded by the weighted distributor plus the pair vault&apos;s <b>60/30/10</b> split. Document new work against the distributor.</Gap>
-    </>
-  )
-}
-function LpGateway({ nav }: { nav: Nav }) {
-  return (
-    <>
-      <div className={EY}>How it works · LP Gateway</div>
-      <h1>The LP Gateway</h1>
-      <p className={SUB}>Put USDG to work in a curated Robinhood Chain pool — your full deposit becomes liquidity and earns trading fees, compounded back into your position. Mintware&rsquo;s first live product surface.</p>
-      <Note k="Status — live on testnet">Live on <b>Robinhood Chain testnet (46630)</b>, hardened and reviewed (self-audit + a firm-grade multi-auditor pass). <b>Testnet, mock tokens, unaudited</b> — an external audit gates real value on mainnet. A separate surface: it touches none of the vault / YPN contracts.</Note>
-
-      <h2>The loop</h2>
-      <Pipe items={[
-        ['Deposit', 'USDG → shares', 'Entry-NAV shares, marked at deposit. No par claim.'],
-        ['Stage', 'brief holding step', 'A short window before the next scheduled deploy — no yield accrues here.'],
-        ['Deploy', 'Uniswap V4 pool', 'Your full deposit becomes curated-pool liquidity — no held-back reserve. Mintware supplies no capital and bears none of the IL.'],
-        ['Harvest', 'fees only', 'Trading fees collected without touching principal.'],
-        ['Compound', 'back into NAV', 'Fees lift your position’s value pro-rata. Withdraw anytime for both legs.'],
-      ]} />
-
-      <h2>Honest by construction</h2>
-      <p>A liquidity position is <b>not a deposit, a savings account, or a guaranteed or fixed return</b> — its value moves with the pool price and is subject to <b>impermanent loss</b>, 100% of which is yours; Mintware supplies no capital to any position. IL can be <i>diminished</i> by a wide range, never <i>eliminated</i> for a fee-earning LP.</p>
-
-      <h2>Safe on a hookless pool (no TWAP)</h2>
-      <p>The deployed leg is spot-priced, and hookless meme pools have no on-chain oracle — so manipulation resistance is built in. A <b>clamped-follower reference</b> tracks spot at a bounded step per block, and NAV is marked <b>conservatively by direction</b>: a withdrawal values the LP leg at <code>min(spot, ref)</code>, a deposit at <code>max</code>. A single-block price pump can neither inflate a withdrawal claim nor cheapen a deposit — and nothing reverts on price, so <b>withdrawals never brick</b>. Fees always route to the buffer (never a withdrawer), and redemption is pro-rata across idle and LP. Deep-pool curation is the economic backstop.</p>
-
-      <h2>Many pools, curated</h2>
-      <p>The Discover feed shows the hottest real Robinhood Chain pools <b>live from GeckoTerminal</b>, risk-scored. The score <b>ranks the queue; it never certifies safety</b> — every pool is a human decision. A pool becomes depositable only once a curator approves it and a gateway is deployed for it. So: <b>browse everything live, deposit into the curated subset.</b></p>
-
-      <Note k="Where">The live product is at <code>/v1</code>. Manipulation-resistance details: <Ln to="security" nav={nav}>Security</Ln>. Deploy status: <Ln to="contracts" nav={nav}>Contracts &amp; status</Ln>.</Note>
+      <p>See how it would feel in the <Link href="/app/previews/card">card preview</Link> (simulated), or read <Link href="/cards">how the card works</Link>.</p>
     </>
   )
 }
 
-function LSA() {
+function Agents() {
   return (
     <>
-      <div className={EY}>How it works · Liquid Sovereign Account</div>
-      <h1>The Liquid Sovereign Account</h1>
-      <p className={SUB}>USDC that earns yield and stays spendable. A card charge authorizes in under 150ms off a cached vault NAV, then settles on-chain by burning exactly enough shares.</p>
-      <Note k="Status — coming">The v1 payment core is <b>deployed and cast-verified on Base Sepolia</b>; the edge-auth service (55 tests) and relayer are built and proven; the v2 tranche vault is invariant-proven (256 × 128k) but not deployed. External audit precedes mainnet or any real value. <b>Deployed ≠ audited.</b></Note>
-
-      <h2>Two tiers: authorize, then settle</h2>
-      <Pipe items={[
-        ['Authorization', 'Off-chain edge (Rust)', 'Under 150ms · APPROVE/DECLINE off cached NAV + reserve a hold · never moves funds.'],
-        ['Settlement', 'On-chain (Base)', 'Async · burns shares + pays the rail.'],
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Products · Agents</div>
+      <h1>Agent payments</h1>
+      <p className={SUB}>Pay per request and get paid per request over x402, with an on-chain identity under ERC-8004.</p>
+      <Steps items={[
+        ['The agent asks', 'A normal HTTP request to an x402 endpoint.'],
+        ['The API names a price', 'It answers 402 with an amount in USDC.'],
+        ['The agent pays and retries', 'It signs a USDC transfer (EIP-3009) from its own wallet and retries. The seller receives the USDC directly.'],
       ]} />
-
-      <h2>Earn — MintwareYieldVault.sol</h2>
-      <p>A single-asset (USDC) 4626-style vault. Because there is one asset, it is <b>price-free by construction</b> — no oracle, no JIT. NAV rises monotonically as aTokens rebase. A symmetric virtual-offset inflation defense (<code>VIRTUAL = 1e3</code>) yields the invariant <code>totalShares ≤ totalAssets</code> — solvent by construction. <code>burnForPayment</code> is <code>onlyGateway</code>, CEI.</p>
-
-      <h2>Authorize — services/edge-auth/src/ledger.rs</h2>
-      <p>A pure decision core. It APPROVEs only if the charge clears all three bounds, each with a distinct decline reason:</p>
-      <Pipe items={[
-        ['1', 'Per-user equity', "Net of the user's own holds."],
-        ['2', 'Daily cap', 'Net of spent + reserved holds.'],
-        ['3', 'Global liquidity', "idleBuffer net of ALL users' holds — every hold stays settleable."],
-      ]} />
-      <p>A stale NAV/price declines first. On approve, it reserves a hold. NAV is cached in Redis and refreshed by a chain poller; a stalled refresher <b>fails safe</b>.</p>
-
-      <h2>Spend permits — MintwarePaymentGateway.sol</h2>
-      <p>EIP-712 domain <code>EIP712(&quot;Mintware Payment Gateway&quot;, &quot;2.0&quot;)</code>. The scheme is hybrid by amount:</p>
-      <Spec>{`< $250            DelegatedSpendPermit(address user, uint256 maxDailySpendUSDC,
-                                       uint256 nonce, uint256 deadline)   // long-lived
-
-≥ $250            ALSO ShortLivedHoldAuth(bytes32 holdId, address user,
-(HIGH_VALUE_          uint256 amountUSDC, uint256 nonce, uint256 expiry)  // ≤5min,
- THRESHOLD 250e6)     signed by an EDGE_SIGNER_ROLE key`}</Spec>
-      <p>The nonce is <b>revocation-only</b>: <code>settleSpend</code> checks but never consumes it, so the long-lived permit is reusable. Replay of a specific charge is stopped by <code>holds[holdId].settled</code>; over-spend is stopped by the daily cap.</p>
-
-      <h2>Settle — settleSpend (RELAYER_ROLE only)</h2>
-      <p>Re-verifies both permits, enforces <code>vault.idleBuffer() ≥ assets</code>, hold idempotency, and the daily cap, then CEI:</p>
-      <Spec>{`sharesBurned = previewWithdraw(assets)   // rounds up
-vault.burnForPayment(...)
-assert redeemed ≥ assets
-USDC → Circle CPN rail treasury`}</Spec>
-      <p>Funds settle to <b>Circle&apos;s CPN rail</b> and are <b>spendable via Visa</b>. The public stack is <b>Circle (CPN) + Visa</b>, with <b>Privy</b> for identity and custody.</p>
-      <Gap k="✕ Rail naming">Settlement is described as &ldquo;settles to Circle&apos;s CPN rail, spendable via Visa.&rdquo; We do not name a card issuer on the authorization side — the code references a name not confirmed for public use.</Gap>
-    </>
-  )
-}
-function AgentPay({ nav }: { nav: Nav }) {
-  return (
-    <>
-      <div className={EY}>Roadmap · Agent payments</div>
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] mb-2"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Blueprint · not yet built</span>
-      <h1>Agent payments — the <span className="text-gradient-accent">402 engine</span></h1>
-      <p className={SUB}>The direction we&apos;re building toward: an autonomous agent whose treasury supplies real liquidity and pays any endpoint the instant it asks — crypto-native or legacy — over one standard, HTTP 402.</p>
-      <Note k="Status — blueprint, not a live product">This composes primitives documented elsewhere on this site that <b>are</b> built and in testing — the <Ln to="vaults" nav={nav}>ULV JIT engine</Ln> and the <Ln to="lsa" nav={nav}>Liquid Sovereign Account&apos;s</Ln> authorize/settle split — plus a net-new agent-facing layer (plugin actions, a 402 facilitator, discovery manifest) that does not exist in this repo yet. Nothing here is deployed, audited, or an offer.</Note>
-
-      <h2>The flow</h2>
-      <Pipe items={[
-        ['01', 'Challenge', 'The agent hits a paid endpoint and gets back HTTP 402: the price, and the rails it accepts.'],
-        ['02', 'Pick a rail', 'Native (x402, on-chain) or legacy (Visa / Mastercard) — the agent reads the 402 payload and chooses.'],
-        ['03', 'Settle', 'Native: sign a session permit, stream USDC on-chain, retry with a proof header. Legacy: mint a just-in-time card.'],
-        ['04', 'Resume & burn', 'The resource unlocks and the task resumes; the single-use card or token auto-burns — nothing reusable is left behind.'],
-      ]} />
-
-      <h2>Why treasury-native, not wallet-native</h2>
-      <p>A conventional agent wallet either sits idle (capital earning nothing between calls) or holds a standing, reusable credential (a card number, an approved allowance) that is a permanent attack surface. Routing every payment through a vault position instead of a hot wallet changes both properties at once:</p>
-      <table className={TABLE}>
-        <thead><tr><th>Property</th><th>Why it matters</th></tr></thead>
-        <tbody>
-          <tr><td><b>Zero idle float</b></td><td>Capital stays in a yield-bearing vault; it only touches a rail at the moment a 402 asks for it.</td></tr>
-          <tr><td><b>No standing attack surface</b></td><td>Compromise the agent and there is no valid, reusable credential to steal — each token is single-use and expires in minutes.</td></tr>
-          <tr><td><b>Vault-enforced spend policy</b></td><td>A daily cap and a per-tx cap are enforced by the same authorization path documented in the <Ln to="lsa" nav={nav}>LSA</Ln>, not by the agent&apos;s own code.</td></tr>
-          <tr><td><b>One stack, every merchant</b></td><td>The same agent could navigate on-chain x402 micro-payments and real-world card-present payments over one settlement core.</td></tr>
-        </tbody>
-      </table>
-
-      <h2>What already exists to build this on</h2>
-      <p>This is not a from-scratch design — it composes pieces documented earlier on this site:</p>
       <ul>
-        <li>The <Ln to="vaults" nav={nav}>ULV engine&apos;s</Ln> single-call <code>depositUSDC(amount)</code> liquidity supply — an agent becomes an LP with one call, no two-asset inventory to manage.</li>
-        <li>The <Ln to="lsa" nav={nav}>LSA&apos;s</Ln> two-tier authorize/settle split — sub-150ms off-chain authorization against a cached vault NAV, async on-chain settlement by burning exactly enough shares.</li>
-        <li>The <Ln to="lsa" nav={nav}>payment gateway&apos;s</Ln> hybrid EIP-712 permit scheme, already sized for both long-lived low-value spend and short-lived high-value holds.</li>
+        <li>Mintware’s own score API is sold this way at <code>/api/x402/score</code>.</li>
+        <li>Mintware is ERC-8004 agent <code>#37297</code> on Base.</li>
+        <li>Tools for agent runtimes: <code>@mintwarehq/mcp-server</code> (Claude, Cursor), <code>@mintwarehq/agentkit-actions</code> (Coinbase AgentKit) and <code>@mintwarehq/eliza-plugin</code> (ElizaOS).</li>
       </ul>
-      <p>What is missing is the agent-facing surface itself: a plugin layer for the common agent frameworks, a 402 facilitator that adapts the authorize/settle split to the x402 protocol, and a public discovery manifest. None of that is written against <code>main</code> today.</p>
+      <Note k="Not built yet">An agent balance that earns between jobs is a plan. The testnet parking vault holds USDC without yield, and x402 payments don’t spend from it.</Note>
     </>
   )
 }
+
+function Risks() {
+  return (
+    <>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Trust · Risks</div>
+      <h1>Risks</h1>
+      <p className={SUB}>Read these before providing to any market. Full text: <Link href="/risk-disclosures">risk disclosures</Link>.</p>
+      <ul>
+        <li><b>Impermanent loss.</b> When prices move, you can end up with more of the token that fell. Fees may not make up for it.</li>
+        <li><b>Exits can be delayed.</b> There is no lockup, but a withdrawal can wait if a token’s issuer pauses or freezes it, or a market is short of liquidity.</li>
+        <li><b>Issuer controls.</b> Regulated tokens can be paused, frozen or wiped by their issuer. That can leave part of a position unavailable.</li>
+        <li><b>Price marks.</b> Deposits rely on a price mark. On testnet the mark is fixed for testing; mainnet needs a verified source.</li>
+        <li><b>Smart-contract risk.</b> The contracts are unaudited.</li>
+        <li><b>No yield on testnet holding adapters.</b> Assets waiting outside the pool earn nothing on today’s testnet markets.</li>
+      </ul>
+      <Note k="Never" tone="warn">A position is not a deposit or a savings product, and no return is fixed or guaranteed.</Note>
+    </>
+  )
+}
+
 function Security({ nav }: { nav: Nav }) {
   return (
     <>
-      <div className={EY}>Trust · Security</div>
-      <h1>Security</h1>
-      <p className={SUB}>Built security-first: a guardian kill-switch, an identity-blind price oracle, deviation-priced fees, and fuzzed invariants. Nothing here is externally audited — we never write &ldquo;audited.&rdquo;</p>
-
-      <h2>Guardian kill-switch (MWGuardianPausable.sol)</h2>
-      <p>The guardian pauses instantly; only the owner unpauses. In the hook, pause gates <code>beforeAddLiquidity</code> <b>only</b> — never the swap callbacks (a reverting <code>beforeSwap</code> would brick the pool) and never <code>beforeRemoveLiquidity</code> (positions must always be able to exit).</p>
-
-      <h2>Truncated-oracle price guard (MWOracleGuard.sol)</h2>
-      <p>A truncated geometric-mean tick oracle that reads <b>no trader identity</b>. The reference tick lags spot and advances at most <code>maxTickMovePerBlock</code> per block, so a single-block price push barely moves it.</p>
-      <Spec>{`checkCircuitBreaker: revert swaps at deviation > maxDeviationTicks
-pokeOracle:          permissionless heal path out of a circuit-breaker deadlock`}</Spec>
-
-      <h2>Deviation-priced dynamic fee &amp; the am-AMM auction</h2>
-      <p>Swap fees price in how far spot has drifted from the oracle above, rate-limited per block; unmanaged pools fall back to a capped surge fee. The pool&apos;s fee-setting right is itself auctioned — full mechanics on <Ln to="mev" nav={nav}>MEV — the am-AMM engine</Ln>.</p>
-
-      <h2>Access &amp; reentrancy</h2>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Trust · Security</div>
+      <h1>Security and custody</h1>
+      <p className={SUB}>Non-custodial by construction, and unaudited until an external audit says otherwise.</p>
+      <h2>Custody</h2>
+      <p>You interact with the contracts from your own wallet. Mintware never holds your keys. Sign-in and wallets run on Privy. Each market has an operator who can deploy and remove liquidity, collect fees, swap idle balances within set limits, re-centre the band and pause deposits. Pausing doesn’t block withdrawals.</p>
+      <h2>What protects a position</h2>
       <ul>
-        <li><b>Vault-only LP gate.</b> The hook reverts add/remove unless <code>sender == vault</code>; JIT is hook-only; hook / vault / adapters are set-once; JIT uses a dedicated salt.</li>
-        <li><b>CEI / reentrancy.</b> <code>nonReentrant</code> on all state-changing paths; settled state is decremented before external Aave withdraws.</li>
-        <li><b>Adapter safety.</b> Supply-only, aToken verified in the constructor, a per-block withdraw cap, and a never-revert withdraw.</li>
-        <li><b>Rewards guards.</b> total ≤ pot, a per-claim cumulative cap, no-claims-after-sweep, and a 48h oracle timelock.</li>
+        <li>Minimum-shares on deposit and minimum-outputs on withdrawal, set by you.</li>
+        <li>Deposits refused when the pool price strays from the mark.</li>
+        <li>Per-market caps on total value and on the amount in the pool.</li>
+        <li>Pause stops deposits, never withdrawals.</li>
+        <li>Each asset in its own engine, so a problem stays in that market.</li>
       </ul>
+      <h2>Audit status</h2>
+      <p>The contracts have been through internal reviews, fuzzing and invariant testing. None has had an external audit. Real value waits for one.</p>
+      <Note k="Addresses">Every deployed contract is listed under <Ln to="contracts" nav={nav}>Contracts</Ln>.</Note>
+    </>
+  )
+}
 
-      <h2>Testing</h2>
-      <p>ULV invariants run <b>256 runs × 128k calls over real swaps</b>; the YPN v2 vault is fuzzed to the same depth. Solidity <code>^0.8.26</code>; Slither clean; Halmos proof specs are written (execution is blocked by a tooling incompatibility, so those properties are covered by fuzzing). Suites: <b>Vitest ~256 green, Forge 175/175</b>.</p>
-      <Note k="Honest status">No contract here has had an <b>external audit</b>. Attribution and agents are live on Base mainnet; the vault engine is in testing on Base Sepolia; YPN is coming. See <Ln to="contracts" nav={nav}>Contracts &amp; status</Ln>.</Note>
-    </>
-  )
-}
-function Wallets({ nav }: { nav: Nav }) {
-  return (
-    <>
-      <div className={EY}>Trust · Accounts</div>
-      <h1>Wallets &amp; custody</h1>
-      <p className={SUB}>Non-custodial throughout. Privy handles identity and custody; Mintware never holds your keys or your deposits.</p>
-      <h2>Non-custodial by construction</h2>
-      <p>You interact with the vault and payment contracts directly — assets stay in your control on-chain. Keys stay with you via <b>Privy</b>, the public stack&apos;s identity and custody layer (alongside Circle&apos;s CPN rail and Visa on the payments surface). There is no path where Mintware moves your funds unilaterally: rewards settle as signed Merkle roots you claim yourself, and the oracle never takes custody.</p>
-      <h2>One identity</h2>
-      <p>Your wallet is your identity — the same address carries your <Ln to="attribution" nav={nav}>Attribution</Ln> score across every surface. On the agent surface, identity is anchored on-chain via the <b>ERC-8004</b> registry (Mintware Agent #37297).</p>
-      <Note k="Scope of this page">These docs describe custody at the level the engine guarantees it — direct contract interaction and self-claimed rewards. Deeper Privy key-management specifics are out of scope here.</Note>
-    </>
-  )
-}
 function Contracts() {
   return (
     <>
-      <div className={EY}>Reference · Contracts &amp; status</div>
-      <h1>Contracts &amp; status</h1>
-      <p className={SUB}>The honest inventory: what is live on Base mainnet, and what is built but undeployed. Nothing here is externally audited.</p>
-
-      <h2>Live — Base mainnet (8453)</h2>
-      <table className={TABLE}>
-        <thead><tr><th>Contract</th><th>Address / ID</th></tr></thead>
+      <div className={EY} style={{ color: 'var(--mw-peri-deep)' }}>Reference · Contracts</div>
+      <h1>Contracts</h1>
+      <p className={SUB}>The current deployments. The one committed record is <code>config/deployments.json</code>; if this page and that file disagree, the file wins.</p>
+      <h2>Robinhood Chain testnet</h2>
+      <div className="overflow-x-auto"><table className={TABLE}>
+        <thead><tr><th>Contract</th><th>Address</th></tr></thead>
         <tbody>
-          <tr><td><b>AIAttribution v3</b></td><td><code>0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421</code></td></tr>
-          <tr><td>AIAttribution v2 (deprecated)</td><td><code>0xb9FB965…</code></td></tr>
-          <tr><td><b>ERC-8004 registry</b></td><td><code>0x8004A169FB4a3325136EB29fA0ceB6D2e539a432</code></td></tr>
-          <tr><td>Mintware Agent</td><td><code>#37297</code></td></tr>
+          <tr><td><b>MarketEngine</b> (PONS / USDG)</td><td><Addr a="0x38E426D6671FB2c07C07a468e59f954Dcd0eDeb8" /></td></tr>
+          <tr><td>Lifecycle module</td><td><Addr a="0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421" /></td></tr>
+          <tr><td>Holding adapter · tUSDG</td><td><Addr a="0xFC17B41e102DA194083a3BfD0df49F79Fd1FcA62" /></td></tr>
+          <tr><td>Holding adapter · tPONS</td><td><Addr a="0xDc11D311364a175d992bB47484BA9DFaa3A0b73b" /></td></tr>
+          <tr><td>Fixed test mark</td><td><Addr a="0xA7e84b45E59bccC5F1227e706Cc335dc7ab6ed10" /></td></tr>
         </tbody>
-      </table>
-      <p>Agent reputation dimensions: <code>behavior + contribution + interpretability − risk</code>.</p>
-
-      <h2>Built — Base Sepolia / undeployed (contracts-v4/src/)</h2>
-      <table className={TABLE}>
-        <thead><tr><th>Group</th><th>Contracts</th></tr></thead>
+      </table></div>
+      <h2>Base Sepolia</h2>
+      <div className="overflow-x-auto"><table className={TABLE}>
+        <thead><tr><th>Contract</th><th>Address</th></tr></thead>
         <tbody>
-          <tr><td><b>Hooks</b></td><td><code>MWHookCoordinator</code>, <code>MWOracleGuard</code>, <code>MWDynamicFee</code>, am-AMM auction</td></tr>
-          <tr><td><b>Vaults</b></td><td><code>MintwareDeFiPairVault</code> (canonical), <code>MintwareMatchedLiquidityVault</code>, <code>AaveV3YieldAdapter</code>, <code>MintwareVaultFactory</code>, <code>MintwareVaultRegistry</code>, shared base — <i>deprecated:</i> <code>MintwareDeFiVault4626</code>, <code>FeeVault</code></td></tr>
-          <tr><td><b>Libs</b></td><td><code>MWJitLib</code>, <code>MWIdleLib</code>, <code>MWPositionLib</code>, <code>MWGuardianPausable</code>, <code>MWTimelockedOracleSigner</code></td></tr>
-          <tr><td><b>Rewards</b></td><td><code>MintwareWeightedDistributor</code>, soulbound <code>MintwareAttributionToken</code></td></tr>
-          <tr><td><b>Payments / YPN</b></td><td><code>MintwarePaymentGateway</code>, <code>MintwareYieldVault</code>, <code>MintwareTreasuryVault</code></td></tr>
-          <tr><td><b>Off-chain (Rust)</b></td><td><code>services/edge-auth</code> (55 tests), <code>services/relayer</code></td></tr>
+          <tr><td><b>MarketEngine</b> (WETH / USDC)</td><td><Addr a="0x961534db8C0EbB7cEb729E74CaB698A83A9c827e" /></td></tr>
+          <tr><td>Adapter · USDC</td><td><Addr a="0xc1287f27A79711F6a8945f1B9Dec2Ae9E15cc9E5" /></td></tr>
+          <tr><td>Adapter · WETH</td><td><Addr a="0xc04a84794782a3F5e6dB1226b68cF46934aE4994" /></td></tr>
+          <tr><td>Fixed test mark</td><td><Addr a="0x11fbbDC9954A2Ca6C1eA9E5786d3725d7803dC8D" /></td></tr>
+          <tr><td><b>Property market</b> vault (demo)</td><td><Addr a="0xf507640a7bcb17b696c9199b34e93384b9fa5136" /></td></tr>
+          <tr><td>Appraisal hook (demo)</td><td><Addr a="0xaB8E64c7087A232c24658726AD3Bc363Ed6AEAC0" /></td></tr>
         </tbody>
-      </table>
-      <Note k="The one rule">Live = Attribution, Agents, Swap (Base mainnet). In testing on Base Sepolia = the ULV vault engine. Coming = the Liquid Sovereign Account. <b>Nothing is externally audited.</b></Note>
+      </table></div>
+      <h2>Base mainnet</h2>
+      <div className="overflow-x-auto"><table className={TABLE}>
+        <thead><tr><th>Contract</th><th>Address</th></tr></thead>
+        <tbody>
+          <tr><td><b>AIAttribution v3</b> — attestation ledger, holds no funds</td><td><Addr a="0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421" /></td></tr>
+          <tr><td>ERC-8004 identity registry (third party)</td><td><Addr a="0x8004A169FB4a3325136EB29fA0ceB6D2e539a432" /></td></tr>
+        </tbody>
+      </table></div>
+      <Note k="Same address, different chains">The Robinhood lifecycle module and the Base AIAttribution contract share an address because they came from the same deployer nonce on different chains. They are unrelated contracts.</Note>
     </>
   )
 }
 
 // ── nav + content registry ───────────────────────────────────────────────────
-const GROUPS: { group: string; items: { id: string; label: string; star?: boolean }[] }[] = [
-  { group: 'Start here', items: [
-    { id: 'overview', label: 'Overview' },
-    { id: 'model', label: 'The model' },
-  ]},
-  { group: 'How it works', items: [
-    { id: 'lpgateway', label: 'LP Gateway — live', star: true },
-    { id: 'attribution', label: 'Attribution — the score' },
-    { id: 'vaults', label: 'Vaults — the ULV engine' },
-    { id: 'mev', label: 'MEV — the am-AMM engine' },
-    { id: 'matched', label: 'Matched liquidity' },
-    { id: 'rewards', label: 'Rewards — epochs & distribution' },
-    { id: 'lsa', label: 'Liquid Sovereign Account' },
-  ]},
-  { group: 'Roadmap', items: [
-    { id: 'agentpay', label: 'Agent payments — the 402 engine' },
-  ]},
-  { group: 'Trust', items: [
-    { id: 'security', label: 'Security', star: true },
-    { id: 'wallets', label: 'Wallets & custody' },
-  ]},
-  { group: 'Reference', items: [
-    { id: 'contracts', label: 'Contracts & status' },
-  ]},
+const GROUPS: { group: string; items: { id: string; label: string }[] }[] = [
+  { group: 'Start here', items: [{ id: 'overview', label: 'Overview' }] },
+  { group: 'Products', items: [
+    { id: 'markets', label: 'Markets' },
+    { id: 'rwa', label: 'Property market (demo)' },
+    { id: 'swap', label: 'Swap' },
+    { id: 'earn', label: 'Treasury yield' },
+    { id: 'card', label: 'Card' },
+    { id: 'agents', label: 'Agent payments' },
+  ] },
+  { group: 'Trust', items: [{ id: 'risks', label: 'Risks' }, { id: 'security', label: 'Security and custody' }] },
+  { group: 'Reference', items: [{ id: 'contracts', label: 'Contracts' }] },
 ]
 
 const CONTENT: Record<string, (p: { nav: Nav }) => ReactNode> = {
-  overview: Overview, model: Model, lpgateway: LpGateway, attribution: Attribution, vaults: Vaults, mev: Mev,
-  matched: Matched, rewards: Rewards, lsa: LSA, agentpay: AgentPay, security: Security,
-  wallets: Wallets, contracts: Contracts,
+  overview: Overview, markets: Markets, rwa: Rwa, swap: Swap, earn: Earn, card: Card, agents: Agents,
+  risks: Risks, security: Security, contracts: Contracts,
 }
 
-const PROSE = 'max-w-[840px] px-14 pt-11 pb-24 max-[880px]:px-5 max-[880px]:pt-8 ' +
-  '[&_h1]:text-[clamp(28px,3.4vw,40px)] [&_h1]:font-bold [&_h1]:tracking-[-0.03em] [&_h1]:leading-[1.05] [&_h1]:mt-2.5 [&_h1]:mb-1.5 [&_h1]:text-wrap-balance ' +
-  '[&_h2]:text-[21px] [&_h2]:font-semibold [&_h2]:tracking-[-0.01em] [&_h2]:mt-8 [&_h2]:mb-2.5 [&_h2]:pt-5 [&_h2]:border-t [&_h2]:border-hair ' +
-  '[&_h3]:text-[15.5px] [&_h3]:font-semibold [&_h3]:mt-5 [&_h3]:mb-1 ' +
-  '[&_p]:my-2.5 [&_p]:leading-[1.62] [&_p]:text-ink-mid ' +
-  '[&_code]:font-mono [&_code]:text-[0.85em] [&_code]:bg-ground-cool [&_code]:border [&_code]:border-hair [&_code]:rounded-md [&_code]:px-1.5 [&_code]:py-px ' +
-  '[&_ul]:my-2.5 [&_li]:relative [&_li]:pl-5 [&_li]:py-1 [&_li]:leading-[1.5] [&_li]:text-ink-mid ' +
-  "[&_li]:before:content-['✦'] [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:top-2 [&_li]:before:text-peri [&_li]:before:text-[11px]"
+const PROSE = 'min-w-0 max-w-[820px] px-12 pt-10 pb-24 max-[880px]:px-4 max-[880px]:pt-6 text-ink ' +
+  '[&_h1]:text-[clamp(30px,3.6vw,44px)] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.05] [&_h1]:mt-3 [&_h1]:mb-0 ' +
+  '[&_h2]:text-[20px] [&_h2]:font-semibold [&_h2]:tracking-[-0.02em] [&_h2]:mt-9 [&_h2]:mb-2.5 ' +
+  '[&_p]:my-2.5 [&_p]:leading-[1.62] [&_p]:text-[15.5px] [&_p]:text-[var(--mw-ink-2)] ' +
+  '[&_a]:font-semibold [&_a]:no-underline hover:[&_a]:underline [&_a]:text-[var(--mw-peri-deep)] ' +
+  '[&_code]:font-geist-mono [&_code]:text-[0.86em] [&_code]:rounded-md [&_code]:px-1.5 [&_code]:py-px [&_code]:bg-[var(--mw-well)] ' +
+  '[&_ul]:my-3 [&_ul]:pl-0 [&_ul]:list-none [&_li]:relative [&_li]:pl-5 [&_li]:py-1 [&_li]:leading-[1.55] [&_li]:text-[15px] [&_li]:text-[var(--mw-ink-2)] ' +
+  "[&_li]:before:content-[''] [&_li]:before:absolute [&_li]:before:left-1 [&_li]:before:top-[13px] [&_li]:before:w-1.5 [&_li]:before:h-1.5 [&_li]:before:rounded-full [&_li]:before:bg-[var(--mw-btn)]"
 
 export default function DocsPage() {
   const [active, setActive] = useState('overview')
@@ -562,24 +317,33 @@ export default function DocsPage() {
   const Section = CONTENT[active] ?? Overview
 
   return (
-    <div className="bg-white min-h-screen font-atx-display text-ink">
-      <MwNav />
-      <div className="grid grid-cols-[262px_1fr] max-w-[1280px] mx-auto max-[880px]:grid-cols-1">
-        <aside className="border-r border-hair px-4 pt-6 pb-16 sticky top-[58px] self-start h-[calc(100vh-58px)] overflow-y-auto max-[880px]:static max-[880px]:h-auto max-[880px]:overflow-visible max-[880px]:border-r-0 max-[880px]:border-b max-[880px]:border-hair">
-          {GROUPS.map((g) => (
-            <div key={g.group}>
-              <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-ink-soft mx-2 mt-5 mb-2 first:mt-0">{g.group}</div>
-              {g.items.map((it) => (
-                <button
-                  key={it.id}
-                  onClick={() => nav(it.id)}
-                  className={`block w-full text-left text-[13px] px-3 py-[6px] rounded-lg leading-[1.35] cursor-pointer transition-colors ${active === it.id ? 'text-peri font-semibold bg-ground-cool' : 'text-ink-mid hover:text-peri hover:bg-ground-cool/60'}`}
-                >
-                  {it.label}{it.star && <span className="text-coral2-deep text-[9px] align-[1px]"> ★</span>}
-                </button>
-              ))}
-            </div>
-          ))}
+    <div className="font-geist min-h-screen overflow-x-clip antialiased" style={{ background: 'var(--mw-ground)', color: 'var(--mw-ink)' }}>
+      <V2Nav />
+      <div className="grid grid-cols-[248px_minmax(0,1fr)] max-w-[1200px] mx-auto max-[880px]:grid-cols-1">
+        <aside className="px-4 pt-8 pb-10 sticky top-[64px] self-start max-[880px]:static max-[880px]:pt-4 max-[880px]:pb-0">
+          <nav className="flex flex-col gap-4 max-[880px]:flex-row max-[880px]:gap-1 max-[880px]:overflow-x-auto max-[880px]:p-1 max-[880px]:rounded-[12px] max-[880px]:[background:var(--mw-well)] max-[880px]:[box-shadow:var(--mw-inset)] [scrollbar-width:none]">
+            {GROUPS.map((g) => (
+              <div key={g.group} className="max-[880px]:contents">
+                <div className="mb-1.5 px-2 text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft max-[880px]:hidden">{g.group}</div>
+                <div className="flex flex-col gap-0.5 rounded-[14px] p-1 max-[880px]:contents" style={{ background: 'var(--mw-well)', boxShadow: 'var(--mw-inset)' }}>
+                  {g.items.map((it) => {
+                    const on = active === it.id
+                    return (
+                      <button
+                        key={it.id}
+                        onClick={() => nav(it.id)}
+                        aria-current={on ? 'page' : undefined}
+                        className="text-left text-[14px] font-medium px-3 py-2 rounded-[10px] border-0 cursor-pointer whitespace-nowrap shrink-0"
+                        style={on ? { background: '#fff', boxShadow: 'var(--mw-raise-sm)', color: 'var(--mw-ink)' } : { background: 'transparent', color: 'var(--mw-ink-2)' }}
+                      >
+                        {it.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
         </aside>
         <main className={PROSE}>
           <Section nav={nav} />
