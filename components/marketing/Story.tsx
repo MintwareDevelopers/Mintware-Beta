@@ -26,6 +26,19 @@ export function H2({ children, soft }: { children: ReactNode; soft?: ReactNode }
   return <h2 className={`${display} text-ink text-[clamp(34px,4.4vw,54px)] max-w-[20ch] mt-3`}><TwoTone main={children} soft={soft} /></h2>
 }
 
+/** The landing's section header: eyebrow + headline on the left, a short framing paragraph on the right. */
+export function SectionHead({ eyebrow, title, soft, aside }: { eyebrow: ReactNode; title: ReactNode; soft?: ReactNode; aside?: ReactNode }) {
+  return <div className="flex flex-wrap justify-between items-end gap-6">
+    <div className="max-w-[640px]"><Eyebrow>{eyebrow}</Eyebrow><H2 soft={soft}>{title}</H2></div>
+    {aside && <p className="m-0 max-w-[420px] text-[17px] leading-[1.55] text-ink-mid">{aside}</p>}
+  </div>
+}
+
+/** Small arrow used in links and flows. */
+export function Arrow({ size = 18, down }: { size?: number; down?: boolean }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{down ? <path d="M12 5v14M6 13l6 6 6-6" /> : <path d="M5 12h14M13 6l6 6-6 6" />}</svg>
+}
+
 export function P({ children }: { children: ReactNode }) {
   return <p className={`${body} mt-5`}>{children}</p>
 }

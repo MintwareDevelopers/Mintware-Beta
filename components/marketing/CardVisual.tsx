@@ -34,7 +34,7 @@ function Card({ tone, className = '' }: { tone: 'peri' | 'coral'; className?: st
   )
 }
 
-export function CardVisual({ label = 'Card balance · earning', amount = '$2,480.00' }: { label?: string; amount?: string }) {
+export function CardVisual({ label = 'Earning balance', amount = '$2,480.00' }: { label?: string; amount?: string }) {
   const [earned, setEarned] = useState(18.4)
   useEffect(() => {
     const id = window.setInterval(() => setEarned(e => e + 0.01), 150)

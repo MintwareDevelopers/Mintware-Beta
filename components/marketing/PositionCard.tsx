@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 
-// Simulated walkthrough of one MarketEngine position moving through its three states.
-// Illustrative figures only — the card is tagged "Simulated".
+// Simulated walkthrough of one liquidity position: capital deployed into the pool, capital still staged, and an
+// exit. Illustrative figures only — the card is tagged "Simulated". Staged capital is part of the position's
+// value but is not promised to earn, so the copy never says it does.
 const STATES = [
-  { label: 'Market is busy', note: 'Most of your capital is in the pool, earning on every trade.', pool: 80, yieldPct: 20 },
-  { label: 'Market is quiet', note: 'What the market doesn’t need moves into yield and keeps earning.', pool: 30, yieldPct: 70 },
-  { label: 'You leave', note: 'Out instantly, with your share of both assets.', pool: 0, yieldPct: 0 },
+  { label: 'Deployed into the pool', note: 'Most of your capital is in the market’s pool, earning a share of the fee on every trade.', pool: 80, staged: 20 },
+  { label: 'Waiting to be deployed', note: 'New capital sits staged until the market deploys it. It still counts toward your share.', pool: 45, staged: 55 },
+  { label: 'You leave', note: 'Exit whenever you want, paid out pro‑rata in both of the market’s assets.', pool: 0, staged: 0 },
 ] as const
 
 const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -46,12 +47,12 @@ export function PositionCard() {
           ) : (
             <div className="mt-4 space-y-3 text-[13px]">
               <Bar label="In the market" pct={s.pool} />
-              <Bar label="Earning yield" pct={s.yieldPct} dots />
+              <Bar label="Staged" pct={s.staged} dots />
             </div>
           )}
         </div>
         <div className="mt-4 rounded-[16px] px-4 py-3 flex items-center justify-between text-[13px]" style={{ background: 'var(--mw-band)' }}>
-          <span className="text-ink-mid">Earned so far</span>
+          <span className="text-ink-mid">Fees earned so far</span>
           <span className="font-geist-mono font-medium text-[15px]" style={{ color: 'var(--mw-gain)' }}>+${fmt(earned)}</span>
         </div>
       </div>
