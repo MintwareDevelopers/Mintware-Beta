@@ -222,6 +222,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/dataroom` | `app/dataroom/page.tsx` |
 | `/deck` | `app/deck/page.tsx` |
 | `/docs` | `app/docs/page.tsx` |
+| `/docs/[section]` | `app/docs/[section]/page.tsx` |
 | `/issuers` | `app/issuers/page.tsx` |
 | `/legal` | `app/legal/page.tsx` |
 | `/markets` | `app/markets/page.tsx` |
