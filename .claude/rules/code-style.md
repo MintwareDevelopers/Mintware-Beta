@@ -121,6 +121,6 @@ Shared pieces:
 - Marketing pages use the `components/marketing/Story.tsx` kit (`Page`, `Hero` on a halo, `Rows` with an optional icon, `IconTile`, `Kicker`, `CTA`).
 - `GradientPanel` is now a lit inset well rather than a mesh gradient.
 - `FlowDiagram` is raised step cards joined by arrows.
-- `V2Nav` has the inset nav with a raised active pill.
+- `V2Nav` is the one public header on every marketing page, the landing included (Markets, RWAs, Issuers, Card, Agents, Docs; the current page is found from the path; a menu button below 960px). The app uses `AppShell`; `MwNav` remains only on the invite-accept handoff.
 
 New helpers: `.mw-btn-lg` (54px hero button) and `.mw-range` (inset slider track; set `--mw-fill`). For new code, prefer the `mw-*` classes over the legacy names.

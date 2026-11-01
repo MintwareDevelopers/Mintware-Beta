@@ -1,7 +1,7 @@
 'use client'
 
 // /legal — PUBLIC "Legal & Disclosures" page (not legal advice, not an offer).
-// Rendered in the /proof doc style (MwNav + centered column, platform tokens, light-only). The
+// Rendered in the /proof doc style (V2Nav + centered column, platform tokens, light-only). The
 // posture: Mintware is non-custodial software, not a financial intermediary; every regulated leg
 // (fiat, cards, USDC issuance) belongs to a licensed partner. Public-safe: it states the six
 // bright lines, the partner licence map, the Delaware-LLC entity note, and USER-facing risk
@@ -24,7 +24,7 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { MwNav } from '@/components/web2/MwNav'
+import { V2Nav } from '@/components/ui2/V2Nav'
 
 const BRIGHT_LINES: { n: number; title: string; do: string; dont: string }[] = [
   {
@@ -155,7 +155,7 @@ function Kicker({ no, children }: { no: string; children: ReactNode }) {
 export default function LegalDisclosuresPage() {
   return (
     <div className="min-h-screen font-geist bg-[#F6F6FA] text-ink">
-      <MwNav />
+      <V2Nav />
       <main className="mx-auto max-w-[820px] px-6 max-[700px]:px-4 py-[44px]">
 
         {/* hero */}

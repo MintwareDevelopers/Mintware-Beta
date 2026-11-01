@@ -2,7 +2,7 @@
 
 import { useAccount }          from 'wagmi'
 import { useRouter }           from 'next/navigation'
-import { MwNav }               from '@/components/web2/MwNav'
+import { V2Nav } from '@/components/ui2/V2Nav'
 import { MwAuthGuard }         from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
 import { shortAddr }           from '@/lib/web2/api'
@@ -206,7 +206,7 @@ await registerWithMintwareOracle({
 export default function AgentsLeaderboardPage() {
   return (
     <>
-      <MwNav />
+      <V2Nav />
       <MwAuthGuard>
         <AgentsLeaderboardContent />
       </MwAuthGuard>
